@@ -166,7 +166,10 @@ class Database:
 		assert self.connection is not None
 
 		with self.connection.cursor() as cursor:
-			cursor.execute(sql, tuple(params or ()))
+			if params:
+				cursor.execute(sql, tuple(params))
+			else:
+				cursor.execute(sql)
 			return list(cursor.fetchall())
 
 	def query_one(
@@ -220,7 +223,10 @@ class Database:
 		assert self.connection is not None
 
 		with self.connection.cursor() as cursor:
-			affected_rows = cursor.execute(sql, tuple(params or ()))
+			if params:
+				affected_rows = cursor.execute(sql, tuple(params))
+			else:
+				affected_rows = cursor.execute(sql)
 			if not self.autocommit:
 				self.connection.commit()
 			return affected_rows
