@@ -225,6 +225,72 @@ class Database:
 				self.connection.commit()
 			return affected_rows
 
+	def update_priorities(
+			self,
+			prioritized_pending_rows: list[dict[str, Any]],
+	) -> int:
+		"""
+		Write computed priorities back to the `priority` column of the
+		`submissions` table.
+
+		Only rows whose run_status is 'Not Submitted' are updated — these are
+		the rows that were assigned a priority integer by the scoring algorithm.
+		Rows with no priority (i.e. already-submitted jobs) are left untouched.
+
+		Each row in `prioritized_pending_rows` must contain:
+		- ``user_submission_id``: the primary key used to identify the row
+		- ``priority``: the integer priority to write (1 = highest)
+
+		The priority is stored as a string to match the ``varchar(10)`` column
+		type.  Updates are issued as a single batch using ``executemany`` for
+		efficiency.
+
+		Parameters
+		----------
+		prioritized_pending_rows:
+			List of pending-job dicts as returned by ``compute_priorities``.
+			Each dict must have ``user_submission_id`` and ``priority`` keys.
+
+		Returns
+		-------
+		int
+			Total number of rows updated.
+
+		Raises
+		------
+		ValueError
+			If any row is missing ``user_submission_id`` or ``priority``.
+		"""
+		if not prioritized_pending_rows:
+			return 0
+
+		params: list[tuple[str, int]] = []
+		for row in prioritized_pending_rows:
+			if "user_submission_id" not in row or "priority" not in row:
+				raise ValueError(
+					"Each row must have 'user_submission_id' and 'priority' keys. "
+					f"Got: {list(row.keys())}"
+				)
+			params.append((str(row["priority"]), int(row["user_submission_id"])))
+
+		if self.connection is None:
+			self.connect()
+
+		assert self.connection is not None
+
+		sql = """
+			UPDATE submissions
+			SET priority = %s
+			WHERE user_submission_id = %s
+		"""
+
+		with self.connection.cursor() as cursor:
+			affected_rows = cursor.executemany(sql, params)
+			if not self.autocommit:
+				self.connection.commit()
+
+		return affected_rows
+
 	def get_submissions_with_status(
 			self,
 			days_past: int | None = None,

@@ -213,6 +213,16 @@ def build_parser() -> argparse.ArgumentParser:
 		),
 	)
 
+	parser.add_argument(
+		"--write-to-db",
+		action="store_true",
+		default=False,
+		help=(
+			"If set, write the computed priorities back to the `priority` column "
+			"of the `submissions` table in the database."
+		),
+	)
+
 	return parser
 
 
@@ -891,6 +901,11 @@ def main() -> int:
 
 		print()
 		print(f"Wrote priority JSON: {args.json_out}")
+
+		if args.write_to_db:
+			with Database(args.credentials) as db:
+				updated = db.update_priorities(prioritized_pending_rows)
+			print(f"Updated {updated} row(s) in the database.")
 
 		return 0
 
