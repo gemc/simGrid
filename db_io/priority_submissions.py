@@ -205,6 +205,18 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 
 	parser.add_argument(
+		"--no-queue-penalty",
+		action="store_true",
+		default=False,
+		help=(
+			"Ignore pending jobs in the denominator. "
+			"Forces history_load_pending to zero for all users, so the "
+			"denominator depends only on the decay-weighted history of "
+			"completed jobs."
+		),
+	)
+
+	parser.add_argument(
 		"--json-out",
 		default="submission_priorities.json",
 		help=(
@@ -296,6 +308,7 @@ def compute_history_loads(
 		rows: list[dict],
 		time_format: str,
 		history_half_life_days: float,
+		no_queue_penalty: bool = False,
 ) -> tuple[dict[str, float], dict[str, float], dict[str, float], dict[str, int]]:
 	"""
 	Compute per-user history loads, split by run_status.
@@ -318,6 +331,9 @@ def compute_history_loads(
 	    contributes exactly 1 regardless of age.
 	    --history-half-life-days has no effect on this component.
 
+	    If no_queue_penalty is True, this component is forced to 0.0 for
+	    all users, so the denominator depends only on completed-job history.
+
 	Parameters
 	----------
 	rows:
@@ -327,6 +343,8 @@ def compute_history_loads(
 	history_half_life_days:
 		Half-life for the exponential decay applied to non-pending jobs
 		(must be > 0).
+	no_queue_penalty:
+		If True, pending jobs contribute 0 to the denominator instead of 1.
 
 	Returns
 	-------
@@ -354,8 +372,10 @@ def compute_history_loads(
 		status = str(row.get("run_status", "")).strip()
 
 		if status == "Not Submitted":
-			# Pending jobs count as exactly 1 each, no decay.
-			pending_load_by_user[user] += 1.0
+			# Pending jobs count as exactly 1 each, no decay —
+			# unless --no-queue-penalty is set, in which case they contribute 0.
+			if not no_queue_penalty:
+				pending_load_by_user[user] += 1.0
 			continue
 
 		# Non-pending jobs: smooth exponential decay by age.
@@ -395,6 +415,7 @@ def compute_priorities(
 		queue_penalty_exponent: float,
 		history_half_life_days: float,
 		burst_per_user: int = 1,
+		no_queue_penalty: bool = False,
 ) -> tuple[list[dict], list[dict], dict[str, float], dict[str, float]]:
 	"""
 	Compute priorities for rows with run_status == 'Not Submitted'.
@@ -445,6 +466,7 @@ def compute_priorities(
 		rows=rows,
 		time_format=time_format,
 		history_half_life_days=history_half_life_days,
+		no_queue_penalty=no_queue_penalty,
 	)
 
 	now = datetime.now()
@@ -654,6 +676,7 @@ def print_summary(
 		pending_load_by_user: dict[str, float],
 		days_considered: int | None = None,
 		time_format: str = "%Y-%m-%d %H:%M:%S",
+		no_queue_penalty: bool = False,
 ) -> None:
 	"""
 	Print a summary table with the number of jobs per user, estimated time
@@ -728,6 +751,8 @@ def print_summary(
 
 	print()
 	print("Summary: jobs per user")
+	if no_queue_penalty:
+		print("  (--no-queue-penalty: pending-job count excluded from denominator)")
 	print("  ".join(header.ljust(widths[header]) for header in headers))
 	print("  ".join("-" * widths[header] for header in headers))
 
@@ -769,6 +794,7 @@ def write_priority_json(
 		days_considered: int | None,
 		submitted_load_by_user: dict[str, float],
 		pending_load_by_user: dict[str, float],
+		no_queue_penalty: bool = False,
 ) -> None:
 	"""
 	Write the computed pending-job priorities to a JSON file for later use.
@@ -815,6 +841,7 @@ def write_priority_json(
 		"half_life_days":           half_life_days if algorithm in {"aging",
 		                                                            "aging_interleaved"} else None,
 		"history_half_life_days":   history_half_life_days,
+		"no_queue_penalty":         no_queue_penalty,
 		"days_considered":          days_considered,
 		"total_jobs":               len(all_rows),
 		"total_users":              len(summary_jobs_per_user),
@@ -876,6 +903,7 @@ def main() -> int:
 			queue_penalty_exponent=args.queue_penalty_exponent,
 			history_half_life_days=history_half_life_days,
 			burst_per_user=args.burst_per_user,
+			no_queue_penalty=args.no_queue_penalty,
 		)
 
 		print_table(rows_with_priority)
@@ -885,6 +913,7 @@ def main() -> int:
 			pending_load_by_user=pending_load_by_user,
 			days_considered=args.days,
 			time_format=args.time_format,
+			no_queue_penalty=args.no_queue_penalty,
 		)
 
 		write_priority_json(
@@ -897,6 +926,7 @@ def main() -> int:
 			days_considered=args.days,
 			submitted_load_by_user=submitted_load_by_user,
 			pending_load_by_user=pending_load_by_user,
+			no_queue_penalty=args.no_queue_penalty,
 		)
 
 		print()
