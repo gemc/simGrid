@@ -686,7 +686,7 @@ def print_summary(
 	Columns
 	-------
 	user          : user identifier
-	total_jobs    : total job count (all statuses)
+	total_submissions    : total job count (all statuses)
 	estimate_days : estimated queue time in days for pending jobs
 	weight        : decay-weighted count of non-pending jobs
 	                (controlled by --history-half-life-days)
@@ -707,7 +707,7 @@ def print_summary(
 		print("Total jobs: 0")
 		print("Total users: 0")
 		print("Total 'Not Submitted' jobs: 0")
-		print("Total estimated time for 'Not Submitted' jobs (hours): 0.0")
+		print("Total estimated time for 'Not Submitted' jobs (days): 0.0")
 		return
 
 	job_counts = Counter(str(row.get("user", "")) for row in rows)
@@ -726,7 +726,7 @@ def print_summary(
 	summary_rows = [
 		{
 			"user":         user,
-			"total_jobs":   count,
+			"total_submissions":   count,
 			"estimate_days": estimate_time_by_user.get(user, 0.0),
 			"weight":       submitted_load_by_user.get(user, 0.0),
 			"pending_jobs": int(round(pending_load_by_user.get(user, 0.0))),
@@ -734,7 +734,7 @@ def print_summary(
 		for user, count in sorted(job_counts.items(), key=lambda item: (-item[1], item[0]))
 	]
 
-	headers = ["user", "total_jobs", "estimate_days", "weight", "pending_jobs"]
+	headers = ["user", "total_submissions", "estimate_days", "weight", "pending_jobs"]
 
 	widths = {}
 	for header in headers:
@@ -760,7 +760,7 @@ def print_summary(
 		print(
 			"  ".join([
 				str(row["user"]).ljust(widths["user"]),
-				str(row["total_jobs"]).ljust(widths["total_jobs"]),
+				str(row["total_submissions"]).ljust(widths["total_submissions"]),
 				f"{row['estimate_days']:.2f}".ljust(widths["estimate_days"]),
 				f"{row['weight']:.2f}".ljust(widths["weight"]),
 				str(row["pending_jobs"]).ljust(widths["pending_jobs"]),
@@ -781,7 +781,7 @@ def print_summary(
 	print(f"Total jobs: {len(rows)}")
 	print(f"Total users: {len(summary_rows)}")
 	print(f"Total 'Not Submitted' jobs: {total_pending}")
-	print(f"Total estimated time for 'Not Submitted' jobs (hours): {total_estimate_time:.1f}")
+	print(f"Total estimated time for 'Not Submitted' jobs (days): {total_estimate_time:.1f}")
 
 
 def write_priority_json(
@@ -843,7 +843,7 @@ def write_priority_json(
 		"history_half_life_days":   history_half_life_days,
 		"no_queue_penalty":         no_queue_penalty,
 		"days_considered":          days_considered,
-		"total_jobs":               len(all_rows),
+		"total_submissions":               len(all_rows),
 		"total_users":              len(summary_jobs_per_user),
 		"total_not_submitted_jobs": len(prioritized_pending_rows),
 		"jobs_per_user":            summary_jobs_per_user,
