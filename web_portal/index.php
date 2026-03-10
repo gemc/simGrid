@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>CLAS12 Monte-Carlo Simulations OSG Portal</title>
+		<title>CLAS12 Monte-Carlo Job Submission Portal</title>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
@@ -16,8 +16,8 @@
 			<ul id="nav">
 				<li><a href="index.php">     <h3><b>Home</b></h3></a></li>
 				<li><a href="about.html">    About</a></li>
-<!--				<li><a href="disk.php">      Disk Usage</a></li>-->
 				<li><a href="osgStats.html"> OSG Stats</a></li>
+				<li><a href="fairshare.html"> Fairshare</a></li>
 				<li><a href="monitor.html">  Monitors</a></li>
 			</ul>
 
@@ -58,9 +58,9 @@
 						<h3>Generator<br/></h3><br/>
 						<i class="w3-margin-bottom w3-text-theme" style="font-size:120px; "></i>
 						<p style="text-align: left; font-weight: normal;">
-						- In-Container or gemc internal generator <br/>
+						- clas12-mcgen or gemc internal generator <br/>
 						- Arbitrary number of jobs <br/>
-						- Arbitrary number of events for each job (max 10,000) <br/>
+						- Arbitrary number of events per job (max 10,000) <br/>
 						</p>
 					</div>
 				</div>
@@ -74,6 +74,7 @@
 						<p style="text-align: left; font-weight: normal;">
 						- LUND files (.txt) from a web location <br/>
 						- One job per LUND file <br/>
+						- File define number of events per job (max 10,000) <br/>
 						</p>
 					</div>
 				</div>
@@ -93,7 +94,6 @@
 		</div>
 
 		<div class="w3-padding w3-center">
-			<!--					<div id="farmStats"></div>-->
 			<br/><br/>
 			<h2 class="w3-xlarge" style="text-align:center">Details of current OSG Jobs</h2>
 			<div id="osgLog"></div>
@@ -102,6 +102,6 @@
 
 	</body>
 
-	<script src="main.js"></script>		<!-- Don't move this line to the top! It causes an error at Safari -->
+	<script src="main.js?v=3"></script>
 
 </html>

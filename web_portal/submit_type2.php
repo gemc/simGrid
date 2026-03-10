@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>CLAS12 Monte-Carlo Simulations OSG Portal</title>
+		<title>CLAS12 Monte-Carlo Job Submission Portal</title>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
@@ -16,8 +16,8 @@
 			<ul id="nav">
 				<li><a href="index.php">     Home</a></li>
 				<li><a href="about.html">    About</a></li>
-				<li><a href="disk.php">      Disk Usage</a></li>
 				<li><a href="osgStats.html"> OSG Stats</a></li>
+				<li><a href="fairshare.html"> Fairshare</a></li>
 			</ul>
 
 			<div class="w3-center">
@@ -32,48 +32,58 @@
 			<?php
 				$project       = 'CLAS12';
 				$configuration = $_POST['configuration'];
+				$softwarev     = $_POST['softwarev'];
 				$lundFiles     = $_POST['lundFiles'];
-
-
-
-
+				$username      = $_SERVER['REMOTE_USER'];
+				$client_ip     = $_SERVER['REMOTE_ADDR'];
 				$fields		   = $_POST['fields'];
 				$bkmerging     = $_POST['bkmerging'];
-				$username      = $_SERVER['PHP_AUTH_USER'];
-				$client_ip     = $_SERVER['REMOTE_ADDR'];
-				$uri		      = $_SERVER['REQUEST_URI'];
-				$fname         = 'submissions/'.uniqid($username.'.type2.', true);
+    			$zposition     = $_POST['zposition-show'];
+				$raster        = $_POST['raster-show'];
+				$beam          = $_POST['beamspot-show'];
+				$vertex_choice = $_POST['vuser_selection'];
+				$string_id     = $_POST['user_string'];
+				$output_type   = $_POST['output_type'];
+				$uri		   = $_SERVER['REQUEST_URI'];
+				
+				function yesorno($cond){
+					$val = "no";
+					if($cond) $val="yes";
+					return $val;
+				}
 
-				if (!empty($project) && !empty($configuration) && !empty($fields)&& !empty($bkmerging) && !empty($lundFiles) ) {
-					$fp = fopen($fname, 'w');
-					fwrite($fp, 'project: '.$project.PHP_EOL);
-					fwrite($fp, 'connection: mysql'.PHP_EOL);
-					fwrite($fp, 'type: 2'.PHP_EOL);
-					fwrite($fp, 'username: '.$username.PHP_EOL);
+				if (!empty($project) && !empty($configuration)  && !empty($softwarev)  && !empty($lundFiles) && !empty($fields)&& !empty($bkmerging)) {
+					$fp = fopen('/var/www/gemc-runtime/scard_type2.txt', 'w');
+					fwrite($fp, 'project:  '.$project.PHP_EOL);
 					fwrite($fp, 'configuration: '.$configuration.PHP_EOL);
+					fwrite($fp, 'softwarev: '.$softwarev.PHP_EOL);
 					fwrite($fp, 'generator: '.$lundFiles.PHP_EOL);
-
-
-
 					fwrite($fp, 'client_ip: '.$client_ip.PHP_EOL);
+					fwrite($fp, 'dstOUT: yes'.PHP_EOL);
 					fwrite($fp, 'fields: '.$fields.PHP_EOL);
 					fwrite($fp, 'bkmerging: '.$bkmerging.PHP_EOL);
-					if (strpos($uri, 'test/clas12osg/webPortal') !== false) {
-						fwrite($fp, 'version: test'.PHP_EOL);
+					fwrite($fp, 'zposition: '.$zposition.PHP_EOL);
+					fwrite($fp, 'raster: '.$raster.PHP_EOL);
+					fwrite($fp, 'beam: '.$beam.PHP_EOL);
+					fwrite($fp, 'vertex_choice: '.$vertex_choice.PHP_EOL);
+					fwrite($fp, 'string_id: '.$string_id.PHP_EOL);
+					fwrite($fp, 'output_type: '.$output_type.PHP_EOL);
+					if (strpos($uri, 'test/web_interface') !== false) {
+						fwrite($fp, 'submission: devel'.PHP_EOL);
 					} else {
-						fwrite($fp, 'version: production'.PHP_EOL);
+						fwrite($fp, 'submission: production'.PHP_EOL);
 					}
 					fclose($fp);
-					if (strpos($uri, 'test/clas12osg/webPortal') !== false) {
-						$command = escapeshellcmd('../client/SubMit.py -t '.$fname);
+					if (strpos($uri, 'test/web_interface') !== false) {
+						$command = escapeshellcmd('../SubMit/client/src/SubMit.py --test_database -u '.$username.' /var/www/gemc-runtime/scard_type2.txt');
 						$output = shell_exec($command);
 					} else {
-						$command = escapeshellcmd('../client/SubMit.py '.$fname);
+						$command = escapeshellcmd('../SubMit/client/src/SubMit.py -u '.$username.' /var/www/gemc-runtime/scard_type2.txt');
 						$output = shell_exec($command);
 					}
 				}
 				else {
-					echo("<h2> All fields are required </h2>");
+					echo "All field are required";
 					die();
 				}
 			?>
@@ -90,16 +100,46 @@
 					<td><?php echo($configuration); ?></td>
 				</tr>
 				<tr>
+					<td>Software Versions</td>
+					<td><?php echo($softwarev); ?></td>
+				</tr>
+				<tr>
+					<td>Magnetic Fields</td>
+					<td><?php echo($fields); ?></td>
+				</tr>
+				<tr>
 					<td>Lund File Location</td>
 					<td> <?php echo($lundFiles); ?> </td>
 				</tr>
+					<td> Target Position and Length </td>
+					<td><?php echo($zposition); ?></td>
+                </tr>
+                <tr>
+                    <td> Beamspot </td>
+                    <td><?php echo($beam); ?></td>
+                </tr>                <tr>
+                    <td> Raster </td>
+                    <td><?php echo($raster); ?></td>
+                </tr>
+
+                <tr>
+                    <td> User Choice: <br/> 0=ignore generator vertex <br/> 1=relative to generator vertex  </td>
+                    <td><?php echo($vertex_choice); ?></td>
+                </tr>
 				<tr>
 					<td> Background Merging </td>
 					<td> <?php echo($bkmerging); ?> M</td>
 				</tr>
-						
+				<tr>
+					<td> Output Type </td>
+					<td> <?php echo($output_type); ?></td>
+				</tr>
+				<tr>
+                    <td> String Identifier: </td>
+                    <td><?php echo($string_id); ?></td>
+                </tr>
 			</table>
-			<h4>Output is synced hourly at /lustre/expphy/volatile/clas12/osg2/<?php echo($username); ?>.</h4>
+			<h4>Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
 		</div>
 	</body>
 

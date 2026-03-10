@@ -1,110 +1,214 @@
 <!DOCTYPE HTML>
-<html>
-	<head>
-		<title>CLAS12 Monte-Carlo Simulations OSG Portal</title>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
-		<link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-black.css"/>
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway"/>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-		<link rel="stylesheet" href="main.css"/>
-	</head>
+<html lang="english">
+<head>
+	<title>CLAS12 Monte-Carlo Job Submission Portal</title>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
+	<link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-black.css"/>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway"/>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+	<link rel="stylesheet" href="main.css"/>
+</head>
 
-	<body onload="configurationSelected(); fieldSelected(); bkmergingSelected()">
-		<header class="w3-panel w3-container" id="myHeader">
-			<ul id="nav">
-				<li><a href="index.php">     Home</a></li>
-				<li><a href="about.html">    About</a></li>
-				<li><a href="disk.php">      Disk Usage</a></li>
-				<li><a href="osgStats.html"> OSG Stats</a></li>
-			</ul>
+<body onload="configurationSelected(); fieldSelected(); bkmergingSelected(); update_mcgen_versions(); vertexSelected();">
+<header class="w3-panel w3-container" id="myHeader">
+	<ul id="nav">
+		<li><a href="index.php"> Home</a></li>
+		<li><a href="about.html"> About</a></li>
+		<li><a href="osgStats.html"> OSG Stats</a></li>
+		<li><a href="fairshare.html">Fairshare</a></li>
+	</ul>
 
-			<div class="w3-center">
-				<h1 id="title" class="w3-xlarge w3-opacity"></h1>
-				<h2 class="w3-xlarge" style="text-align:center">Logged in as <img width = "160" src="username.php"/></h2>
-				<br/><br/>
-			</div>
-		</header>
+	<div class="w3-center">
+		<h1 id="title" class="w3-xlarge w3-opacity"></h1>
+		<h2 class="w3-xlarge" style="text-align:center">Logged in as <img width="160" src="username.php"/></h2>
+		<br/><br/>
+	</div>
+</header>
 
-		<div class="w3-center">
+<div class="w3-center">
 
-			<form action="submit_type1.php" method="POST">
-				<table id = "submission_table" style="text-align: center;width: 50%;" align="center">
-					<tr>
-						<td> <div class="tooltip">Configuration <span class="tooltiptext">Choose one of the gcards in the container</span></div> </td>
-						<td>
-							<select name="configuration" id="configuration" required onchange="fieldSelected(); bkmergingSelected();">
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<td><div class="tooltip">Magnetic Fields <span class="tooltiptext">Choose one of the fields setup for corresponding gcards, select gcards first.</span></div></td>
-						<td>
-							<select name="fields" id ="fields" required onchange="bkmergingSelected()">
-							</select>
-						</td>
-					<tr>
-						<td> <div class="tooltip">Generator <span class="tooltiptext">Choose one of the generators in the container</span></div> </td>
-						<td>
-							<select name="generator" id="generator" required onchange="genSelected(this)">
-								<option selected hidden value=""></option>
-								<option value="gemc">              gemc</option>
-								<option value="clasdis">           clasdis</option>
-								<option value="claspyth">          claspyth</option>
-								<option value="dvcsgen">           dvcsgen</option>
-								<option value="genKYandOnePion">   genKYandOnePion</option>
-								<option value="inclusive-dis-rad"> inclusive-dis-rad</option>
-								<option value="JPsiGen">           JPsiGen</option>
-								<option value="TCSGen">            TCSGen</option>
-								<option value="twopeg">            twopeg</option>
-								<option value="clas12-elSpectro">  clas12-elSpectro</option>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<td> <div class="tooltip">Generator Options<span class="tooltiptext">
-							Once a generator is selected, click on the right link to open a new window with the selected generator documentation</span></div> </td>
-						<td> <input type="" name="genOptions"/></td>
-						<td>
-							<div id="generatorLink" >
-								<a href="#" target="_blank">  </a>
-							</div>
-						</td>
-					</tr>
-					<tr>
-						<td colspan = "2"> After selecting the generator, check the documentation and paste the needed options above.<br>
-							Notice: do no use the following options as they are automatically passed for you: --docker, output file name --trig options. </td>
-					</tr>
-					<tr>
-						<td>Number of Events / Job</td>
-						<td><input type="number" name="nevents" id='box2' oninput="calculate();" min="1" max="10000" required></td>
-					</tr>
-					<tr>
-						<td>Number of Jobs</td>
-						<td><input type="number" name="jobs" id='box1' oninput="calculate();" min="0" required></td>
-					</tr>
-					<tr>
-						<td> Total Number of Events </td>
-						<td><input type="number" name="totalevents" id="result"  readonly /> M</td>
-					</tr>
-					<tr>
-						<td> <div class="tooltip">Background Merging <span class="tooltiptext">Choose values to merge background from random trigger. Select magentic fields at second row first! No merging is selected by default.</span></div> </td>
-						<td>
-							<select name="bkmerging" id="bkmerging" required>
-							</select>
-						</td>
-					</tr>
+	<form action="submit_type1.php" method="POST">
+		<table id="submission_table" style="text-align: center; width: 70%;" align="center">
+			<tr>
+				<td>
+					<div class="tooltip">Configuration<span class="tooltiptext">Choose an experiment configuration</span></div>
+				</td>
+				<td>
+					<select name="configuration" id="configuration" required
+							onchange="fieldSelected(); bkmergingSelected(); vertexSelected(); softwareVersionSelected(); ">
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Versions (see <a target="_blank" href="https://github.com/JeffersonLab/clas12-config#readme">README)</a><span class="tooltiptext">Choose a gemc/coatjava versions pair for the selected experiment</span>
+					</div>
+				</td>
+				<td>
+					<select name="softwarev" id="softwarev" required
+							onchange="fieldSelected(); bkmergingSelected(); vertexSelected(); ">
+					</select>
+				</td>
+			<tr>
+				<td>
+					<div class="tooltip">MC Gen Versions (see <a target="_blank" href="https://github.com/JeffersonLab/clas12-mcgen#readme">README)</a>
+						<br>Consider <a href="about.html#gen-test">testing the generators</a><span class="tooltiptext">Choose the mcgen version</span>
+					</div>
+				</td>
+				<td>
+					<select name="mcgenv" id="mcgenv" required>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Magnetic Fields <span class="tooltiptext">Choose one of the fields setup for the selected experiment </span></div>
+				</td>
+				<td>
+					<select name="fields" id="fields" required onchange="bkmergingSelected()"></select>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Vertex <span class="tooltiptext">Choose How to modify the vertex </span></div>
+				</td>
+				<td style="text-align: left;">
+					<div class="checkbox-container"><input type="checkbox" id="zposition-check" checked onchange="vertexSelected();"/>
+						<label for="zposition-check">z: adjust for target position and semi-length </label>
+						<input type="text" id="zposition-show" name="zposition-show" value="" readonly size="20"><br>
 
-					<tr>
-						<td style='border-left-color:white;border-bottom-color:white;'></td>
-						<td><input type="submit" value="Submit"></td>
-					</tr>
-				</table>
-			</form>
-		</div>
-	</body>
+					</div>
+					<div class="checkbox-container"><input type="checkbox" id="beamspot-check" checked onchange="vertexSelected();"/>
+						<label for="beamspot-check">x/y: smear beamspot </label>
+						<input type="text" id="beamspot-show" name="beamspot-show" value="" readonly size="50"><br>
 
-	<script src="main.js"></script>		<!-- Don't move this line to the top! It causes an error at Safari -->
+					</div>
+					<div class="checkbox-container"><input type="checkbox" id="raster-check" checked onchange="vertexSelected();"/>
+						<label for="raster-check">x/y: raster </label>
+						<input type="text" id="raster-show" name="raster-show" value="" readonly size="20"><br>
+
+					</div>
+					<div style="text-align: center;">
+						<fieldset id="vertex_user_selection" name="vertex_user_selection" style="border-width: 0">
+
+							<input type="radio" id="ignore" name="vuser_selection" value="0" checked>
+							<label for="ignore"> Ignore Generator Vertex</label>
+
+							<input type="radio" id="relative" name="vuser_selection" value="1">
+							<label for="relative"> Relative to Generator Vertex</label>
+
+						</fieldset>
+					</div>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Generator <span class="tooltiptext">Choose one of the available generators on OSG</span>
+					</div>
+				</td>
+				<td>
+					<select name="generator" id="generator" required onchange="genSelected(this)">
+						<option selected hidden value=""></option>
+						<option value="clas12-elSpectro"> clas12-elSpectro</option>
+						<option value="clasdis"> clasdis</option>
+						<option value="claspyth"> claspyth</option>
+						<option value="deep-pipi-gen"> deep-pipi-gen</option>
+						<option value="dvcsgen"> dvcsgen</option>
+						<option value="genKYandOnePion"> genKYandOnePion</option>
+						<option value="inclusive-dis-rad"> inclusive-dis-rad</option>
+						<option value="JPsiGen"> JPsiGen</option>
+						<option value="MCEGENpiN_radcorr"> MCEGENpiN_radcorr</option>
+						<option value="TCSGen"> TCSGen</option>
+						<option value="twopeg"> twopeg</option>
+						<option value="genepi"> genepi</option>
+						<option value="onepigen"> onepigen</option>
+						<option value="gibuu"> gibuu</option>
+						<option value="clas-stringspinner"> clas-stringspinner</option>
+						<option value="gemc"> gemc</option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Generator Options<span class="tooltiptext">
+							Once a generator is selected, click on the right link to open a new window with the selected generator documentation</span>
+					</div>
+				</td>
+				<td><input type="" name="genOptions" id="genOptions" style="min-width: 200px !important;"/></td>
+				<td>
+					<div id="generatorLink">
+						<a href="#" target="_blank"> </a>
+					</div>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="2"> Once you've chosen the generator, review the linked documentation and insert the desired options above.<br/>
+
+					Do not utilize the following options, as they are automatically included: <i>--docker, output file name, --trig </i>.
+				</td>
+			</tr>
+			<tr>
+				<td>Number of Events per Job</td>
+				<td><input type="number" name="nevents" id='box2' oninput="calculate();" min="1" max="5000" required>
+				</td>
+			</tr>
+			<tr>
+				<td>Number of Jobs</td>
+				<td><input type="number" name="jobs" id='box1' oninput="calculate();" min="0" required></td>
+			</tr>
+			<tr>
+				<td> Total Number of Events</td>
+				<td><input type="number" name="totalevents" id="result" readonly/> M</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Background Merging
+						<span class="tooltiptext">Choose values to merge background from random trigger. Select magentic fields at second row first! No merging is selected by default.</span></div>
+				</td>
+				<td>
+					<select name="bkmerging" id="bkmerging" required></select>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">String Identifier (optional)
+						<span class="tooltiptext"> Output filename will be:<br/> STRINGID-OSGID-JOBINDEX.hipo</span></div>
+				</td>
+				<td>
+					<input type="text" id="user_string" name="user_string" value="" size="20" onkeydown="return /[aA-zZ0-9-]/i.test(event.key)"><br>
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<div class="tooltip">Output Type
+						<span class="tooltiptext">Choose DST or GEMC only</span></div>
+				</td>
+				<td>
+					<div style="text-align: center;">
+						<fieldset id="sim_output_type" name="sim_output_type" style="border-width: 0">
+
+							<input type="radio" id="dst" name="output_type" value="0" checked>
+							<label for="dst"> DST</label>
+
+							<input type="radio" id="gemc" name="output_type" value="1">
+							<label for="gemc"> GEMC Only</label>
+
+						</fieldset>
+					</div>
+				</td>
+			</tr>
+			<tr>
+				<td style='border-left-color:white;border-bottom-color:white;'></td>
+				<td><input type="submit" value="Submit">
+				</td>
+			</tr>
+		</table>
+	</form>
+</div>
+</body>
+
+<script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
 
 </html>

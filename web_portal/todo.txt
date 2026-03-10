@@ -1,2 +1,0 @@
-- subdir 'submissions' to keep last 10 days history of submissions (need cronjob to delete files older than 30 days or so)
-

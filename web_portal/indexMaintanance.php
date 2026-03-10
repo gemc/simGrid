@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>CLAS12 Monte-Carlo Simulations OSG Portal</title>
+		<title>CLAS12 Monte-Carlo Job Submission Portal</title>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
@@ -18,6 +18,7 @@
 				<li><a href="about.html">    About</a></li>
 <!--				<li><a href="disk.php">      Disk Usage</a></li>-->
 				<li><a href="osgStats.html"> OSG Stats</a></li>
+				<li><a href="fairshare.html"> Fairshare</a></li>
 				<li><a href="monitor.html">  Monitors</a></li>
 			</ul>
 
@@ -41,13 +42,22 @@
 		<h3>
 			<center>
 				<font color="blue">
-					Nov 17 2020 Maintenance <br/>
-					Job Submission is suspended. <br/>
+					Nov 20, 2025 <br/>
+					There are issues with pelican that prevent file transfers  <br/>
+					XROOTD has been deprecated at JLab. All jobs that have background merging are placed on hold.
+					When a solution is found, these jobs will be resubmitted.<br/>
+					All submissions are suspended until these issues are resolved. <br/>
 				</font>
 			</center>
 		</h3>
 
-
+		<div class="w3-padding w3-center">
+			<!--					<div id="farmStats"></div>-->
+			<br/><br/>
+			<h2 class="w3-xlarge" style="text-align:center">Details of current OSG Jobs</h2>
+			<div id="osgLog"></div>
+			<br/><br/>
+		</div>
 
 	</body>
 
