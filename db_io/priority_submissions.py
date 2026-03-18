@@ -861,7 +861,7 @@ def write_priority_json(
 				"submitted_load_for_user": row.get("submitted_load_for_user"),
 				"pending_load_for_user":  row.get("pending_load_for_user"),
 				"history_load_for_user":  row.get("history_load_for_user"),
-				"score": round(row["score"], 1),
+				"score": f"{row['score']:.1f}",
 				"age_days":               row["age_days"],
 			}
 			for row in prioritized_pending_rows
