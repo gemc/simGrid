@@ -860,7 +860,7 @@ def write_priority_json(
 				"submitted_load_for_user": row.get("submitted_load_for_user"),
 				"pending_load_for_user":  row.get("pending_load_for_user"),
 				"history_load_for_user":  row.get("history_load_for_user"),
-				"score":                  row["score"],
+				"score": round(row["score"], 1),
 				"age_days":               row["age_days"],
 			}
 			for row in prioritized_pending_rows
@@ -894,6 +894,23 @@ def main() -> int:
 				days_past=args.days,
 				client_time_format="%Y-%m-%d %H:%i:%s",
 			)
+			print(f"DEBUG fetched rows: {len(rows)}")
+
+			if args.days is not None:
+				total_all = db.query_one("SELECT COUNT(*) AS n FROM submissions")
+				print(f"DEBUG total rows in submissions: {total_all['n']}")
+
+				bad_time = db.query_one(
+					"""
+					SELECT COUNT(*) AS n
+					FROM submissions
+					WHERE client_time IS NULL
+					   OR TRIM(client_time) = ''
+					   OR STR_TO_DATE(client_time, %s) IS NULL
+					""",
+					["%Y-%m-%d %H:%i:%s"],
+				)
+				print(f"DEBUG unparsable/blank client_time rows: {bad_time['n']}")
 
 		rows_with_priority, prioritized_pending_rows, submitted_load_by_user, pending_load_by_user = compute_priorities(
 			rows=rows,

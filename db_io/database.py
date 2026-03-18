@@ -303,39 +303,27 @@ class Database:
 			client_time_format: str = "%Y-%m-%d %H:%i:%s",
 	) -> list[dict[str, Any]]:
 		"""
-		Return submission user, id, client_time, and run_status from the `submissions` table.
-
-		Parameters
-		----------
-		days_past:
-			If provided, restrict results to rows whose `client_time` is within
-			the last N days.
-		client_time_format:
-			MySQL STR_TO_DATE format string used to parse the `client_time` text
-			column.
-
-		Returns
-		-------
-		list[dict[str, Any]]
-			Rows with keys: user, user_submission_id, client_time, run_status
+		Return submission user, id, client_time, and run_status from the
+		`submissions` table.
 		"""
 		if days_past is None:
 			sql = """
-                SELECT user, user_submission_id, client_time, run_status
-                FROM submissions
-                ORDER BY user_submission_id
-            """
-			params: tuple[Any, ...] = ()
-		else:
-			sql = """
-                SELECT user, user_submission_id, client_time, run_status
-                FROM submissions
-                WHERE STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
-                ORDER BY user_submission_id
-            """
-			params = (client_time_format, days_past)
+				SELECT user, user_submission_id, client_time, run_status
+				FROM submissions
+				ORDER BY user_submission_id
+			"""
+			return self.query(sql)
 
-		return self.query(sql, params)
+		sql = """
+			SELECT user, user_submission_id, client_time, run_status
+			FROM submissions
+			WHERE client_time IS NOT NULL
+			  AND TRIM(client_time) != ''
+			  AND STR_TO_DATE(client_time, %s) IS NOT NULL
+			  AND STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
+			ORDER BY user_submission_id
+		"""
+		return self.query(sql, [client_time_format, client_time_format, days_past])
 
 	def get_submission_times(
 			self,
