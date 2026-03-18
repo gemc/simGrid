@@ -770,6 +770,7 @@ def print_summary(
 	total_pending = sum(
 		1 for row in rows if str(row.get("run_status", "")).strip() == "Not Submitted"
 	)
+	total_submissions = row["total_submissions"]
 
 	total_estimate_time = sum(estimate_time_by_user.values())
 
@@ -778,7 +779,7 @@ def print_summary(
 		print("Days considered: all")
 	else:
 		print(f"Days considered: last {days_considered}")
-	print(f"Total jobs: {len(rows)}")
+	print(f"Total submissions: {total_submissions}")
 	print(f"Total users: {len(summary_rows)}")
 	print(f"Total 'Not Submitted' jobs: {total_pending}")
 	print(f"Total estimated time for 'Not Submitted' jobs (days): {total_estimate_time:.1f}")
