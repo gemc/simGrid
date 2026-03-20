@@ -1,7 +1,7 @@
 from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 
-import htcondor
+import htcondor2 as htcondor
 
 
 # HTCondor JobStatus codes
