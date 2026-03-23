@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 
 import htcondor2 as htcondor
+from typing import Dict, Optional, Any, Iterable
 
 # HTCondor JobStatus codes
 # 0 = UNEXPANDED, 1 = IDLE, 2 = RUNNING, 3 = REMOVED, 4 = COMPLETED, 5 = HELD, 6 = TRANSFERRING_OUTPUT, 7 = SUSPENDED
@@ -120,3 +121,61 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 			pass
 
 	return batches
+
+def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
+	"""
+	Set JobPrio for all jobs in a given cluster.
+
+	Args:
+		cluster_id: HTCondor ClusterId.
+		priority: Integer JobPrio to assign.
+
+	Returns:
+		Result from schedd.edit(...).
+	"""
+	schedd = htcondor.Schedd()
+	return schedd.edit(
+		job_spec=int(cluster_id),
+		attr="JobPrio",
+		value=str(int(priority)),
+	)
+
+
+def set_clusters_job_priority(priority_by_cluster: Dict[int, int], skip_zero: bool = True) -> Dict[int, Any]:
+	"""
+	Set JobPrio for multiple clusters.
+
+	Args:
+		priority_by_cluster: Mapping {ClusterId: priority}
+		skip_zero: If True, do not edit clusters whose target priority is 0.
+
+	Returns:
+		Mapping {ClusterId: schedd.edit(...) result}
+	"""
+	results: Dict[int, Any] = {}
+
+	for cluster_id, priority in priority_by_cluster.items():
+		if skip_zero and int(priority) == 0:
+			continue
+		results[cluster_id] = set_cluster_job_priority(cluster_id, int(priority))
+
+	return results
+
+
+def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool = True) -> Dict[int, Any]:
+	"""
+	Apply priorities from the internal priority map to HTCondor JobPrio.
+
+	Args:
+		priority_map: Mapping keyed by ClusterId, with each value containing
+		              at least a 'priority' field.
+		skip_zero: If True, do not edit clusters whose target priority is 0.
+
+	Returns:
+		Mapping {ClusterId: schedd.edit(...) result}
+	"""
+	priority_by_cluster = {
+		int(cluster_id): int(entry["priority"])
+		for cluster_id, entry in priority_map.items()
+	}
+	return set_clusters_job_priority(priority_by_cluster, skip_zero=skip_zero)

@@ -2,8 +2,7 @@ import argparse
 import sys
 from typing import Dict, Any, List, Tuple
 
-from htcondor_utils import get_owner_batches
-
+from htcondor_utils import get_owner_batches, apply_priority_map
 
 def _priority_from_ratio(run: int, run_avg: float) -> int:
 	"""
@@ -19,7 +18,6 @@ def _priority_from_ratio(run: int, run_avg: float) -> int:
 	if run_avg <= 0:
 		return 0
 
-	# Positive when below average, negative when above average
 	value = round(5 * (1.0 - (run / run_avg)))
 
 	if value > 5:
@@ -82,11 +80,16 @@ def build_priority_map(owner: str, max_running: int = 5) -> Dict[int, Dict[str, 
 	return priority_map
 
 
-def print_priority_map(owner: str, max_running: int) -> None:
+def print_priority_map(owner: str, max_running: int, apply: bool = False) -> None:
 	"""
 	Print the current internal priority map as a table.
+
+	If apply=True, also write non-zero priorities to HTCondor JobPrio.
 	"""
 	priority_map = build_priority_map(owner, max_running=max_running)
+
+	if apply and priority_map:
+		apply_priority_map(priority_map, skip_zero=True)
 
 	header = (
 		f"{'OWNER':<6}  {'BATCH_NAME':<10}  {'RUN':>6}  {'PRIORITY':>8}"
@@ -111,7 +114,8 @@ def main(argv=None):
 
 	Usage:
 	  -p / --priority-map prints the internal priority table for an owner.
-	  -m / --max-running sets how many oldest submissions get non-zero priority.
+	  -m / --max-running sets how many oldest submissions get active priority.
+	  -a / --apply writes non-zero priorities to HTCondor JobPrio.
 	  --owner defaults to 'gemc'.
 	"""
 	if argv is None:
@@ -139,6 +143,12 @@ def main(argv=None):
 		help="Condor owner to query (default: gemc)",
 	)
 
+	parser.add_argument(
+		"-a", "--apply",
+		action="store_true",
+		help="Apply non-zero priorities to HTCondor JobPrio",
+	)
+
 	# Print help when run with no arguments
 	if not argv:
 		parser.print_help()
@@ -150,7 +160,7 @@ def main(argv=None):
 		parser.error("--max-running must be >= 1")
 
 	if args.priority_map:
-		print_priority_map(args.owner, args.max_running)
+		print_priority_map(args.owner, args.max_running, apply=args.apply)
 
 	return 0
 
