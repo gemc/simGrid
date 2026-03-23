@@ -1,6 +1,8 @@
 import argparse
+import sys
 
 from htcondor_utils import get_owner_batches, format_submitted_time
+
 
 def print_owner_batches(owner: str) -> None:
 	"""
@@ -94,6 +96,9 @@ def main(argv=None):
 	  -q / --query prints the per-batch table for the requested owner.
 	  --owner defaults to 'gemc'.
 	"""
+	if argv is None:
+		argv = sys.argv[1:]
+
 	parser = argparse.ArgumentParser(description="condor queries")
 
 	parser.add_argument(
@@ -109,11 +114,18 @@ def main(argv=None):
 		help="Condor owner to query (default: gemc)",
 	)
 
+	# Print help when run with no arguments
+	if not argv:
+		parser.print_help()
+		return 0
+
 	args = parser.parse_args(argv)
 
 	if args.query:
 		print_owner_batches(args.owner)
 
+	return 0
+
 
 if __name__ == "__main__":
-	main()
+	raise SystemExit(main())
