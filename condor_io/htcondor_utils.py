@@ -2,7 +2,7 @@ from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 
 import htcondor2 as htcondor
-from typing import Dict, Optional, Any, Iterable
+from typing import Dict, Optional, Any
 
 # HTCondor JobStatus codes
 # 0 = UNEXPANDED, 1 = IDLE, 2 = RUNNING, 3 = REMOVED, 4 = COMPLETED, 5 = HELD, 6 = TRANSFERRING_OUTPUT, 7 = SUSPENDED
@@ -16,6 +16,7 @@ JOB_STATUS = {
 	6: "XFER",
 	7: "SUSP",
 }
+
 
 def format_submitted_time(epoch: Optional[int]) -> str:
 	"""
@@ -59,8 +60,8 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 
 	ads = schedd.query(
 		constraint=constraint,
-		projection=["Owner", "ClusterId", "ProcId", "JobStatus", "QDate", "TotalSubmitProcs"],
-	)
+		projection=["Owner", "ClusterId", "ProcId", "JobStatus", "QDate", "TotalSubmitProcs",
+		            "JobPrio"], )
 
 	batches: Dict[int, Dict[str, Any]] = {}
 
@@ -76,13 +77,14 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 
 		if cluster_id not in batches:
 			batches[cluster_id] = {
-				"owner":              owner,
-				"submitted_epoch":    qdate,
-				"total_submit_procs": int(
-					total_submit_procs) if total_submit_procs is not None else None,
-				"counts":             {"RUN": 0, "IDLE": 0, "HOLD": 0, "OTHER": 0},
-				"min_proc":           proc_id,
-				"max_proc":           proc_id,
+				"owner":                  owner,
+				"submitted_epoch":        qdate,
+				"total_submit_procs":     int(total_submit_procs) if total_submit_procs is not None else None,
+				"counts":                 {"RUN": 0, "IDLE": 0, "HOLD": 0, "OTHER": 0},
+				"min_proc":               proc_id,
+				"max_proc":               proc_id,
+				"current_priority":       ad.get("JobPrio"),
+				"current_priority_mixed": False,
 			}
 
 		b = batches[cluster_id]
@@ -96,6 +98,15 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 		# If it wasn't set on the first ad we saw, adopt it when we do see it.
 		if b["total_submit_procs"] is None and total_submit_procs is not None:
 			b["total_submit_procs"] = int(total_submit_procs)
+
+		# Track current JobPrio across jobs in the cluster.
+		# If all jobs agree, keep that value. If not, mark as mixed.
+		job_prio = ad.get("JobPrio")
+		if not b["current_priority_mixed"]:
+			if b["current_priority"] is None:
+				b["current_priority"] = job_prio
+			elif job_prio is not None and job_prio != b["current_priority"]:
+				b["current_priority_mixed"] = True
 
 		# Track proc id range among jobs still present in the queue
 		if proc_id is not None:
@@ -122,6 +133,7 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 
 	return batches
 
+
 def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	"""
 	Set JobPrio for all jobs in a given cluster.
@@ -141,28 +153,26 @@ def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	)
 
 
-def set_clusters_job_priority(priority_by_cluster: Dict[int, int], skip_zero: bool = True) -> Dict[int, Any]:
+def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	"""
-	Set JobPrio for multiple clusters.
+	Set JobPrio for all jobs in a given cluster.
 
 	Args:
-		priority_by_cluster: Mapping {ClusterId: priority}
-		skip_zero: If True, do not edit clusters whose target priority is 0.
+		cluster_id: HTCondor ClusterId.
+		priority: Integer JobPrio to assign.
 
 	Returns:
-		Mapping {ClusterId: schedd.edit(...) result}
+		Result from schedd.edit(...).
 	"""
-	results: Dict[int, Any] = {}
-
-	for cluster_id, priority in priority_by_cluster.items():
-		if skip_zero and int(priority) == 0:
-			continue
-		results[cluster_id] = set_cluster_job_priority(cluster_id, int(priority))
-
-	return results
+	schedd = htcondor.Schedd()
+	return schedd.edit(
+		job_spec=int(cluster_id),
+		attr="JobPrio",
+		value=str(int(priority)),
+	)
 
 
-def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool = True) -> Dict[int, Any]:
+def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool = True) -> Dict[int, Dict[str, Any]]:
 	"""
 	Apply priorities from the internal priority map to HTCondor JobPrio.
 
@@ -172,10 +182,30 @@ def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool 
 		skip_zero: If True, do not edit clusters whose target priority is 0.
 
 	Returns:
-		Mapping {ClusterId: schedd.edit(...) result}
+		Mapping:
+		  {
+		    ClusterId: {
+		      "old_priority": old priority if uniform, else None,
+		      "new_priority": target priority,
+		      "result": raw schedd.edit(...) result,
+		    }
+		  }
 	"""
-	priority_by_cluster = {
-		int(cluster_id): int(entry["priority"])
-		for cluster_id, entry in priority_map.items()
-	}
-	return set_clusters_job_priority(priority_by_cluster, skip_zero=skip_zero)
+	results: Dict[int, Dict[str, Any]] = {}
+
+	for cluster_id, entry in priority_map.items():
+		new_priority = int(entry["priority"])
+
+		if skip_zero and new_priority == 0:
+			continue
+
+		old_priority = entry.get("old_priority")
+		result = set_cluster_job_priority(int(cluster_id), new_priority)
+
+		results[int(cluster_id)] = {
+			"old_priority": old_priority,
+			"new_priority": new_priority,
+			"result": result,
+		}
+
+	return results

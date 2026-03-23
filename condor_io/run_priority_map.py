@@ -54,10 +54,13 @@ def build_priority_map(owner: str, max_running: int = 5) -> Dict[int, Dict[str, 
 		run = b["counts"]["RUN"]
 		submitted_epoch = b.get("submitted_epoch")
 
+		current_priority = None if b.get("current_priority_mixed") else b.get("current_priority")
+
 		priority_map[cluster_id] = {
 			"batch_name": f"ID: {cluster_id}",
 			"submitted_epoch": submitted_epoch,
 			"run": run,
+			"old_priority": current_priority,
 			"priority": 0,
 		}
 
@@ -88,11 +91,12 @@ def print_priority_map(owner: str, max_running: int, apply: bool = False) -> Non
 	"""
 	priority_map = build_priority_map(owner, max_running=max_running)
 
+	apply_results = {}
 	if apply and priority_map:
-		apply_priority_map(priority_map, skip_zero=True)
+		apply_results = apply_priority_map(priority_map, skip_zero=True)
 
 	header = (
-		f"{'OWNER':<6}  {'BATCH_NAME':<10}  {'RUN':>6}  {'PRIORITY':>8}"
+		f"{'OWNER':<6}  {'BATCH_NAME':<10}  {'RUN':>6}  {'OLD_PRIO':>8}  {'NEW_PRIO':>8}"
 	)
 	print(header)
 
@@ -101,11 +105,24 @@ def print_priority_map(owner: str, max_running: int, apply: bool = False) -> Non
 		return
 
 	# Show ordered by batch ID
-	for _, entry in sorted(priority_map.items(), key=lambda item: item[0]):
+	for cluster_id, entry in sorted(priority_map.items(), key=lambda item: item[0]):
+		old_prio = entry["old_priority"]
+		new_prio = entry["priority"]
+
+		old_prio_str = "-" if old_prio is None else str(old_prio)
+
 		print(
 			f"{owner:<6}  {entry['batch_name']:<10}  "
-			f"{entry['run']:>6}  {entry['priority']:>8}"
+			f"{entry['run']:>6}  {old_prio_str:>8}  {new_prio:>8}"
 		)
+
+	if apply_results:
+		print()
+		print("Applied priority updates:")
+		for cluster_id in sorted(apply_results):
+			r = apply_results[cluster_id]
+			old_prio = "-" if r["old_priority"] is None else str(r["old_priority"])
+			print(f"  ID: {cluster_id:<6}  {old_prio:>4} -> {r['new_priority']:>4}")
 
 
 def main(argv=None):
