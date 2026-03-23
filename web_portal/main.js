@@ -34,7 +34,7 @@ if (document.getElementById('title')) {
 	document.getElementById('title').innerHTML = title;
 }
 
-function formatNumber(value, digits = 6) {
+function formatNumber(value, digits = 1) {
 	var num = Number(value);
 	if (!isFinite(num)) return "";
 	return num.toFixed(digits);
@@ -666,19 +666,19 @@ function fairshareToTable() {
 			summaryTxt += "<tr><td>Aging Half-life (days)</td><td>" + escapeHtml(myObj.half_life_days == null ? "n/a" : myObj.half_life_days) + "</td></tr>";
 			summaryTxt += "<tr><td>History half-life (days)</td><td>" + escapeHtml(myObj.history_half_life_days == null ? "n/a" : myObj.history_half_life_days) + "</td></tr>";
 			summaryTxt += "<tr><td>Days considered</td><td>" + escapeHtml(daysConsidered) + "</td></tr>";
-			summaryTxt += "<tr><td>Total jobs</td><td>" + escapeHtml(myObj.total_jobs || 0) + "</td></tr>";
+			summaryTxt += "<tr><td>Number of Submissions</td><td>" + escapeHtml(myObj.total_submissions || 0) + "</td></tr>";
 			summaryTxt += "<tr><td>Total users</td><td>" + escapeHtml(myObj.total_users || 0) + "</td></tr>";
-			summaryTxt += "<tr><td>Total 'Not Submitted' jobs</td><td>" + escapeHtml(myObj.total_not_submitted_jobs || 0) + "</td></tr>";
+			summaryTxt += "<tr><td>Not Submitted</td><td>" + escapeHtml(myObj.total_not_submitted_jobs || 0) + "</td></tr>";
 			summaryTxt += "</table>";
 
 			// Per-user summary table
 			var userSummaryTxt = "<table align=\"center\" style=\"width:60%;text-align:center\">";
-			userSummaryTxt += "<tr><th>user</th><th>total jobs</th><th>history weight</th><th>pending jobs</th></tr>";
+			userSummaryTxt += "<tr><th>user</th><th>submissions</th><th>history weight</th><th>pending</th></tr>";
 			for (var i = 0; i < jobsPerUser.length; i++) {
 				userSummaryTxt += "<tr>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].user) + "</td>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].jobs) + "</td>";
-				userSummaryTxt += "<td>" + escapeHtml(formatNumber(jobsPerUser[i].submitted_load, 2)) + "</td>";
+				userSummaryTxt += "<td>" + escapeHtml(formatNumber(jobsPerUser[i].submitted_load*100, 2)) + "</td>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].pending_jobs) + "</td>";
 				userSummaryTxt += "</tr>";
 			}
@@ -692,10 +692,10 @@ function fairshareToTable() {
 			var headers = [
 				"user",
 				"user_submission_id",
-				"client_time",
+				"date",
 				"order",
 				"wait_time (h)",
-				"pending_jobs_for_user",
+				"pending",
 				"score",
 				"age_days"
 			];

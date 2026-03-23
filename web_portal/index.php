@@ -17,8 +17,8 @@
 				<li><a href="index.php">     <h3><b>Home</b></h3></a></li>
 				<li><a href="about.html">    About</a></li>
 				<li><a href="osgStats.html"> OSG Stats</a></li>
-				<li><a href="fairshare.html"> Fairshare</a></li>
 				<li><a href="monitor.html">  Monitors</a></li>
+				<li><a href="fairshare.html"> Fairshare</a></li>
 			</ul>
 
 			<div class="w3-center">
