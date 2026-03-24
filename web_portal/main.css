@@ -1,117 +1,182 @@
 /*Sticky top navigation from https://csswizardry.com/2011/01/create-a-centred-horizontal-navigation/ */
-	#nav{
-		border:1px solid #ccc;
-		border-width:1px 0;
-		list-style:none;
-		margin:0;
-		padding:0;
-		text-align:center;
-		z-index:500;
-		background-color: #fff;
-		overflow: hidden;
-	}
-	#nav li{
-		position:relative;
-		display:inline;
-	}
-	#nav a{
-		display:inline-block;
-		padding:10px;
-	}
-	#nav a.active {
-	  background-color: #aaa;
-	  color: white;
-	}
-	#nav ul{
-		position:absolute;
-		/*top:100%; Uncommenting this makes the dropdowns work in IE7 but looks a little worse in all other browsers. Your call. */
-		left:-9999px;
-		margin:0;
-		padding:0;
-		text-align:left;
-	}
-	#nav ul li{
-		display:block;
-	}
-	#nav li:hover ul{
-		left:0;
-	}
-	#nav li:hover a{
-		text-decoration:underline;
-		background:#fff;
-	}
-	#nav li:hover ul a{
-		text-decoration:none;
-		background:none;
-	}
-	#nav li:hover ul a:hover{
-		text-decoration:underline;
-		background:#fff;
-	}
-	#nav ul a{
-		white-space:nowrap;
-		display:block;
-		border-bottom:1px solid #ccc;
-	}
-	a{
-		color:#000;
-		text-decoration:none;
-		font-weight:bold;
-	}
-	a:hover{
-		text-decoration:underline;
-		background:#fff;
-	}
-	.sticky {
-	  position: fixed;
-	  top: 0;
-	  width: 100%;
-	}
+#nav {
+	border: 1px solid #ccc;
+	border-width: 1px 0;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	text-align: center;
+	z-index: 500;
+	background-color: #fff;
+	overflow: hidden;
+}
 
-	.sticky + .content {
-	  padding-top: 60px;
-	}
+#nav li {
+	position: relative;
+	display: inline;
+}
+
+#nav a {
+	display: inline-block;
+	padding: 10px;
+}
+
+#nav a.active {
+	background-color: #aaa;
+	color: white;
+}
+
+#nav ul {
+	position: absolute;
+	/*top:100%; Uncommenting this makes the dropdowns work in IE7 but looks a little worse in all other browsers. Your call. */
+	left: -9999px;
+	margin: 0;
+	padding: 0;
+	text-align: left;
+}
+
+#nav ul li {
+	display: block;
+}
+
+#nav li:hover ul {
+	left: 0;
+}
+
+#nav li:hover a {
+	text-decoration: underline;
+	background: #fff;
+}
+
+#nav li:hover ul a {
+	text-decoration: none;
+	background: none;
+}
+
+#nav li:hover ul a:hover {
+	text-decoration: underline;
+	background: #fff;
+}
+
+#nav ul a {
+	white-space: nowrap;
+	display: block;
+	border-bottom: 1px solid #ccc;
+}
+
+checkbox-container {
+	display: flex;
+}
+
+.checkbox-container input[type="checkbox"] {
+	margin-left: 10px;
+}
+
+.checkbox-container label {
+	margin-left: 5px;
+	text-align: left;
+}
+
+a {
+	color: #44a;
+	text-decoration: none;
+	font-weight: bold;
+}
+
+a:hover {
+	text-decoration: underline;
+	background: #fff;
+}
+
+.sticky {
+	position: fixed;
+	top: 0;
+	width: 100%;
+}
+
+.sticky + .content {
+	padding-top: 60px;
+}
 
 
 /* css template from https://www.w3schools.com/w3css/tryw3css_templates_photo2.htm */
-	body,h1,h2,h3,h4 {font-family: "Avenir", Helvetica, sans-serif}
-	h1 {letter-spacing: 6px}
-	.w3-row-padding img {margin-bottom: 12px}
-	table, th, td {
-		border: 1px solid black;
-		border-collapse: collapse;
-	}
-	th, td {
-		padding: 10px;
-	}
+body, h1, h2, h3, h4 {
+	font-family: "Avenir", Helvetica, sans-serif, Monaco
+}
+
+h1 {
+	letter-spacing: 6px
+}
+
+.w3-row-padding img {
+	margin-bottom: 12px
+}
+
+table, th, td {
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+
+th, td {
+	padding: 10px;
+}
 
 /* style for objects used in tables */
-	.tooltip {
-		position: relative;
-		display: inline-block;
-		border-bottom: 1px dotted black;
-	}
+.tooltip {
+	position: relative;
+	display: inline-block;
+	border-bottom: 1px dotted black;
+}
 
-	.tooltip .tooltiptext {
-		visibility: hidden;
-		width: 150px;
-		background-color: black;
-		color: #fff;
-		text-align: center;
-		border-radius: 6px;
-		padding: 2px 0;
+.tooltip .tooltiptext {
 
-		/* Position the tooltip */
-		position: absolute;
-		z-index: 1;
-	}
+	visibility: hidden;
+	width: 450px;
+	background-color: black;
+	color: #fff;
+	text-align: center;
+	border-radius: 4px;
+	padding: 2px 0;
 
-	.tooltip:hover .tooltiptext {
-		visibility: visible;
-	}
+	/* Position the tooltip */
+	position: absolute;
+	z-index: 1;
+}
 
-	input[type=number]::-webkit-inner-spin-button,
-	input[type=number]::-webkit-outer-spin-button {
-		-webkit-appearance: none;
-		margin: 0;
-	}
+.tooltip:hover .tooltiptext {
+	visibility: visible;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+input {
+/ / min-width: 200 px !important;
+	max-width: 99.99% !important;
+	transition: width 0.1s;
+	text-align: center;
+}
+
+.pdf-container {
+	text-align: center;
+	align-content: center;
+	align-self: center;
+	display: flex;
+	justify-content: center;
+}
+
+
+.pdf-preview {
+	width: 100%;
+	height: 100%;
+	border: 0px;
+	margin: 0px;
+
+}
+
+.pdf-preview td {
+	width: 1500px;
+}
