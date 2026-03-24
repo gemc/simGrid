@@ -46,15 +46,26 @@
 				$string_id     = $_POST['user_string'];
 				$output_type   = $_POST['output_type'];
 				$uri		   = $_SERVER['REQUEST_URI'];
-				
+				$timestamp     = date('Y-m-d_H-i-s');
+				$scard_file    = '/var/www/gemc-runtime/scard_type2_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $username) . '_' . $timestamp . '.txt';
+
 				function yesorno($cond){
 					$val = "no";
 					if($cond) $val="yes";
 					return $val;
 				}
 
-				if (!empty($project) && !empty($configuration)  && !empty($softwarev)  && !empty($lundFiles) && !empty($fields)&& !empty($bkmerging)) {
-					$fp = fopen('/var/www/gemc-runtime/scard_type2.txt', 'w');
+				if (
+					!empty($project) &&
+					!empty($configuration) &&
+					!empty($softwarev) &&
+					!empty($lundFiles) &&
+					!empty($fields) &&
+					!empty($bkmerging)
+				) {
+
+					$fp = fopen($scard_file, 'w');
+
 					fwrite($fp, 'project:  '.$project.PHP_EOL);
 					fwrite($fp, 'configuration: '.$configuration.PHP_EOL);
 					fwrite($fp, 'softwarev: '.$softwarev.PHP_EOL);
@@ -75,11 +86,16 @@
 						fwrite($fp, 'submission: production'.PHP_EOL);
 					}
 					fclose($fp);
+					$submit_script = '../SubMit/client/src/SubMit.py';
 					if (strpos($uri, 'test/web_interface') !== false) {
-						$command = escapeshellcmd('../SubMit/client/src/SubMit.py --test_database -u '.$username.' /var/www/gemc-runtime/scard_type2.txt');
+						$command = $submit_script
+								 . ' --test_database -u ' . escapeshellarg($username)
+								 . ' ' . escapeshellarg($scard_file);
 						$output = shell_exec($command);
 					} else {
-						$command = escapeshellcmd('../SubMit/client/src/SubMit.py -u '.$username.' /var/www/gemc-runtime/scard_type2.txt');
+						$command = $submit_script
+								 . ' -u ' . escapeshellarg($username)
+								 . ' ' . escapeshellarg($scard_file);
 						$output = shell_exec($command);
 					}
 				}
