@@ -22,7 +22,8 @@
 
 			<div class="w3-center">
 				<h1 id="title" class="w3-xlarge w3-opacity"></h1>
-				<h3>Logged in as <img width = "160" src="username.php"/></h3>
+				<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
+				<h4><i>Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></i></h4>
 				<br/><br/>
 			</div>
 		</header>
