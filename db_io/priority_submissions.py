@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 List submission timing information from the `submissions` table, compute
 priority for pending jobs, and write those priorities to a JSON file.
