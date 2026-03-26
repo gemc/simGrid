@@ -31,6 +31,8 @@
 		<div class="w3-center">
 			
 			<?php
+				require_once __DIR__ . '/common.php';
+
 				$project       = 'CLAS12';
 				$configuration = $_POST['configuration'];
 				$softwarev     = $_POST['softwarev'];
@@ -48,6 +50,7 @@
 				$uri		   = $_SERVER['REQUEST_URI'];
 				$timestamp     = date('Y-m-d_H-i-s');
 				$scard_file    = '/var/www/gemc-runtime/scard_type2_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $username) . '_' . $timestamp . '.txt';
+				$command = $submit_script;
 
 				function yesorno($cond){
 					$val = "no";
@@ -80,24 +83,16 @@
 					fwrite($fp, 'vertex_choice: '.$vertex_choice.PHP_EOL);
 					fwrite($fp, 'string_id: '.$string_id.PHP_EOL);
 					fwrite($fp, 'output_type: '.$output_type.PHP_EOL);
-					if (strpos($uri, 'test/web_interface') !== false) {
+					if ($IS_DEVEL_MODE) {
 						fwrite($fp, 'submission: devel'.PHP_EOL);
+    					$command .= ' --database CLAS12TEST';
 					} else {
 						fwrite($fp, 'submission: production'.PHP_EOL);
 					}
 					fclose($fp);
-					$submit_script = '../SubMit/client/src/SubMit.py';
-					if (strpos($uri, 'test/web_interface') !== false) {
-						$command = $submit_script
-								 . ' --test_database -u ' . escapeshellarg($username)
-								 . ' ' . escapeshellarg($scard_file);
-						$output = shell_exec($command);
-					} else {
-						$command = $submit_script
-								 . ' -u ' . escapeshellarg($username)
-								 . ' ' . escapeshellarg($scard_file);
-						$output = shell_exec($command);
-					}
+					$command .= ' -u ' . escapeshellarg($username)
+							 . ' ' . escapeshellarg($scard_file);
+					$output = shell_exec($command);
 				}
 				else {
 					echo "All field are required";
