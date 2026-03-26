@@ -12,11 +12,40 @@ if (!isset($_GET['id']) || !preg_match('/^\d+$/', $_GET['id'])) {
 }
 
 $id = $_GET['id'];
-$defaultsFile = realpath('../../../../msql_conn.txt');
+$defaultsPath = '../../../../msql_conn.txt';
+$defaultsFile = realpath($defaultsPath);
 
-if ($defaultsFile === false || !is_readable($defaultsFile)) {
-	$response['error'] = 'Cannot read MySQL defaults file.';
-	echo json_encode($response, JSON_PRETTY_PRINT);
+if ($defaultsFile === false) {
+	$response['error'] = 'MySQL defaults file was not found.';
+	$response['details'] = [
+		'requested_path' => $defaultsPath,
+		'resolved_path' => null,
+		'cwd' => getcwd()
+	];
+	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+	exit;
+}
+
+if (!is_file($defaultsFile)) {
+	$response['error'] = 'Resolved MySQL defaults path is not a regular file.';
+	$response['details'] = [
+		'requested_path' => $defaultsPath,
+		'resolved_path' => $defaultsFile
+	];
+	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+	exit;
+}
+
+if (!is_readable($defaultsFile)) {
+	$response['error'] = 'MySQL defaults file is not readable.';
+	$response['details'] = [
+		'requested_path' => $defaultsPath,
+		'resolved_path' => $defaultsFile,
+		'file_owner_uid' => @fileowner($defaultsFile),
+		'file_group_gid' => @filegroup($defaultsFile),
+		'file_perms_octal' => substr(sprintf('%o', @fileperms($defaultsFile)), -4)
+	];
+	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 	exit;
 }
 
@@ -27,7 +56,11 @@ $output = shell_exec($cmd);
 
 if ($output === null) {
 	$response['error'] = 'Command execution failed.';
-	echo json_encode($response, JSON_PRETTY_PRINT);
+	$response['details'] = [
+		'defaults_file' => $defaultsFile,
+		'command' => $cmd
+	];
+	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 	exit;
 }
 
@@ -35,7 +68,11 @@ $output = trim($output);
 
 if ($output === '') {
 	$response['error'] = 'No submission found for this job id.';
-	echo json_encode($response, JSON_PRETTY_PRINT);
+	$response['details'] = [
+		'job_id' => $id,
+		'defaults_file' => $defaultsFile
+	];
+	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 	exit;
 }
 
