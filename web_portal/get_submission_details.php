@@ -12,7 +12,7 @@ if (!isset($_GET['id']) || !preg_match('/^\d+$/', $_GET['id'])) {
 }
 
 $id = $_GET['id'];
-$defaultsFile = realpath(__DIR__ . '../../../../msql_conn.txt');
+$defaultsFile = realpath('../../../../msql_conn.txt');
 
 if ($defaultsFile === false || !is_readable($defaultsFile)) {
 	$response['error'] = 'Cannot read MySQL defaults file.';
