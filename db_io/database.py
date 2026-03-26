@@ -159,6 +159,7 @@ class Database:
         scard: str,
         run_status: str = "Not Submitted",
         client_ip: str | None = None,
+        priority: int = 0,
         debug_enabled: bool = False,
     ) -> int:
         """Insert a row into submissions and return user_submission_id."""
@@ -171,12 +172,13 @@ class Database:
                 pool_node,
                 scard,
                 client_ip,
-                run_status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                run_status,
+                priority
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         self.execute(
             sql,
-            [username, user_id, client_time, pool_node, scard, client_ip, run_status],
+            [username, user_id, client_time, pool_node, scard, client_ip, run_status, priority],
         )
 
         row = self.query_one("SELECT LAST_INSERT_ID() AS user_submission_id")
