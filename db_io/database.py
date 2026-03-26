@@ -1,22 +1,13 @@
 #!/usr/bin/env python3
-
 """
-Simple MySQL database helper built on top of pymysql.
+MySQL database helper utilities for submissions.
 
-This module provides a `Database` class that:
-
-- reads connection credentials from a MySQL-style option file
-- connects to a MySQL database using `pymysql`
-- exposes methods to run queries and statements
-- provides convenience methods for common submission queries
-
-Expected credential file format:
-
-    [client]
-    user='user'
-    password='pwd'
-    host='address'
-    database='dbname'
+This module centralizes:
+- connection handling
+- shared debug/timestamp helpers
+- common query helpers
+- user lookup/creation
+- submission insert helpers
 """
 
 from __future__ import annotations
@@ -25,6 +16,7 @@ import argparse
 import configparser
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -39,8 +31,20 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 )
 
 
+def debug(enabled: bool, message: str) -> None:
+    """Print a debug message when enabled."""
+    if enabled:
+        print(f"[DEBUG] {message}")
+
+
+
+def current_timestamp() -> str:
+    """Return current local time formatted for the submissions table."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 class Database:
-    """Simple MySQL database wrapper using pymysql."""
+    """Small MySQL wrapper built on top of pymysql."""
 
     def __init__(self, credentials_file: str | Path, autocommit: bool = True) -> None:
         self.credentials_file = Path(credentials_file)
@@ -48,20 +52,7 @@ class Database:
         self.connection: Optional[pymysql.connections.Connection] = None
 
     def _read_credentials(self) -> dict[str, str]:
-        """Read and validate connection settings from the credential file.
-
-        Returns
-        -------
-        dict[str, str]
-            Dictionary containing the values required by `pymysql.connect()`.
-
-        Raises
-        ------
-        FileNotFoundError
-            If the credentials file does not exist.
-        ValueError
-            If the `[client]` section or a required key is missing.
-        """
+        """Read connection settings from a MySQL option file."""
         if not self.credentials_file.is_file():
             raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
 
@@ -86,6 +77,9 @@ class Database:
 
     def connect(self) -> None:
         """Open the MySQL connection if needed."""
+        if self.connection is not None:
+            return
+
         creds = self._read_credentials()
         self.connection = pymysql.connect(
             host=creds["host"],
@@ -97,59 +91,104 @@ class Database:
         )
 
     def close(self) -> None:
-        """Close the MySQL connection if it is open."""
+        """Close the current MySQL connection."""
         if self.connection is not None:
             self.connection.close()
             self.connection = None
 
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
-        """Execute a SELECT-style query and return all rows."""
+        """Run a SELECT-style query and return all rows."""
         if self.connection is None:
             self.connect()
 
         assert self.connection is not None
-
         with self.connection.cursor() as cursor:
-            if params:
-                cursor.execute(sql, tuple(params))
-            else:
-                cursor.execute(sql)
+            cursor.execute(sql, tuple(params) if params is not None else None)
             return list(cursor.fetchall())
 
     def query_one(self, sql: str, params: Sequence[Any] | None = None) -> dict[str, Any] | None:
-        """Execute a query and return only the first row, if any."""
+        """Run a query and return the first row, or None."""
         rows = self.query(sql, params)
         return rows[0] if rows else None
 
     def execute(self, sql: str, params: Sequence[Any] | None = None) -> int:
-        """Execute a non-SELECT SQL statement and return affected row count."""
+        """Run a non-SELECT statement and return affected row count."""
         if self.connection is None:
             self.connect()
 
         assert self.connection is not None
-
         with self.connection.cursor() as cursor:
-            if params:
-                affected_rows = cursor.execute(sql, tuple(params))
-            else:
-                affected_rows = cursor.execute(sql)
+            affected_rows = cursor.execute(sql, tuple(params) if params is not None else None)
             if not self.autocommit:
                 self.connection.commit()
             return affected_rows
 
     def get_recent_submissions(self) -> list[dict[str, Any]]:
-        """Return submissions from the last 24 hours using the default query.
-
-        Returns
-        -------
-        list[dict[str, Any]]
-            Rows containing user, client_time, user_submission_id, pool_node,
-            run_status, and priority.
-        """
+        """Return recent submissions using the default query."""
         return self.query(DEFAULT_RECENT_SUBMISSIONS_QUERY)
 
+    def get_user_id(self, username: str) -> int | None:
+        """Return the user_id for username, or None if absent."""
+        row = self.query_one("SELECT user_id FROM users WHERE user = %s", [username])
+        if row is None:
+            return None
+        return int(row["user_id"])
+
+    def ensure_user(self, username: str, debug_enabled: bool = False) -> int:
+        """Ensure a user exists in the users table and return user_id."""
+        existing_user_id = self.get_user_id(username)
+        if existing_user_id is not None:
+            debug(debug_enabled, f"User '{username}' already exists with user_id={existing_user_id}")
+            return existing_user_id
+
+        debug(debug_enabled, f"Creating user '{username}'")
+        self.execute("INSERT INTO users (user) VALUES (%s)", [username])
+
+        created_user_id = self.get_user_id(username)
+        if created_user_id is None:
+            raise RuntimeError(f"Failed to create or retrieve user_id for user '{username}'")
+        return created_user_id
+
+    def insert_submission(
+        self,
+        *,
+        username: str,
+        user_id: int,
+        client_time: str,
+        pool_node: str,
+        scard: str,
+        run_status: str = "Not Submitted",
+        client_ip: str | None = None,
+        debug_enabled: bool = False,
+    ) -> int:
+        """Insert a row into submissions and return user_submission_id."""
+        debug(debug_enabled, "Inserting submission row")
+        sql = """
+            INSERT INTO submissions (
+                user,
+                user_id,
+                client_time,
+                pool_node,
+                scard,
+                client_ip,
+                run_status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        self.execute(
+            sql,
+            [username, user_id, client_time, pool_node, scard, client_ip, run_status],
+        )
+
+        row = self.query_one("SELECT LAST_INSERT_ID() AS user_submission_id")
+        if row is None or row.get("user_submission_id") is None:
+            raise RuntimeError("Failed to retrieve user_submission_id after INSERT")
+
+        submission_id = int(row["user_submission_id"])
+        debug(debug_enabled, f"Inserted submission with user_submission_id={submission_id}")
+        return submission_id
+
     def update_priorities(self, prioritized_pending_rows: list[dict[str, Any]]) -> int:
-        """Write computed priorities back to the `priority` column."""
+        """Update the priority field for many submission rows."""
         if not prioritized_pending_rows:
             return 0
 
@@ -166,18 +205,15 @@ class Database:
             self.connect()
 
         assert self.connection is not None
-
         sql = """
             UPDATE submissions
             SET priority = %s
             WHERE user_submission_id = %s
         """
-
         with self.connection.cursor() as cursor:
             affected_rows = cursor.executemany(sql, params)
             if not self.autocommit:
                 self.connection.commit()
-
         return affected_rows
 
     def get_submissions_with_status(
@@ -185,16 +221,18 @@ class Database:
         days_past: int | None = None,
         client_time_format: str = "%Y-%m-%d %H:%i:%s",
     ) -> list[dict[str, Any]]:
-        """Return submission user, id, client_time, and run_status."""
+        """Return submission rows including run_status."""
         if days_past is None:
-            sql = """
+            return self.query(
+                """
                 SELECT user, user_submission_id, client_time, run_status
                 FROM submissions
                 ORDER BY user_submission_id
-            """
-            return self.query(sql)
+                """
+            )
 
-        sql = """
+        return self.query(
+            """
             SELECT user, user_submission_id, client_time, run_status
             FROM submissions
             WHERE client_time IS NOT NULL
@@ -202,54 +240,49 @@ class Database:
               AND STR_TO_DATE(client_time, %s) IS NOT NULL
               AND STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
             ORDER BY user_submission_id
-        """
-        return self.query(sql, [client_time_format, client_time_format, days_past])
+            """,
+            [client_time_format, client_time_format, days_past],
+        )
 
     def get_submission_times(
         self,
         days_past: int | None = None,
         client_time_format: str = "%Y-%m-%d %H:%i:%s",
     ) -> list[dict[str, Any]]:
-        """Return submission user, id, and client_time."""
+        """Return submission rows with timing fields only."""
         if days_past is None:
-            sql = """
+            return self.query(
+                """
                 SELECT user, user_submission_id, client_time
                 FROM submissions
                 ORDER BY user_submission_id
-            """
-            params: tuple[Any, ...] = ()
-        else:
-            sql = """
-                SELECT user, user_submission_id, client_time
-                FROM submissions
-                WHERE STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
-                ORDER BY user_submission_id
-            """
-            params = (client_time_format, days_past)
+                """
+            )
 
-        return self.query(sql, params)
+        return self.query(
+            """
+            SELECT user, user_submission_id, client_time
+            FROM submissions
+            WHERE STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
+            ORDER BY user_submission_id
+            """,
+            [client_time_format, days_past],
+        )
 
     def __enter__(self) -> "Database":
-        """Open the connection for context-manager use."""
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Close the connection at the end of a context-manager block."""
         self.close()
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the CLI parser for ad hoc database queries."""
+    """Build the CLI parser for ad hoc SQL queries."""
     parser = argparse.ArgumentParser(
         description="Run SQL queries against a MySQL database using a credential file."
     )
-    parser.add_argument(
-        "-c",
-        "--credentials",
-        required=True,
-        help="Path to the credential file.",
-    )
+    parser.add_argument("-c", "--credentials", required=True, help="Path to the credential file.")
     parser.add_argument(
         "-q",
         "--query",
@@ -263,46 +296,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Optional positional SQL parameters, passed in order.",
     )
-    parser.add_argument(
-        "--no-autocommit",
-        action="store_true",
-        help="Disable autocommit.",
-    )
-    parser.add_argument(
-        "--one",
-        action="store_true",
-        help="Return only the first row for SELECT queries.",
-    )
-    parser.add_argument(
-        "--execute",
-        action="store_true",
-        help="Treat the SQL as a non-SELECT statement and return affected row count.",
-    )
-    parser.add_argument(
-        "--indent",
-        type=int,
-        default=2,
-        help="JSON indentation for printed query results (default: 2).",
-    )
+    parser.add_argument("--no-autocommit", action="store_true", help="Disable autocommit.")
+    parser.add_argument("--one", action="store_true", help="Return only the first row for SELECT queries.")
+    parser.add_argument("--execute", action="store_true", help="Treat the SQL as a non-SELECT statement.")
+    parser.add_argument("--indent", type=int, default=2, help="JSON indentation for output.")
     return parser
 
 
+
 def main() -> int:
-    """Run the command-line database utility and return a shell exit code."""
+    """Run the database command-line utility."""
     parser = build_parser()
     args = parser.parse_args()
 
     try:
         with Database(args.credentials, autocommit=not args.no_autocommit) as db:
             if args.execute:
-                count = db.execute(args.query, args.params)
-                print(json.dumps({"affected_rows": count}, indent=args.indent))
+                payload: Any = {"affected_rows": db.execute(args.query, args.params)}
             elif args.one:
-                row = db.query_one(args.query, args.params)
-                print(json.dumps(row, indent=args.indent, default=str))
+                payload = db.query_one(args.query, args.params)
             else:
-                rows = db.query(args.query, args.params)
-                print(json.dumps(rows, indent=args.indent, default=str))
+                payload = db.query(args.query, args.params)
+            print(json.dumps(payload, indent=args.indent, default=str))
         return 0
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

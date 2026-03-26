@@ -892,6 +892,23 @@ def main() -> int:
 
 	try:
 		with Database(args.credentials) as db:
+			if args.days is not None:
+				old_pending = db.query_one(
+					"""
+					SELECT COUNT(*) AS n
+					FROM submissions
+					WHERE run_status = %s
+					  AND STR_TO_DATE(client_time, %s) IS NOT NULL
+					  AND STR_TO_DATE(client_time, %s) < NOW() - INTERVAL %s DAY
+					""",
+					["Not Submitted", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", args.days],
+				)
+
+				if old_pending["n"] > 0:
+					raise RuntimeError(
+						f"Found {old_pending['n']} 'Not Submitted' job(s) older than {args.days} day(s)."
+					)
+
 			rows = db.get_submissions_with_status(
 				days_past=args.days,
 				client_time_format="%Y-%m-%d %H:%i:%s",
