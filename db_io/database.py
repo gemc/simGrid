@@ -29,6 +29,7 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"WHERE STR_TO_DATE(client_time, '%Y-%m-%d %H:%i:%s') > NOW() - INTERVAL 1 DAY ;"
 )
 
+DEFAULT_CREDENTIALS_FILE = Path("~/msql_conn.txt").expanduser()
 
 def debug(enabled: bool, message: str) -> None:
 	"""Print a debug message when enabled."""
@@ -46,14 +47,15 @@ class Database:
 
 	def __init__(
 			self,
-			credentials_file: str | Path,
+			credentials_file: str | Path | None = None,
 			autocommit: bool = True,
 			database_name: str | None = None,
 	) -> None:
-		self.credentials_file = Path(credentials_file)
-		self.autocommit = autocommit
-		self.database_name = database_name
-		self.connection: Optional[pymysql.connections.Connection] = None
+		self.credentials_file = (
+			Path(credentials_file).expanduser()
+			if credentials_file is not None
+			else DEFAULT_CREDENTIALS_FILE
+		)
 
 	def _read_credentials(self) -> dict[str, str]:
 		"""Read connection settings from a MySQL option file."""
@@ -296,8 +298,8 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument(
 		"-c", "--credentials",
-		default=str(Path("~/hello.txt").expanduser()),
-		help="Path to the credential file. Default: ~/hello.txt"
+		default=str(DEFAULT_CREDENTIALS_FILE),
+		help=f"Path to the credential file. Default: {DEFAULT_CREDENTIALS_FILE}"
 	)
 	parser.add_argument(
 		"-q",

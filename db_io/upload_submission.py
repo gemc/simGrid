@@ -31,7 +31,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-f", "--file", dest="gcard_file", help="Path to the gcard text file.")
     parser.add_argument("-u", "--user", dest="username", help="Submission username.")
-    parser.add_argument("-c", "--credentials", help="Path to the MySQL credentials file.")
     parser.add_argument("--pool", default=DEFAULT_POOL, help=f"Pool name stored in pool_node (default: {DEFAULT_POOL}).")
     parser.add_argument("-d", "--debug", action="store_true", help="Print debug messages.")
     parser.add_argument("--database", help="Override the database name from the MySQL credentials file.")
@@ -115,7 +114,7 @@ def upload_submission(args: argparse.Namespace) -> int:
     debug(args.debug, f"Using client_time '{client_time}'")
 
 
-    with Database(args.credentials, database_name=args.database) as db:
+    with Database(database_name=args.database) as db:
         user_id = db.ensure_user(args.username, debug_enabled=args.debug)
         submission_id = db.insert_submission(
             username=args.username,
