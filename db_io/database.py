@@ -29,7 +29,7 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"WHERE STR_TO_DATE(client_time, '%Y-%m-%d %H:%i:%s') > NOW() - INTERVAL 1 DAY ;"
 )
 
-DEFAULT_CREDENTIALS_FILE = Path("~/msql_conn.txt").expanduser()
+DEFAULT_CREDENTIALS_FILE = Path("/home/gemc/msql_conn.txt").expanduser()
 
 
 def debug(enabled: bool, message: str) -> None:
