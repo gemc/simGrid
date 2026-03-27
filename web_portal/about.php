@@ -162,42 +162,35 @@
 	<br/>
 	<hr>
 
-	<center>
+	<table style=" width:70%; text-align:center; border: 0px; border-collapse: collapse;">
+		<tr>
+			<th style="border-collapse:collapse; border: 0px;"></th>
+			<th style="border-collapse:collapse; border: 0px;"><h2> Contacts and Support </h2></th>
+			<th style="border-collapse:collapse; border: 0px;"></th>
+		</tr>
+		<tr>
+			<th style="border-collapse:collapse; border: 0px;"><h3> JLab </h3>
+				<a href="mailto:baltzell@jlab.org">Nathan Baltzell</a><br/>
+				<a href="mailto:ungaro@jlab.org">Maurizo Ungaro</a>
+			</th>
+			<th style="border-collapse:collapse; border: 0px;"><h3></h3>
+			<th style="border-collapse:collapse; border: 0px;"><h3> Additional Resources </h3>
+				<a href="https://clas12.discourse.group/c/simulation/9">Discourse</a><br/>
+				<a href="https://clasweb.jlab.org/clas12/clas12SoftwarePage/html/index.html">Docker Distribution</a><br/>
+				<a href="https://github.com/JeffersonLab/clas12-mcgen">clas12-mcgen Repo</a><br/>
+				<a href="https://clasweb.jlab.org/wiki/index.php/CLAS12_Software_Center#tab=Simulation">CLAS12
+					Software Center </a><br/>
 
-		<table style=" width:70%; text-align:center; border: 0px; border-collapse: collapse;">
-			<tr>
-				<th style="border-collapse:collapse; border: 0px;"></th>
-				<th style="border-collapse:collapse; border: 0px;"><h2> Contacts and Support </h2></th>
-				<th style="border-collapse:collapse; border: 0px;"></th>
-			</tr>
-			<tr>
-				<th style="border-collapse:collapse; border: 0px;"><h3> JLab </h3>
-					<a href="mailto:baltzell@jlab.org">Nathan Baltzell</a><br/>
-					<a href="mailto:ungaro@jlab.org">Maurizo Ungaro</a>
-				</th>
-				<th style="border-collapse:collapse; border: 0px;"><h3></h3>
-				<th style="border-collapse:collapse; border: 0px;"><h3> Additional Resources </h3>
-					<a href="https://clas12.discourse.group/c/simulation/9">Discourse</a><br/>
-					<a href="https://clasweb.jlab.org/clas12/clas12SoftwarePage/html/index.html">Docker Distribution</a><br/>
-					<a href="https://github.com/JeffersonLab/clas12-mcgen">clas12-mcgen Repo</a><br/>
-					<a href="https://clasweb.jlab.org/wiki/index.php/CLAS12_Software_Center#tab=Simulation">CLAS12
-						Software Center </a><br/>
+			</th>
 
-				</th>
+		</tr>
 
-			</tr>
-
-		</table>
-		<br/>
-		<br/>
-
-	</center>
-
+	</table>
+	<br/>
+	<br/>
 
 </div>
 
 </body>
-
-<script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
-
+<script src="main.js"></script>
 </html>

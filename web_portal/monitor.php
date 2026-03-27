@@ -1,24 +1,8 @@
-<!DOCTYPE HTML>
-<html>
+<!DOCTYPE html>
+<html lang="english">
 <?php require_once __DIR__ . '/head.php'; ?>
-
 <body>
-<header class="w3-panel w3-container" id="myHeader">
-	<ul id="nav">
-		<li><a href="index.php"> Home</a></li>
-		<li><a href="about.html"> About</a></li>
-		<li><a href="osgStats.html"> OSG Stats</a></li>
-		<li><a href="monitor.html"><h3><b>Monitors</b></h3></a></li>
-		<li><a href="fairshare.html">Fairshare</a></li>
-	</ul>
-
-	<div class="w3-center">
-		<h1 id="title" class="w3-xlarge w3-opacity"></h1>
-		<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
-		<h4><i>Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></i></h4>
-		<br/><br/>
-	</div>
-</header>
+<?php require_once __DIR__ . '/header.php'; ?>
 
 <div class="pdf-container" style="text-align: center;">
 	<table style="margin: 0 auto;">
@@ -48,7 +32,5 @@
 </iframe>
 
 </body>
-
-<script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
-
+<script src="main.js"></script>
 </html>
