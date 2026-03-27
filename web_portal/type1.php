@@ -5,6 +5,10 @@
 <?php require_once __DIR__ . '/header.php'; ?>
 
 <section class="page-section page-section--center">
+	<h2 class="section-title">Submit to OSG: Generator</h2>
+</section>
+
+<section class="page-section page-section--center">
 	<form action="submit_type1.php" method="POST">
 		<table id="submission_table" style="width: 70%; margin: 0 auto; text-align: center;">
 			<tr>
@@ -184,6 +188,6 @@
 	</form>
 </section>
 
-<script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
+<script src="main.js"></script>
 </body>
 </html>
