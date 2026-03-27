@@ -4,22 +4,23 @@
 <body>
 <?php require_once __DIR__ . '/header.php'; ?>
 
-<div class="w3-padding w3-center">
-	<h2 class="w3-xlarge" style="text-align:center">Fairshare Summary</h2>
-	<div id="fairshare_summary"></div>
-	<br/><br/>
-</div>
-<div class="w3-padding w3-center">
-	<br/><br/>
-	<h2 class="w3-xlarge" style="text-align:center">Summary: jobs per user</h2>
-	<div id="fairshare_user_summary"></div>
-	<br/><br/>
+<main class="page-section">
+	<section class="content-block page-section--center">
+		<h2 class="section-title">Fairshare Summary</h2>
+		<div id="fairshare_summary"></div>
+	</section>
 
-	<h2 class="w3-xlarge" style="text-align:center">Pending Jobs Fairshare Priority</h2>
-	<div id="fairshare"></div>
-	<br/><br/>
-</div>
+	<section class="content-block page-section--center">
+		<h2 class="section-title">Summary: jobs per user</h2>
+		<div id="fairshare_user_summary"></div>
+	</section>
 
-</body>
+	<section class="content-block page-section--center">
+		<h2 class="section-title">Pending Jobs Fairshare Priority</h2>
+		<div id="fairshare"></div>
+	</section>
+</main>
+
 <script src="main.js"></script>
+</body>
 </html>
