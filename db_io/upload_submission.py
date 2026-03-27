@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-f", "--file", dest="gcard_file", help="Path to the gcard text file.")
     parser.add_argument("-u", "--user", dest="username", help="Submission username.")
-    parser.add_argument("-c", "--credentials", required=True, help="Path to the MySQL credentials file.")
+    parser.add_argument("-c", "--credentials", help="Path to the MySQL credentials file.")
     parser.add_argument("--pool", default=DEFAULT_POOL, help=f"Pool name stored in pool_node (default: {DEFAULT_POOL}).")
     parser.add_argument("-d", "--debug", action="store_true", help="Print debug messages.")
     parser.add_argument("--database", help="Override the database name from the MySQL credentials file.")

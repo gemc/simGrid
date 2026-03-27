@@ -94,7 +94,7 @@
 					}
 					fclose($fp);
 					$command .= ' -u ' . escapeshellarg($username)
-							 . ' ' . escapeshellarg($scard_file);
+							 . ' -f ' . escapeshellarg($scard_file);
 					$output = shell_exec($command);
 				}
 				else {

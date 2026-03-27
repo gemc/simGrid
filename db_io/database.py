@@ -294,7 +294,11 @@ def build_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(
 		description="Run SQL queries against a MySQL database using a credential file."
 	)
-	parser.add_argument("-c", "--credentials", required=True, help="Path to the credential file.")
+	parser.add_argument(
+		"-c", "--credentials",
+		default=str(Path("~/hello.txt").expanduser()),
+		help="Path to the credential file. Default: ~/hello.txt"
+	)
 	parser.add_argument(
 		"-q",
 		"--query",
