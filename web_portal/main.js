@@ -25,15 +25,6 @@ function myFunction() {
 	}
 }
 
-var is_test = window.location.pathname.includes("test");
-var title = "CLAS12 Monte-Carlo Job Submission Portal";
-if (is_test) {
-	title = "CLAS12 Test Job Submission Portal";
-}
-if (document.getElementById('title')) {
-	document.getElementById('title').innerHTML = title;
-}
-
 function formatNumber(value, digits = 1) {
 	var num = Number(value);
 	if (!isFinite(num)) return "";

@@ -1,67 +1,26 @@
 <!DOCTYPE html>
-<html>
-	<head>
-		<title>CLAS12 Monte-Carlo Job Submission Portal</title>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"/>
-		<link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-black.css"/>
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway"/>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-		<link rel="stylesheet" href="main.css"/>
-	</head>
-	
-	<body onload='osgLogtoTable();'>
-		<header class="w3-panel w3-container" id="myHeader">
-			<ul id="nav">
-				<li><a href="index.php">     <h3><b>Home</b></h3></a></li>
-				<li><a href="about.html">    About</a></li>
-<!--				<li><a href="disk.php">      Disk Usage</a></li>-->
-				<li><a href="osgStats.html"> OSG Stats</a></li>
-				<li><a href="fairshare.html"> Fairshare</a></li>
-				<li><a href="monitor.html">  Monitors</a></li>
-			</ul>
-
-			<div class="w3-center">
-				<h1 id="title" class="w3-xlarge w3-opacity"></h1>
-				<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
-				<h4><i>Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></i></h4>
-				<br/><br/>
-			</div>
-
-			<div class="w3-padding w3-center">
-				<!--					<div id="farmStats"></div>-->
-				<br/><br/>
-				<h2 class="w3-xlarge" style="text-align:center">Summary of current jobs</h2>
-				<div id="osgLog_summary"></div>
-				<br/><br/>
-			</div>
-
-		</header>
+<html lang="english">
+<?php require_once __DIR__ . '/head.php'; ?>
+<body onload='osgLogtoTable();'>
+<?php require_once __DIR__ . '/header.php'; ?>
 
 
-		<h3>
-			<center>
-				<font color="blue">
-					Nov 20, 2025 <br/>
-					There are issues with pelican that prevent file transfers  <br/>
-					XROOTD has been deprecated at JLab. All jobs that have background merging are placed on hold.
-					When a solution is found, these jobs will be resubmitted.<br/>
-					All submissions are suspended until these issues are resolved. <br/>
-				</font>
-			</center>
-		</h3>
+<div class="w3-row-padding w3-center w3-margin-top">
 
-		<div class="w3-padding w3-center">
-			<!--					<div id="farmStats"></div>-->
-			<br/><br/>
-			<h2 class="w3-xlarge" style="text-align:center">Details of current OSG Jobs</h2>
-			<div id="osgLog"></div>
-			<br/><br/>
-		</div>
 
-	</body>
+	<h3>
+		<font color="blue">
+			Nov 20, 2025 <br/>
+			There are issues with pelican that prevent file transfers <br/>
+			XROOTD has been deprecated at JLab. All jobs that have background merging are placed on hold.
+			When a solution is found, these jobs will be resubmitted.<br/>
+			All submissions are suspended until these issues are resolved. <br/>
+		</font>
+	</h3>
 
-	<script src="main.js"></script>		<!-- Don't move this line to the top! It causes an error at Safari -->
+</div>
 
+
+</body>
+<script src="main.js"></script>
 </html>

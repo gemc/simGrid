@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/common.php';
 $currentPage = basename($_SERVER['SCRIPT_NAME']);
 
 function navLink(string $file, string $label, string $currentPage): string
@@ -23,7 +24,7 @@ function navLink(string $file, string $label, string $currentPage): string
 	</ul>
 
 	<div class="w3-center">
-		<h1 id="title" class="w3-xlarge w3-opacity"></h1>
+		<h1 id="title" class="w3-xlarge w3-opacity"><?php echo htmlspecialchars($portalTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
 		<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
 		<h4><i>Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></i></h4>
 	</div>
