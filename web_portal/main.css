@@ -21,7 +21,8 @@
 	box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
 	margin: 0;
 	padding: 0;
 	min-height: 100%;
@@ -37,7 +38,10 @@ body {
 /* =========================
    Typography
    ========================= */
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
 	margin-top: 0;
 	margin-bottom: 0.75rem;
 	font-weight: 600;
@@ -47,7 +51,6 @@ h1, h2, h3, h4 {
 h1 {
 	letter-spacing: 1px;
 }
-
 
 /* =========================
    Links
@@ -77,47 +80,6 @@ a:hover {
 }
 
 /* =========================
-   Grid replacing w3-row-padding / w3-quarter
-   ========================= */
-.w3-row-padding {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 24px;
-	justify-content: center;
-	align-items: stretch;
-	padding-left: 16px;
-	padding-right: 16px;
-}
-
-.w3-quarter {
-	flex: 1 1 240px;
-	max-width: 280px;
-	min-width: 220px;
-	display: flex;
-}
-
-.w3-quarter > .w3-card {
-	width: 100%;
-}
-
-/* =========================
-   Cards
-   ========================= */
-.w3-card {
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-md);
-	transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-a .w3-card:hover,
-.w3-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.10);
-}
-
-/* =========================
    Tables
    ========================= */
 table {
@@ -130,7 +92,8 @@ table {
 	box-shadow: var(--shadow-sm);
 }
 
-th, td {
+th,
+td {
 	padding: 12px 14px;
 	border-bottom: 1px solid var(--border);
 	text-align: left;
@@ -231,46 +194,8 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 /* =========================
-   PDFs
-   ========================= */
-.pdf-container {
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	text-align: center;
-}
-
-.pdf-preview {
-	width: 100%;
-	height: 100%;
-	border: 0;
-	margin: 0;
-}
-
-.pdf-preview td {
-	width: 1500px;
-}
-
-/* =========================
-   Images in old W3 rows
-   ========================= */
-.w3-row-padding img {
-	margin-bottom: 12px;
-	max-width: 100%;
-	height: auto;
-	border-radius: 8px;
-}
-
-/* =========================
    Responsive
    ========================= */
-@media (max-width: 900px) {
-	.w3-quarter {
-		max-width: 100%;
-		min-width: 260px;
-	}
-}
-
 @media (max-width: 640px) {
 	#nav li {
 		display: block;
@@ -279,20 +204,6 @@ input[type=number]::-webkit-outer-spin-button {
 	#nav a {
 		display: block;
 		padding: 12px 14px;
-	}
-
-	.w3-row-padding {
-		gap: 16px;
-		padding-left: 12px;
-		padding-right: 12px;
-	}
-
-	.w3-padding {
-		padding: 18px 12px;
-	}
-
-	.w3-xlarge {
-		font-size: 1.25rem;
 	}
 }
 
