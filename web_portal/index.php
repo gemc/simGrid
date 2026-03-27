@@ -23,7 +23,7 @@
 		</div>
 	</a>
 
-	<a href="type1.html">
+	<a href="type1.php">
 		<div class="w3-quarter">
 			<div class="w3-card w3-container" style="min-height:210px">
 				<h3>Generator<br/></h3><br/>
@@ -37,7 +37,7 @@
 		</div>
 	</a>
 
-	<a href="type2.html">
+	<a href="type2.php">
 		<div class="w3-quarter">
 			<div class="w3-card w3-container" style="min-height:210px">
 				<h3>LUND Files<br/></h3><br/>
