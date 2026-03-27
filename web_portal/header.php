@@ -26,6 +26,5 @@ function navLink(string $file, string $label, string $currentPage): string
 		<h1 id="title" class="w3-xlarge w3-opacity"></h1>
 		<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
 		<h4><i>Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></i></h4>
-		<br/><br/>
 	</div>
 </header>
