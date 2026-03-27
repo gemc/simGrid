@@ -13,14 +13,11 @@
 	<h2 class="section-title">Click to submit to OSG</h2>
 
 	<div class="card-grid">
-		<div class="card-grid__item">
-			<div class="card card--empty"></div>
-		</div>
 
 		<a class="card-grid__item card-link" href="type1.php">
 			<div class="card card--submit">
 				<h3>Generator</h3>
-				<div class="card-icon"></div>
+				<div class="card-icon">⚙️</div>
 				<p class="card-text">
 					- clas12-mcgen or gemc internal generator <br/>
 					- Arbitrary number of jobs <br/>
@@ -40,10 +37,6 @@
 				</p>
 			</div>
 		</a>
-
-		<div class="card-grid__item">
-			<div class="card card--empty"></div>
-		</div>
 	</div>
 </section>
 
