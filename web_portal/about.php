@@ -211,13 +211,9 @@ dvcsgen --beam 10.604 --x 0.05 0.85 --trig 100 --q2 0.9 14 --t 0 0.79 --gpd 101 
 	<section class="content-block">
 		<div class="support-grid">
 			<div class="support-card">
-				<h3>JLab</h3>
+				<h2>Contacts and Support</h2>
 				<a href="mailto:baltzell@jlab.org">Nathan Baltzell</a><br/>
 				<a href="mailto:ungaro@jlab.org">Maurizo Ungaro</a>
-			</div>
-
-			<div class="support-card support-card--wide">
-				<h2>Contacts and Support</h2>
 			</div>
 
 			<div class="support-card">

@@ -29,7 +29,7 @@
 		<a class="card-grid__item card-link" href="type2.php">
 			<div class="card card--submit">
 				<h3>LUND Files</h3>
-				<div class="card-icon"></div>
+				<div class="card-icon">📂</div>
 				<p class="card-text">
 					- LUND files (.txt) from a web location <br/>
 					- One job per LUND file <br/>
