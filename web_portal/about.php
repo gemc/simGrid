@@ -17,11 +17,11 @@
 		<li style="margin-left: 60px"><b>4</b>: The output directory is synced every hour on /volatile/clas12/osg2</li>
 	</p>
 	<p>
-		<b>Notes:</b>:
+		<b tyle="margin-left: 60px">Notes:</b>:
 		<li style="margin-left: 60px; background-color: gold">The number of events per job are limited to 5,000,
 			corresponding to a time on the OSG between 4-10 hours depending on the node CPU
 		</li>
-		<li style="margin-left: 60px; background-color: gold">: The number of jobs per submission are
+		<li style="margin-left: 60px; background-color: gold">The number of jobs per submission are
 			limited to 10,000
 		</li>
 	</p>
