@@ -1,37 +1,141 @@
-/*Sticky top navigation from https://csswizardry.com/2011/01/create-a-centred-horizontal-navigation/ */
+/* =========================
+   Base theme
+   ========================= */
+:root {
+	--bg: #f5f7fb;
+	--surface: #ffffff;
+	--surface-2: #f8fbff;
+	--text: #1f2937;
+	--muted: #6b7280;
+	--border: #d8e1ec;
+	--accent: #2563eb;
+	--accent-hover: #1d4ed8;
+	--theme: #2563eb;
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+	--shadow-md: 0 10px 24px rgba(0, 0, 0, 0.08);
+	--radius: 12px;
+	--content-width: 1200px;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+	min-height: 100%;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: "Avenir", Helvetica, Arial, sans-serif;
+	line-height: 1.5;
+}
+
+/* =========================
+   Typography
+   ========================= */
+h1, h2, h3, h4 {
+	margin-top: 0;
+	margin-bottom: 0.75rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+h1 {
+	letter-spacing: 1px;
+}
+
+.w3-xlarge {
+	font-size: 1.5rem;
+	line-height: 1.3;
+}
+
+/* =========================
+   Utility classes replacing W3
+   ========================= */
+.w3-padding {
+	padding: 24px 16px;
+}
+
+.w3-center {
+	text-align: center;
+}
+
+.w3-margin-top {
+	margin-top: 24px;
+}
+
+.w3-container {
+	padding: 20px;
+}
+
+.w3-text-theme {
+	color: var(--theme);
+}
+
+/* Content width for centered sections */
+.w3-padding,
+.w3-row-padding {
+	max-width: var(--content-width);
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* =========================
+   Navigation
+   ========================= */
 #nav {
-	border: 1px solid #ccc;
-	border-width: 1px 0;
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	text-align: center;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	box-shadow: var(--shadow-sm);
+	position: relative;
 	z-index: 500;
-	background-color: #fff;
-	overflow: hidden;
 }
 
 #nav li {
 	position: relative;
-	display: inline;
+	display: inline-block;
 }
 
 #nav a {
 	display: inline-block;
-	padding: 10px;
+	padding: 14px 18px;
+	color: var(--text);
+	text-decoration: none;
+	font-weight: 600;
+	border-radius: 8px;
+	transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+#nav a:hover {
+	background: #eef4ff;
+	color: var(--accent);
+	text-decoration: none;
 }
 
 #nav a.active {
-	background-color: #aaa;
-	color: white;
+	background: var(--accent);
+	color: #fff;
 }
 
 #nav ul {
 	position: absolute;
-	/*top:100%; Uncommenting this makes the dropdowns work in IE7 but looks a little worse in all other browsers. Your call. */
 	left: -9999px;
+	top: 100%;
 	margin: 0;
-	padding: 0;
+	padding: 8px 0;
+	min-width: 180px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: var(--shadow-md);
 	text-align: left;
 }
 
@@ -43,51 +147,31 @@
 	left: 0;
 }
 
-#nav li:hover a {
-	text-decoration: underline;
-	background: #fff;
-}
-
-#nav li:hover ul a {
-	text-decoration: none;
-	background: none;
-}
-
-#nav li:hover ul a:hover {
-	text-decoration: underline;
-	background: #fff;
-}
-
 #nav ul a {
-	white-space: nowrap;
 	display: block;
-	border-bottom: 1px solid #ccc;
+	padding: 10px 14px;
+	white-space: nowrap;
+	border: 0;
 }
 
-checkbox-container {
-	display: flex;
-}
-
-.checkbox-container input[type="checkbox"] {
-	margin-left: 10px;
-}
-
-.checkbox-container label {
-	margin-left: 5px;
-	text-align: left;
-}
-
+/* =========================
+   Links
+   ========================= */
 a {
-	color: #44a;
+	color: var(--accent);
 	text-decoration: none;
-	font-weight: bold;
+	font-weight: 600;
 }
 
 a:hover {
+	color: var(--accent-hover);
 	text-decoration: underline;
-	background: #fff;
+	background: transparent;
 }
 
+/* =========================
+   Sticky header support
+   ========================= */
 .sticky {
 	position: fixed;
 	top: 0;
@@ -95,56 +179,155 @@ a:hover {
 }
 
 .sticky + .content {
-	padding-top: 60px;
+	padding-top: 70px;
 }
 
-
-/* css template from https://www.w3schools.com/w3css/tryw3css_templates_photo2.htm */
-body, h1, h2, h3, h4 {
-	font-family: "Avenir", Helvetica, sans-serif, Monaco
+/* =========================
+   Grid replacing w3-row-padding / w3-quarter
+   ========================= */
+.w3-row-padding {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	justify-content: center;
+	align-items: stretch;
+	padding-left: 16px;
+	padding-right: 16px;
 }
 
-h1 {
-	letter-spacing: 6px
+.w3-quarter {
+	flex: 1 1 240px;
+	max-width: 280px;
+	min-width: 220px;
+	display: flex;
 }
 
-.w3-row-padding img {
-	margin-bottom: 12px
+.w3-quarter > .w3-card {
+	width: 100%;
 }
 
-table, th, td {
-	border: 1px solid black;
+/* =========================
+   Cards
+   ========================= */
+.w3-card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-md);
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+a .w3-card:hover,
+.w3-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.10);
+}
+
+/* =========================
+   Tables
+   ========================= */
+table {
+	width: 100%;
 	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: var(--shadow-sm);
 }
 
 th, td {
-	padding: 10px;
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+	vertical-align: top;
 }
 
-/* style for objects used in tables */
+th {
+	background: #eef4ff;
+	font-weight: 700;
+}
+
+tbody tr:nth-child(even) {
+	background-color: var(--surface-2);
+}
+
+tbody tr:hover {
+	background-color: #eaf2ff;
+}
+
+/* =========================
+   Tooltips
+   ========================= */
 .tooltip {
 	position: relative;
 	display: inline-block;
-	border-bottom: 1px dotted black;
+	border-bottom: 1px dotted #666;
 }
 
 .tooltip .tooltiptext {
-
 	visibility: hidden;
-	width: 450px;
-	background-color: black;
+	width: 320px;
+	background-color: #111827;
 	color: #fff;
-	text-align: center;
-	border-radius: 4px;
-	padding: 2px 0;
-
-	/* Position the tooltip */
+	text-align: left;
+	border-radius: 8px;
+	padding: 10px 12px;
 	position: absolute;
-	z-index: 1;
+	z-index: 10;
+	top: 125%;
+	left: 50%;
+	transform: translateX(-50%);
+	box-shadow: var(--shadow-md);
 }
 
 .tooltip:hover .tooltiptext {
 	visibility: visible;
+}
+
+/* =========================
+   Forms
+   ========================= */
+.checkbox-container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.checkbox-container input[type="checkbox"] {
+	margin: 0;
+}
+
+.checkbox-container label {
+	margin: 0;
+	text-align: left;
+}
+
+input,
+select,
+textarea,
+button {
+	font: inherit;
+}
+
+input,
+select,
+textarea {
+	max-width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: #fff;
+	text-align: center;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 input[type=number]::-webkit-inner-spin-button,
@@ -153,30 +336,136 @@ input[type=number]::-webkit-outer-spin-button {
 	margin: 0;
 }
 
-input {
-/ / min-width: 200 px !important;
-	max-width: 99.99% !important;
-	transition: width 0.1s;
-	text-align: center;
-}
-
+/* =========================
+   PDFs
+   ========================= */
 .pdf-container {
-	text-align: center;
-	align-content: center;
-	align-self: center;
 	display: flex;
 	justify-content: center;
+	align-items: center;
+	text-align: center;
 }
-
 
 .pdf-preview {
 	width: 100%;
 	height: 100%;
-	border: 0px;
-	margin: 0px;
-
+	border: 0;
+	margin: 0;
 }
 
 .pdf-preview td {
 	width: 1500px;
+}
+
+/* =========================
+   Images in old W3 rows
+   ========================= */
+.w3-row-padding img {
+	margin-bottom: 12px;
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
+
+/* =========================
+   Responsive
+   ========================= */
+@media (max-width: 900px) {
+	.w3-quarter {
+		max-width: 100%;
+		min-width: 260px;
+	}
+}
+
+@media (max-width: 640px) {
+	#nav li {
+		display: block;
+	}
+
+	#nav a {
+		display: block;
+		padding: 12px 14px;
+	}
+
+	.w3-row-padding {
+		gap: 16px;
+		padding-left: 12px;
+		padding-right: 12px;
+	}
+
+	.w3-padding {
+		padding: 18px 12px;
+	}
+
+	.w3-xlarge {
+		font-size: 1.25rem;
+	}
+}
+
+.page-section {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 24px 16px;
+}
+
+.page-section--center {
+	text-align: center;
+}
+
+.section-title {
+	font-size: 1.5rem;
+	line-height: 1.3;
+	margin-bottom: 20px;
+}
+
+.card-grid {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: stretch;
+	gap: 24px;
+	margin-top: 24px;
+}
+
+.card-grid__item {
+	flex: 1 1 240px;
+	max-width: 280px;
+	min-width: 220px;
+	display: flex;
+	text-decoration: none;
+	color: inherit;
+}
+
+.card-link:hover {
+	text-decoration: none;
+}
+
+.card {
+	width: 100%;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-md);
+	padding: 20px;
+}
+
+.card--submit {
+	min-height: 210px;
+}
+
+.card--empty {
+	min-height: 230px;
+}
+
+.card-icon {
+	font-size: 120px;
+	min-height: 120px;
+	margin-bottom: 12px;
+	color: var(--theme);
+}
+
+.card-text {
+	text-align: left;
+	font-weight: normal;
+	margin: 0;
 }

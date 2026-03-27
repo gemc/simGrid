@@ -1,76 +1,57 @@
 <!DOCTYPE html>
-<html lang="english">
+<html lang="en">
 <?php require_once __DIR__ . '/head.php'; ?>
-<body onload='osgLogtoTable();'>
+<body onload="osgLogtoTable();">
 <?php require_once __DIR__ . '/header.php'; ?>
 
-
-<div class="w3-padding w3-center">
-	<h2 class="w3-xlarge" style="text-align:center">Summary of current jobs</h2>
+<section class="page-section page-section--center">
+	<h2 class="section-title">Summary of current jobs</h2>
 	<div id="osgLog_summary"></div>
-	<br/><br/>
-</div>
+</section>
 
-<div class="w3-row-padding w3-center w3-margin-top">
+<section class="page-section page-section--center">
+	<h2 class="section-title">Click to submit to OSG</h2>
 
-	<h2 class="w3-xlarge" style="text-align:center">Click to submit to OSG</h2>
-	<a>
-		<div class="w3-quarter">
-			<div class="w3-card w3-container" style="min-height:230px">
-				<br/><br/>
-				<br/><br/>
-			</div>
+	<div class="card-grid">
+		<div class="card-grid__item">
+			<div class="card card--empty"></div>
 		</div>
-	</a>
 
-	<a href="type1.php">
-		<div class="w3-quarter">
-			<div class="w3-card w3-container" style="min-height:210px">
-				<h3>Generator<br/></h3><br/>
-				<i class="w3-margin-bottom w3-text-theme" style="font-size:120px; "></i>
-				<p style="text-align: left; font-weight: normal;">
+		<a class="card-grid__item card-link" href="type1.php">
+			<div class="card card--submit">
+				<h3>Generator</h3>
+				<div class="card-icon"></div>
+				<p class="card-text">
 					- clas12-mcgen or gemc internal generator <br/>
 					- Arbitrary number of jobs <br/>
 					- Arbitrary number of events per job (max 10,000) <br/>
 				</p>
 			</div>
-		</div>
-	</a>
+		</a>
 
-	<a href="type2.php">
-		<div class="w3-quarter">
-			<div class="w3-card w3-container" style="min-height:210px">
-				<h3>LUND Files<br/></h3><br/>
-				<i class="w3-margin-bottom w3-text-theme" style="font-size:120px"></i>
-				<p style="text-align: left; font-weight: normal;">
+		<a class="card-grid__item card-link" href="type2.php">
+			<div class="card card--submit">
+				<h3>LUND Files</h3>
+				<div class="card-icon"></div>
+				<p class="card-text">
 					- LUND files (.txt) from a web location <br/>
 					- One job per LUND file <br/>
 					- File define number of events per job (max 10,000) <br/>
 				</p>
 			</div>
+		</a>
+
+		<div class="card-grid__item">
+			<div class="card card--empty"></div>
 		</div>
-	</a>
+	</div>
+</section>
 
-	<a>
-		<div class="w3-quarter">
-			<div class="w3-card w3-container" style="min-height:230px">
-				<br/><br/>
-				<br/><br/>
-			</div>
-		</div>
-	</a>
-	<br/><br/>
-	<br/><br/>
-
-</div>
-
-<div class="w3-padding w3-center">
-	<br/><br/>
-	<h2 class="w3-xlarge" style="text-align:center">Details of current OSG Jobs</h2>
+<section class="page-section page-section--center">
+	<h2 class="section-title">Details of current OSG Jobs</h2>
 	<div id="osgLog"></div>
-	<br/><br/>
-</div>
+</section>
 
-</body>
 <script src="main.js"></script>
+</body>
 </html>
