@@ -31,6 +31,7 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 
 DEFAULT_CREDENTIALS_FILE = Path("~/msql_conn.txt").expanduser()
 
+
 def debug(enabled: bool, message: str) -> None:
 	"""Print a debug message when enabled."""
 	if enabled:
@@ -56,6 +57,9 @@ class Database:
 			if credentials_file is not None
 			else DEFAULT_CREDENTIALS_FILE
 		)
+		self.autocommit = autocommit
+		self.database_name = database_name
+		self.connection: Optional[pymysql.connections.Connection] = None
 
 	def _read_credentials(self) -> dict[str, str]:
 		"""Read connection settings from a MySQL option file."""

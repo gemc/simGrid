@@ -68,8 +68,20 @@
 		}
 		fclose($fp);
 		$command .= ' -u ' . escapeshellarg($username)
-				 . ' -f ' . escapeshellarg($scard_file);
-		$output = shell_exec($command);
+					 . ' -f ' . escapeshellarg($scard_file);
+
+			$log_file = preg_replace('/\.txt$/', '.log', $scard_file);
+
+			file_put_contents($log_file, "COMMAND: $command\n\n");
+
+			$cmd_with_log = $command . ' >> ' . escapeshellarg($log_file) . ' 2>&1';
+
+			$lines = [];
+			$return_code = 0;
+			exec($cmd_with_log, $lines, $return_code);
+
+			$output = implode("\n", $lines);
+			$submission_ok = ($return_code === 0);
 	}
 	else {
 		echo "All field are required";
@@ -78,7 +90,16 @@
 	?>
 
 
+	<?php if ($submission_ok): ?>
 	<h4>Your job was successfully submitted with the following parameters.</h4>
+	<table style="text-align: center;width: 50%;" align="center">
+	<?php else: ?>
+	<h4>Submission failed.</h4>
+	<p>Please contact support and include this log file:</p>
+	<p><code><?php echo htmlspecialchars($log_file, ENT_QUOTES, 'UTF-8'); ?></code></p>
+	<?php endif; ?>
+
+	<?php if ($submission_ok): ?>
 	<table style="text-align: center;width: 50%;" align="center">
 		<tr>
 			<td>Project</td>
@@ -130,6 +151,8 @@
 		</tr>
 	</table>
 	<h4>Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
+	<?php endif; ?>
+
 </div>
 </body>
 <script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->

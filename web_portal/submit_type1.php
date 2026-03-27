@@ -84,12 +84,16 @@
 
 			$log_file = preg_replace('/\.txt$/', '.log', $scard_file);
 
-			// write the full command at the top of the log
 			file_put_contents($log_file, "COMMAND: $command\n\n");
 
-			// append both stdout and stderr to the same log file,
-			// while still capturing the combined output in $output
-			$output = shell_exec('{ ' . $command . '; } 2>&1 | tee -a ' . escapeshellarg($log_file));
+			$cmd_with_log = $command . ' >> ' . escapeshellarg($log_file) . ' 2>&1';
+
+			$lines = [];
+			$return_code = 0;
+			exec($cmd_with_log, $lines, $return_code);
+
+			$output = implode("\n", $lines);
+			$submission_ok = ($return_code === 0);
 	}
 	else {
 	echo("<h2> All fields are required </h2>");
@@ -98,8 +102,16 @@
 
 	?>
 
-
+	<?php if ($submission_ok): ?>
 	<h4>Your job was successfully submitted with the following parameters.</h4>
+	<table style="text-align: center;width: 50%;" align="center">
+	<?php else: ?>
+	<h4>Submission failed.</h4>
+	<p>Please contact support and include this log file:</p>
+	<p><code><?php echo htmlspecialchars($log_file, ENT_QUOTES, 'UTF-8'); ?></code></p>
+	<?php endif; ?>
+
+	<?php if ($submission_ok): ?>
 	<table style="text-align: center;width: 50%;" align="center">
 		<tr>
 			<td>Project</td>
@@ -172,6 +184,7 @@
 		</tr>
 	</table>
 	<h4>Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
+	<?php endif; ?>
 </div>
 
 </body>
