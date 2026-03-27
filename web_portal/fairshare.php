@@ -5,7 +5,6 @@
 <?php require_once __DIR__ . '/header.php'; ?>
 
 <div class="w3-padding w3-center">
-	<br/>hello<br/>
 	<h2 class="w3-xlarge" style="text-align:center">Fairshare Summary</h2>
 	<div id="fairshare_summary"></div>
 	<br/><br/>

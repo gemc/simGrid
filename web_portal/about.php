@@ -6,7 +6,7 @@
 
 <div class="w3-row-padding w3-rest" id="contact">
 
-	<h1>Submitting Jobs</h1>
+	<h2>Submitting Jobs</h2>
 	<p style="margin-left: 40px">
 		When you click the "Submit" button:<br/>
 		<li style="margin-left: 60px"><b>1</b>: Your submission is saved in our mysql db</li>
@@ -16,26 +16,27 @@
 		<li style="margin-left: 60px"><b>3</b>: When the jobs are completed, the job will be delisted from the portal.</li>
 		<li style="margin-left: 60px"><b>4</b>: The output directory is synced every hour on /volatile/clas12/osg2</li>
 	</p>
-	<p style="margin-left: 40px">
-		The number of events per job are limited to 5000 corresponding to a
+	<p style="margin-left: 40px; background-color: gold">
+		The number of events per job are limited to 5,000 corresponding to a
 		time on the OSG between 4-10 hours depending on the node CPU<br/>
+		The number of jobs per submission 10,000<br/>
 	</p>
 	<p style="margin-left: 40px">
-		HOWTOS:<br/>
+		See also:<br/>
 		<li style="margin-left: 60px"> Submit Jobs to OSG
 			<a href="https://clasweb.jlab.org/wiki/index.php/Submit_Jobs_to_OSG"> CLAS12 Software Center </a></li>
 
 		<br/>
 
 
-	<h1> Experiment Configurations, Gcards and Yaml Files</h1>
+	<h2> Experiment Configurations, Gcards and Yaml Files</h2>
 	The job workflow and steering cards are maintained in the <a href="https://github.com/JeffersonLab/clas12-config">clas12-config</a> repo.<br/>
 
 	<br/>
 	<br/>
 
 
-	<h1> Background Merging </h1>
+	<h2> Background Merging </h2>
 	<p style="margin-left: 40px">
 		The user choice of experiment and magnetic fieds enable the possibility of backgrond merging
 		in the dropdown menu.<br/>
@@ -44,7 +45,7 @@
 	</p>
 	<br/>
 
-	<h1> Output </h1>
+	<h2> Output </h2>
 	<p style="margin-left: 40px">
 		The output is synced hourly on
 	</p>
@@ -62,7 +63,7 @@
 	<br/>
 
 
-	<h1> Priority </h1>
+	<h2> Priority </h2>
 	<p style="margin-left: 40px">
 		A priority system is in place to ensure that the resources are shared among all submissions.<br/>
 		Analysis groups can submit the <a href="OSG_Priority_Request_Form.pdf"> Priority Permission Increase
@@ -71,7 +72,7 @@
 	</p>
 	<br/>
 
-	<h1> Job Status </h1>
+	<h2> Job Status </h2>
 	<p style="margin-left: 40px">
 		Log files can be browsed on the submit node:<br/>
 	<pre style="font-size: 20px; background-color: #ececec">
@@ -96,7 +97,7 @@
 
 	<br/>
 
-	<h1> Generators </h1>
+	<h2> Generators </h2>
 	<p style="margin-left: 40px">
 
 		The generators available on the portal are collected in the <a href="https://github.com/JeffersonLab/clas12-mcgen">clas12-mcgen</a> repo.<br/>
@@ -115,7 +116,7 @@
 	<br/>
 
 	<section id="gen-test"><br/>
-		<h1> Test Generators </h1>
+		<h2> Test Generators </h2>
 		<p style="margin-left: 40px">
 			Before submitting large scale jobs to OSG it is recommended to test the generator. This can be done on the JLab cue machines.<br/>
 			To test mcgen version X (2.33 for example):
@@ -139,7 +140,7 @@
 		<br/>
 	</section>
 
-	<h1> Versions </h1>
+	<h2> Versions </h2>
 	<p style="margin-left: 40px">
 
 		The <a href="https://github.com/JeffersonLab/clas12-config">software versions of gemc, coatjava</a> and <a target="_blank"
@@ -151,7 +152,7 @@
 
 	<br/>
 	<br/>
-	<h1> Container for Interactive Use </h1>
+	<h2> Container for Interactive Use </h2>
 
 	<p style="margin-left: 40px">
 		The docker container used on OSG is also available for interactive use, see
