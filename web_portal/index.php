@@ -10,7 +10,7 @@
 </section>
 
 <section class="page-section page-section--center">
-	<h2 class="section-title">Click to submit to OSG</h2>
+	<h2 class="section-title">Submit to OSG:</h2>
 
 	<div class="card-grid">
 
