@@ -16,10 +16,13 @@
 		<li style="margin-left: 60px"><b>3</b>: When the jobs are completed, the job will be delisted from the portal.</li>
 		<li style="margin-left: 60px"><b>4</b>: The output directory is synced every hour on /volatile/clas12/osg2</li>
 	</p>
-	<p style="margin-left: 40px; background-color: gold">
-		The number of events per job are limited to 5,000 corresponding to a
-		time on the OSG between 4-10 hours depending on the node CPU<br/>
-		The number of jobs per submission 10,000<br/>
+	<p>
+		<li style="margin-left: 60px; background-color: gold"><b>4</b>: The number of events per job are limited to 5,000,
+			corresponding to a time on the OSG between 4-10 hours depending on the node CPU
+		</li>
+		<li style="margin-left: 60px; background-color: gold"><b>4</b>: The number of jobs per submission are
+			limited to 10,000
+		</li>
 	</p>
 	<p style="margin-left: 40px">
 		See also:<br/>
