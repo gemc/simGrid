@@ -20,7 +20,7 @@
 				</td>
 			</tr>
 			<tr>
-				<td>Versions (see <a target="_blank" href="https://github.com/JeffersonLab/clas12-config#readme">README)</a></td>
+				<td><a target="_blank" href="https://github.com/JeffersonLab/clas12-config#readme">Software Versions</a></td>
 				<td>
 					<select name="softwarev" id="softwarev" required
 							onchange="fieldSelected(); bkmergingSelected(); vertexSelected();">
@@ -28,7 +28,8 @@
 				</td>
 			</tr>
 			<tr>
-				<td>MC Gen Versions (see <a target="_blank" href="https://github.com/JeffersonLab/clas12-mcgen#readme">README)</a><br>Consider <a href="about.html#gen-test">testing the generators</a></td>
+				<td><a target="_blank" href="https://github.com/JeffersonLab/clas12-mcgen#readme">MC Gen Versions</a>
+				 <br>Consider <a href="about.html#gen-test">testing the generators</a> before submission.</td>
 				<td>
 					<select name="mcgenv" id="mcgenv" required>
 					</select>
