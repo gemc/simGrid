@@ -108,8 +108,9 @@
 			</tr>
 			<tr>
 				<td colspan="2">
-					Once you've chosen the generator, review the linked documentation and insert the desired options above.<br/>
-					Do not utilize the following options, as they are automatically included: <i>--docker, output file name, --trig</i>.
+					Once you have chosen the generator, review the linked documentation and insert the desired options above.<br/>
+					Note: Do not utilize the following options, as they are automatically included: <br/>
+					<code>--docker, output file name, --trig</code>.
 				</td>
 			</tr>
 			<tr>
