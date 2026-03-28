@@ -9,5 +9,5 @@ $portalTitle = $IS_DEVEL_MODE
 	<title><?php echo htmlspecialchars($portalTitle, ENT_QUOTES, 'UTF-8'); ?></title>
 	<meta charset="UTF-8"/>
 	<meta name="viewport" content="width=device-width, initial-scale=1"/>
-	<link rel="stylesheet" href="main.css"/>
+	<link rel="stylesheet" href="main.css?v=<?php echo filemtime(__DIR__ . '/main.css'); ?>"/>
 </head>
