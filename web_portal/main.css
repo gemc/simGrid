@@ -82,11 +82,12 @@ a:hover {
 /* =========================
    Tables
    ========================= */
-
 table {
 	width: 100%;
 	border-collapse: collapse;
+	border-spacing: 0;
 	background: var(--surface);
+	border: 1px solid var(--border);
 	box-shadow: var(--shadow-sm);
 }
 
@@ -103,11 +104,11 @@ th {
 	font-weight: 700;
 }
 
-tr:nth-child(even) td {
+tbody tr:nth-child(even) td {
 	background-color: var(--surface-2);
 }
 
-tr:hover td {
+tbody tr:hover td {
 	background-color: #eaf2ff;
 }
 
@@ -177,7 +178,7 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .page-section {
-	max-width: 1200px;
+	max-width: var(--content-width);
 	margin: 0 auto;
 	padding: 24px 16px;
 }
