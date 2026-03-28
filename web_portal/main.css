@@ -82,15 +82,6 @@ a:hover {
 /* =========================
    Tables
    ========================= */
-table {
-	width: 100%;
-	border-collapse: collapse;
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	overflow: hidden;
-	box-shadow: var(--shadow-sm);
-}
 
 table {
 	width: 100%;
