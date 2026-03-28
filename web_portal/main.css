@@ -92,10 +92,20 @@ table {
 	box-shadow: var(--shadow-sm);
 }
 
+table {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: var(--shadow-sm);
+}
+
 th,
 td {
 	padding: 12px 14px;
-	border-bottom: 1px solid var(--border);
+	border: 1px solid var(--border);
 	text-align: left;
 	vertical-align: top;
 }
@@ -111,35 +121,6 @@ tbody tr:nth-child(even) {
 
 tbody tr:hover {
 	background-color: #eaf2ff;
-}
-
-/* =========================
-   Tooltips
-   ========================= */
-.tooltip {
-	position: relative;
-	display: inline-block;
-	border-bottom: 1px dotted #666;
-}
-
-.tooltip .tooltiptext {
-	visibility: hidden;
-	width: 320px;
-	background-color: #111827;
-	color: #fff;
-	text-align: left;
-	border-radius: 8px;
-	padding: 10px 12px;
-	position: absolute;
-	z-index: 10;
-	top: 125%;
-	left: 50%;
-	transform: translateX(-50%);
-	box-shadow: var(--shadow-md);
-}
-
-.tooltip:hover .tooltiptext {
-	visibility: visible;
 }
 
 /* =========================

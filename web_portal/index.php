@@ -20,8 +20,8 @@
 				<div class="card-icon">⚙️</div>
 				<p class="card-text">
 					- clas12-mcgen or gemc internal generator <br/>
-					- Arbitrary number of jobs <br/>
-					- Arbitrary number of events per job (max 10,000) <br/>
+					- Arbitrary number of jobs (max 10,000) <br/>
+					- Arbitrary number of events per job (max 5,000) <br/>
 				</p>
 			</div>
 		</a>
