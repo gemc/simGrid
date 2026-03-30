@@ -477,140 +477,228 @@ function showJobDetails(jobId) {
 		});
 }
 
-function osgLogtoTable() {
+function osgLogtoTable(mode) {
+	var logFile = "data/osgLog.json";
+	var dictionaryName = null;
 
-	fetch("data/osgLog.json").then(function(r) { return r.json(); }).then(function(myObj) {
+	if (mode === "production") {
+		logFile = "data/osg-production.json";
+		dictionaryName = "CLAS12OCR";
+	} else if (mode === "devel") {
+		logFile = "data/osg-devel.json";
+		dictionaryName = "CLAS12TEST";
+	}
 
-		var txt = "<table align=\"center\" style=\"width:80%;text-align:center\"><caption align=\"bottom\">";
-		var txt_summary = "<table align=\"center\" style=\"width:50%;text-align:center\"><tr>";
+	fetch(logFile)
+		.then(function (r) {
+			return r.json();
+		})
+		.then(function (myObj) {
 
-		var meta = myObj.metadata;
-		txt += meta["footer"];
-		txt += "</caption><tr>";
+			var selectedBlock = null;
 
-		var data_summary = {"user": [], "submission": [], "total": [], "done": [], "run": [], "idle": []};
-		var keys = Object.keys(myObj.user_data[0]);
-
-		var jobIdKey = null;
-		for (var k = 0; k < keys.length; k++) {
-			if (String(keys[k]).toLowerCase().replace(/\s+/g, "") === "jobid") {
-				jobIdKey = keys[k];
-				break;
+			if (dictionaryName && myObj[dictionaryName]) {
+				selectedBlock = myObj[dictionaryName];
+			} else if (myObj.user_data) {
+				// backward compatibility with old format
+				selectedBlock = {
+					results: myObj.user_data,
+					update_timestamp: {},
+					database: "",
+					owner: "",
+					count: myObj.user_data.length
+				};
 			}
-		}
 
-		// Headers
-		for (var i = 0; i < keys.length; i++) {
-			txt += "<th>" + keys[i] + "</th>";
-		}
-		txt += "<th>order</th></tr>";
+			if (!selectedBlock || !Array.isArray(selectedBlock.results)) {
+				document.getElementById("osgLog").innerHTML =
+					"<div style=\"color:#b00020;font-weight:bold;\">Invalid OSG log format.</div>";
+				document.getElementById("osgLog_summary").innerHTML = "";
+				return;
+			}
 
-		for (var i in Object.keys(data_summary)) {
-			txt_summary += "<th>" + Object.keys(data_summary)[i] + "</th>";
-		}
+			var userData = selectedBlock.results;
 
-		// Rows
-		for (var rows in myObj.user_data) {
+			var txt = "<table align=\"center\" style=\"width:80%;text-align:center\"><caption align=\"bottom\">";
+			var txt_summary = "<table align=\"center\" style=\"width:50%;text-align:center\"><tr>";
+
+			var footer = "";
+			if (selectedBlock.update_timestamp && selectedBlock.update_timestamp.time) {
+				footer += "Updated: " + escapeHtml(selectedBlock.update_timestamp.time);
+			}
+			if (selectedBlock.database) {
+				if (footer) footer += " | ";
+				footer += "Database: " + escapeHtml(selectedBlock.database);
+			}
+			if (selectedBlock.owner) {
+				if (footer) footer += " | ";
+				footer += "Owner: " + escapeHtml(selectedBlock.owner);
+			}
+			if (selectedBlock.count !== undefined && selectedBlock.count !== null) {
+				if (footer) footer += " | ";
+				footer += "Count: " + escapeHtml(selectedBlock.count);
+			}
+
+			txt += footer;
+			txt += "</caption>";
+
+			if (!userData.length) {
+				txt += "<tr><td>No entries found.</td></tr></table>";
+				document.getElementById("osgLog").innerHTML = txt;
+				document.getElementById("osgLog_summary").innerHTML = "";
+				return;
+			}
+
+			var data_summary = {
+				"user": [],
+				"submission": [],
+				"total": [],
+				"done": [],
+				"run": [],
+				"idle": []
+			};
+
+			var keys = Object.keys(userData[0]);
+
+			var jobIdKey = null;
+			for (var k = 0; k < keys.length; k++) {
+				if (String(keys[k]).toLowerCase().replace(/\s+/g, "") === "jobid") {
+					jobIdKey = keys[k];
+					break;
+				}
+			}
+
 			txt += "<tr>";
-			var val = myObj.user_data[rows];
+			for (var i = 0; i < keys.length; i++) {
+				txt += "<th>" + escapeHtml(keys[i]) + "</th>";
+			}
+			txt += "<th>order</th></tr>";
 
-			for (var newkeys in val) {
-				txt += "<td>";
-				if (newkeys === jobIdKey) {
-					txt += "<a href=\"#\" class=\"job-id-link\" data-job-id=\"" + escapeHtml(val[newkeys]) + "\">" + escapeHtml(val[newkeys]) + "</a>";
-				} else {
-					txt += escapeHtml(val[newkeys]);
-				}
-				txt += "</td>";
+			for (var s in Object.keys(data_summary)) {
+				txt_summary += "<th>" + escapeHtml(Object.keys(data_summary)[s]) + "</th>";
 			}
 
-			txt += "<td></td></tr>";
+			for (var row = 0; row < userData.length; row++) {
+				var val = userData[row];
+				txt += "<tr>";
 
-			if (data_summary.user.includes(val.user)) {
-				for (var i in Object.keys(data_summary)) {
-					if (i < 2) continue;
-					data_summary[Object.keys(data_summary)[i]][data_summary.user.indexOf(val.user)] = Number(data_summary[Object.keys(data_summary)[i]][data_summary.user.indexOf(val.user)]);
-					data_summary[Object.keys(data_summary)[i]][data_summary.user.indexOf(val.user)] += Number(val[Object.keys(data_summary)[i]]);
-				}
-				data_summary["submission"][data_summary.user.indexOf(val.user)] += 1;
-			} else {
-				for (var i in Object.keys(data_summary)) {
-					if (i == 1) continue;
-					data_summary[Object.keys(data_summary)[i]].push(val[Object.keys(data_summary)[i]]);
-				}
-				data_summary["submission"].push(1);
-			}
-		}
+				for (var col = 0; col < keys.length; col++) {
+					var key = keys[col];
+					txt += "<td>";
 
-		txt += "</table>";
-
-		for (var i in data_summary.user) {
-			txt_summary += "</tr><tr>";
-			for (var j in Object.keys(data_summary)) {
-				txt_summary += "<td>" + data_summary[Object.keys(data_summary)[j]][i] + "</td>";
-			}
-		}
-
-		txt_summary += "<tr><td>total</td>";
-		for (var j in Object.keys(data_summary)) {
-			if (j == 0) continue;
-			txt_summary += "<td>" + data_summary[Object.keys(data_summary)[j]].reduce(function(a, b) { return Number(a) + Number(b); }, 0) + "</td>";
-		}
-		txt_summary += "</tr></table>";
-
-		document.getElementById("osgLog").innerHTML = txt;
-		document.getElementById("osgLog_summary").innerHTML = txt_summary;
-
-		var osgLogEl = document.getElementById("osgLog");
-		if (!osgLogEl.dataset.jobClickBound) {
-			osgLogEl.addEventListener("click", function(e) {
-				var link = e.target.closest(".job-id-link");
-				if (!link) return;
-				e.preventDefault();
-				showJobDetails(link.dataset.jobId);
-			});
-			osgLogEl.dataset.jobClickBound = "1";
-		}
-
-		ensureJobDetailsModal();
-
-		// Now fetch priorities and fill in the order column
-		fetch("data/submission_priorities.json").then(function(r) { return r.json(); }).then(function(priorityObj) {
-			var priorities = (priorityObj && priorityObj.priorities) ? priorityObj.priorities : [];
-			var priorityMap = {};
-			for (var p = 0; p < priorities.length; p++) {
-				var entry = priorities[p];
-				if (entry.user_submission_id != null) {
-					priorityMap[String(entry.user_submission_id).trim()] = entry.priority;
-				}
-			}
-
-			// Update each order cell in the rendered table
-			var rows = document.querySelectorAll("#osgLog table tr");
-			for (var r = 1; r < rows.length; r++) { // skip header row
-				var cells = rows[r].querySelectorAll("td");
-				if (!cells.length) continue;
-				var lastCell = cells[cells.length - 1];
-				// Find osg id cell - it's the last data cell before the order cell
-				// Find job id cell via the link
-				var link = rows[r].querySelector(".job-id-link");
-				var jobId = link ? link.dataset.jobId : "";
-				// Find osg id by scanning cells
-				var osgIdCell = null;
-				var headerCells = rows[0] ? rows[0].querySelectorAll("th") : [];
-				for (var h = 0; h < headerCells.length; h++) {
-					if (headerCells[h].textContent.trim() === "osg id") {
-						osgIdCell = cells[h];
-						break;
+					if (key === jobIdKey) {
+						txt += "<a href=\"#\" class=\"job-id-link\" data-job-id=\"" +
+							escapeHtml(val[key]) + "\">" + escapeHtml(val[key]) + "</a>";
+					} else {
+						txt += escapeHtml(val[key]);
 					}
+
+					txt += "</td>";
 				}
-				var osgIdVal = osgIdCell ? osgIdCell.textContent.trim() : "";
-				if (osgIdVal === "Not Submitted" && priorityMap.hasOwnProperty(jobId)) {
-					lastCell.textContent = priorityMap[jobId];
+
+				txt += "<td></td></tr>";
+
+				if (data_summary.user.includes(val.user)) {
+					var idx = data_summary.user.indexOf(val.user);
+					data_summary.total[idx] += Number(val.total || 0);
+					data_summary.done[idx] += Number(val.done || 0);
+					data_summary.run[idx] += Number(val.run || 0);
+					data_summary.idle[idx] += Number(val.idle || 0);
+					data_summary.submission[idx] += 1;
+				} else {
+					data_summary.user.push(val.user || "");
+					data_summary.submission.push(1);
+					data_summary.total.push(Number(val.total || 0));
+					data_summary.done.push(Number(val.done || 0));
+					data_summary.run.push(Number(val.run || 0));
+					data_summary.idle.push(Number(val.idle || 0));
 				}
 			}
-		}).catch(function(e) { console.warn("priorities fetch failed:", e); });
-	});
+
+			txt += "</table>";
+
+			for (var u = 0; u < data_summary.user.length; u++) {
+				txt_summary += "</tr><tr>";
+				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.submission[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.total[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.done[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.run[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
+			}
+
+			txt_summary += "</tr><tr><td>total</td>";
+			txt_summary += "<td>" + data_summary.submission.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.total.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.done.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.run.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.idle.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "</tr></table>";
+
+			document.getElementById("osgLog").innerHTML = txt;
+			document.getElementById("osgLog_summary").innerHTML = txt_summary;
+
+			var osgLogEl = document.getElementById("osgLog");
+			if (!osgLogEl.dataset.jobClickBound) {
+				osgLogEl.addEventListener("click", function (e) {
+					var link = e.target.closest(".job-id-link");
+					if (!link) return;
+					e.preventDefault();
+					showJobDetails(link.dataset.jobId);
+				});
+				osgLogEl.dataset.jobClickBound = "1";
+			}
+
+			ensureJobDetailsModal();
+
+			fetch("data/submission_priorities.json")
+				.then(function (r) { return r.json(); })
+				.then(function (priorityObj) {
+					var priorities = (priorityObj && priorityObj.priorities) ? priorityObj.priorities : [];
+					var priorityMap = {};
+
+					for (var p = 0; p < priorities.length; p++) {
+						var entry = priorities[p];
+						if (entry.user_submission_id != null) {
+							priorityMap[String(entry.user_submission_id).trim()] = entry.priority;
+						}
+					}
+
+					var rows = document.querySelectorAll("#osgLog table tr");
+					for (var r = 1; r < rows.length; r++) {
+						var cells = rows[r].querySelectorAll("td");
+						if (!cells.length) continue;
+
+						var lastCell = cells[cells.length - 1];
+						var link = rows[r].querySelector(".job-id-link");
+						var jobId = link ? link.dataset.jobId : "";
+
+						var osgIdCell = null;
+						var headerCells = rows[0] ? rows[0].querySelectorAll("th") : [];
+						for (var h = 0; h < headerCells.length; h++) {
+							if (headerCells[h].textContent.trim() === "osg id") {
+								osgIdCell = cells[h];
+								break;
+							}
+						}
+
+						var osgIdVal = osgIdCell ? osgIdCell.textContent.trim() : "";
+						if ((osgIdVal === "null" || osgIdVal === "" || osgIdVal === "Not Submitted") &&
+							priorityMap.hasOwnProperty(jobId)) {
+							lastCell.textContent = priorityMap[jobId];
+						}
+					}
+				})
+				.catch(function (e) {
+					console.warn("priorities fetch failed:", e);
+				});
+		})
+		.catch(function (e) {
+			document.getElementById("osgLog").innerHTML =
+				"<div style=\"color:#b00020;font-weight:bold;\">Failed to load OSG log data.</div>";
+			document.getElementById("osgLog_summary").innerHTML = "";
+			console.warn("osg log fetch failed:", e);
+		});
 }
 
 
