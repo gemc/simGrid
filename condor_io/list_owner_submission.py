@@ -144,6 +144,8 @@ def collect_for_database(owner, credentials, database_name):
 			batch = batches[cluster_id]
 			entry = build_condor_entry(cluster_id, batch)
 
+			condor_pool_node = str(cluster_id).strip()
+
 			mysql_row = db.query_one(
 				"""
 				SELECT user,
@@ -157,11 +159,15 @@ def collect_for_database(owner, credentials, database_name):
 				ORDER BY user_submission_id DESC
 				LIMIT 1
 				""",
-				[str(cluster_id)],
+				[condor_pool_node],
 			)
 
-			# Do not show condor-only jobs that are not present in the database
+			# Only keep jobs that exist in MySQL with matching pool_node
 			if mysql_row is None:
+				continue
+
+			mysql_pool_node = str(mysql_row.get("pool_node") or "").strip()
+			if mysql_pool_node != condor_pool_node:
 				continue
 
 			if mysql_row.get("user_submission_id") is not None:
