@@ -160,22 +160,21 @@ def collect_for_database(owner, credentials, database_name):
 				[str(cluster_id)],
 			)
 
-			if mysql_row is not None:
-				if mysql_row.get("user_submission_id") is not None:
-					entry["osg id"] = str(mysql_row["user_submission_id"])
-					entry["user_submission_id"] = mysql_row["user_submission_id"]
-					seen_submission_ids.add(int(mysql_row["user_submission_id"]))
+			# Do not show condor-only jobs that are not present in the database
+			if mysql_row is None:
+				continue
 
-				entry["mysql_status"] = mysql_row.get("run_status")
-				entry["mysql_client_time"] = mysql_row.get("client_time")
-				entry["priority"] = mysql_row.get("priority", entry["priority"])
+			if mysql_row.get("user_submission_id") is not None:
+				entry["osg id"] = str(mysql_row["user_submission_id"])
+				entry["user_submission_id"] = mysql_row["user_submission_id"]
+				seen_submission_ids.add(int(mysql_row["user_submission_id"]))
 
-				if mysql_row.get("user") is not None:
-					entry["user"] = mysql_row["user"]
-			else:
-				# Skip condor-only entries for the queried owner when they do not exist in MySQL
-				if entry.get("user") == owner:
-					continue
+			entry["mysql_status"] = mysql_row.get("run_status")
+			entry["mysql_client_time"] = mysql_row.get("client_time")
+			entry["priority"] = mysql_row.get("priority", entry["priority"])
+
+			if mysql_row.get("user") is not None:
+				entry["user"] = mysql_row["user"]
 
 			results.append(entry)
 
