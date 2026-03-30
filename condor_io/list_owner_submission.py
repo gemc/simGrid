@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from condor_io.htcondor_utils import get_owner_batches, format_submitted_time
+from htcondor_utils import get_owner_batches, format_submitted_time
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE
 
 def build_parser():
