@@ -153,25 +153,6 @@ def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	)
 
 
-def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
-	"""
-	Set JobPrio for all jobs in a given cluster.
-
-	Args:
-		cluster_id: HTCondor ClusterId.
-		priority: Integer JobPrio to assign.
-
-	Returns:
-		Result from schedd.edit(...).
-	"""
-	schedd = htcondor.Schedd()
-	return schedd.edit(
-		job_spec=int(cluster_id),
-		attr="JobPrio",
-		value=str(int(priority)),
-	)
-
-
 def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool = True) -> Dict[int, Dict[str, Any]]:
 	"""
 	Apply priorities from the internal priority map to HTCondor JobPrio.
