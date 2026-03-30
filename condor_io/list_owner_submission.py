@@ -96,27 +96,24 @@ def build_condor_entry(cluster_id, batch):
 
 	done = max(total - run - idle - hold - other, 0)
 
-	condor_pool_node = batch.get("batch_name")
-	if condor_pool_node is None:
-		condor_pool_node = batch.get("osg_id")
+	condor_osg_id = str(cluster_id)
 
 	return {
 		"user": batch.get("owner"),
-		"job id": cluster_id,
+		"job id": None,
 		"submitted": format_submitted_time(batch.get("submitted_epoch")),
 		"total": total,
 		"done": done,
 		"run": run,
 		"idle": idle,
 		"hold": hold,
-		"osg id": condor_pool_node,
-		"pool_node": str(condor_pool_node) if condor_pool_node is not None else None,
+		"osg id": condor_osg_id,
+		"pool_node": condor_osg_id,
 		"mysql_status": None,
 		"mysql_client_time": None,
 		"user_submission_id": None,
 		"priority": batch.get("current_priority"),
 	}
-
 
 def empty_db_payload(database_name, owner, timestamp):
 	# type: (str, str, str) -> Dict[str, Any]
@@ -147,19 +144,7 @@ def collect_for_database(owner, credentials, database_name):
 			batch = batches[cluster_id]
 			entry = build_condor_entry(cluster_id, batch)
 
-			condor_pool_node = None
-
-			# Preferred join key: batch_name
-			if batch.get("batch_name") is not None:
-				condor_pool_node = str(batch.get("batch_name")).strip()
-
-			# Fallback if your condor payload has an explicit osg id field instead
-			elif batch.get("osg_id") is not None:
-				condor_pool_node = str(batch.get("osg_id")).strip()
-
-			# No join key available -> skip
-			if not condor_pool_node:
-				continue
+			condor_pool_node = str(cluster_id)
 
 			mysql_row = db.query_one(
 				"""
@@ -177,20 +162,17 @@ def collect_for_database(owner, credentials, database_name):
 				[condor_pool_node],
 			)
 
-			# Only keep condor jobs that match MySQL by pool_node
 			if mysql_row is None:
 				continue
 
-			mysql_pool_node = str(mysql_row.get("pool_node") or "").strip()
-			if mysql_pool_node != condor_pool_node:
-				continue
-
 			if mysql_row.get("user_submission_id") is not None:
-				entry["osg id"] = str(mysql_row["user_submission_id"])
+				entry["job id"] = mysql_row["user_submission_id"]
 				entry["user_submission_id"] = mysql_row["user_submission_id"]
 				seen_submission_ids.add(int(mysql_row["user_submission_id"]))
 
-			entry["pool_node"] = mysql_pool_node
+			entry["osg id"] = str(mysql_row.get("pool_node")) if mysql_row.get(
+				"pool_node") is not None else entry["osg id"]
+			entry["pool_node"] = mysql_row.get("pool_node")
 			entry["mysql_status"] = mysql_row.get("run_status")
 			entry["mysql_client_time"] = mysql_row.get("client_time")
 			entry["priority"] = mysql_row.get("priority", entry["priority"])
@@ -224,14 +206,14 @@ def collect_for_database(owner, credentials, database_name):
 
 			entry = {
 				"user":               row.get("user"),
-				"job id":             safe_int(pool_node),
+				"job id":             submission_id,
 				"submitted":          row.get("client_time"),
 				"total":              None,
 				"done":               None,
 				"run":                None,
 				"idle":               None,
 				"hold":               None,
-				"osg id":             str(submission_id) if submission_id is not None else None,
+				"osg id":             str(pool_node) if pool_node is not None else "Not Submitted",
 				"pool_node":          pool_node,
 				"mysql_status":       row.get("run_status"),
 				"mysql_client_time":  row.get("client_time"),
