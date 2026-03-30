@@ -35,7 +35,6 @@ if PROJECT_ROOT not in sys.path:
 from htcondor_utils import get_owner_batches, format_submitted_time
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE
 
-
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 
@@ -99,20 +98,20 @@ def build_condor_entry(cluster_id, batch):
 	done = max(total - run - idle - hold - other, 0)
 
 	return {
-		"user": batch.get("owner"),
-		"job id": cluster_id,
-		"submitted": format_submitted_time(batch.get("submitted_epoch")),
-		"total": total,
-		"done": done,
-		"run": run,
-		"idle": idle,
-		"hold": hold,
-		"osg id": None,
-		"pool_node": str(cluster_id),
-		"mysql_status": None,
-		"mysql_client_time": None,
+		"user":               batch.get("owner"),
+		"job id":             cluster_id,
+		"submitted":          format_submitted_time(batch.get("submitted_epoch")),
+		"total":              total,
+		"done":               done,
+		"run":                run,
+		"idle":               idle,
+		"hold":               hold,
+		"osg id":             None,
+		"pool_node":          str(cluster_id),
+		"mysql_status":       None,
+		"mysql_client_time":  None,
 		"user_submission_id": None,
-		"priority": batch.get("current_priority"),
+		"priority":           batch.get("current_priority"),
 	}
 
 
@@ -122,10 +121,10 @@ def empty_db_payload(database_name, owner, timestamp):
 		"update_timestamp": {
 			"time": timestamp,
 		},
-		"database": database_name,
-		"owner": owner,
-		"count": 0,
-		"results": [],
+		"database":         database_name,
+		"owner":            owner,
+		"count":            0,
+		"results":          [],
 	}
 
 
@@ -137,8 +136,8 @@ def collect_for_database(owner, credentials, database_name):
 	seen_submission_ids = set()  # type: Set[int]
 
 	with Database(
-		credentials_file=credentials,
-		database_name=database_name,
+			credentials_file=credentials,
+			database_name=database_name,
 	) as db:
 
 		for cluster_id in sorted(batches):
@@ -173,6 +172,10 @@ def collect_for_database(owner, credentials, database_name):
 
 				if mysql_row.get("user") is not None:
 					entry["user"] = mysql_row["user"]
+			else:
+				# Skip condor-only entries for the queried owner when they do not exist in MySQL
+				if entry.get("user") == owner:
+					continue
 
 			results.append(entry)
 
@@ -199,28 +202,28 @@ def collect_for_database(owner, credentials, database_name):
 				continue
 
 			entry = {
-				"user": row.get("user"),
-				"job id": safe_int(pool_node),
-				"submitted": row.get("client_time"),
-				"total": None,
-				"done": None,
-				"run": None,
-				"idle": None,
-				"hold": None,
-				"osg id": str(submission_id) if submission_id is not None else None,
-				"pool_node": pool_node,
-				"mysql_status": row.get("run_status"),
-				"mysql_client_time": row.get("client_time"),
+				"user":               row.get("user"),
+				"job id":             safe_int(pool_node),
+				"submitted":          row.get("client_time"),
+				"total":              None,
+				"done":               None,
+				"run":                None,
+				"idle":               None,
+				"hold":               None,
+				"osg id":             str(submission_id) if submission_id is not None else None,
+				"pool_node":          pool_node,
+				"mysql_status":       row.get("run_status"),
+				"mysql_client_time":  row.get("client_time"),
 				"user_submission_id": submission_id,
-				"priority": row.get("priority"),
+				"priority":           row.get("priority"),
 			}
 			results.append(entry)
 
 	return {
 		"database": database_name,
-		"owner": owner,
-		"count": len(results),
-		"results": results,
+		"owner":    owner,
+		"count":    len(results),
+		"results":  results,
 	}
 
 
@@ -249,7 +252,7 @@ def main():
 		)
 
 		final_payload = {
-			"CLAS12OCR": empty_db_payload(PRODUCTION_DATABASE, args.owner, update_time),
+			"CLAS12OCR":  empty_db_payload(PRODUCTION_DATABASE, args.owner, update_time),
 			"CLAS12TEST": empty_db_payload(TEST_DATABASE, args.owner, update_time),
 		}
 
@@ -257,10 +260,10 @@ def main():
 			"update_timestamp": {
 				"time": update_time,
 			},
-			"database": selected_payload["database"],
-			"owner": selected_payload["owner"],
-			"count": selected_payload["count"],
-			"results": selected_payload["results"],
+			"database":         selected_payload["database"],
+			"owner":            selected_payload["owner"],
+			"count":            selected_payload["count"],
+			"results":          selected_payload["results"],
 		}
 
 		if args.print_screen:

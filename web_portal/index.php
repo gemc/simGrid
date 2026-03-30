@@ -44,7 +44,7 @@
 
 <section class="page-section page-section--center">
 	<h2 class="section-title">
-		Details of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : '(production)'; ?>
+		Details of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : ''; ?>
 	</h2>
 	<div id="osgLog"></div>
 </section>
