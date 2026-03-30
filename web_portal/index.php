@@ -5,7 +5,9 @@
 <?php require_once __DIR__ . '/header.php'; ?>
 
 <section class="page-section page-section--center">
-	<h2 class="section-title">Summary of current jobs</h2>
+	<h2 class="section-title">
+		Summary of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : '(production)'; ?>
+	</h2>
 	<div id="osgLog_summary"></div>
 </section>
 
@@ -41,7 +43,9 @@
 </section>
 
 <section class="page-section page-section--center">
-	<h2 class="section-title">Details of current OSG Jobs</h2>
+	<h2 class="section-title">
+		Details of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : '(production)'; ?>
+	</h2>
 	<div id="osgLog"></div>
 </section>
 

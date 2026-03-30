@@ -560,6 +560,15 @@ function osgLogtoTable(mode) {
 
 			var keys = Object.keys(userData[0]);
 
+			keys = keys.filter(function (key) {
+				return ![
+					"mysql_status",
+					"mysql_client_time",
+					"priority",
+					"user_submission_id"
+				].includes(key);
+			});
+
 			var jobIdKey = null;
 			for (var k = 0; k < keys.length; k++) {
 				if (String(keys[k]).toLowerCase().replace(/\s+/g, "") === "jobid") {
@@ -628,11 +637,21 @@ function osgLogtoTable(mode) {
 			}
 
 			txt_summary += "</tr><tr><td>total</td>";
-			txt_summary += "<td>" + data_summary.submission.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.total.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.done.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.run.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.idle.reduce(function (a, b) { return Number(a) + Number(b); }, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.submission.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.total.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.done.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.run.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0) + "</td>";
+			txt_summary += "<td>" + data_summary.idle.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0) + "</td>";
 			txt_summary += "</tr></table>";
 
 			document.getElementById("osgLog").innerHTML = txt;
@@ -652,7 +671,9 @@ function osgLogtoTable(mode) {
 			ensureJobDetailsModal();
 
 			fetch("data/submission_priorities.json")
-				.then(function (r) { return r.json(); })
+				.then(function (r) {
+					return r.json();
+				})
 				.then(function (priorityObj) {
 					var priorities = (priorityObj && priorityObj.priorities) ? priorityObj.priorities : [];
 					var priorityMap = {};
@@ -757,7 +778,7 @@ function fairshareToTable() {
 				userSummaryTxt += "<tr>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].user) + "</td>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].jobs) + "</td>";
-				userSummaryTxt += "<td>" + escapeHtml(formatNumber(jobsPerUser[i].submitted_load*100, 2)) + "</td>";
+				userSummaryTxt += "<td>" + escapeHtml(formatNumber(jobsPerUser[i].submitted_load * 100, 2)) + "</td>";
 				userSummaryTxt += "<td>" + escapeHtml(jobsPerUser[i].pending_jobs) + "</td>";
 				userSummaryTxt += "</tr>";
 			}
