@@ -722,7 +722,6 @@ function osgLogtoTable(mode) {
 		});
 }
 
-
 function fairshareToTable() {
 	var fairshareEl = document.getElementById("fairshare");
 	var fairshareSummaryEl = document.getElementById("fairshare_summary");

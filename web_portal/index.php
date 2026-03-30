@@ -6,7 +6,7 @@
 
 <section class="page-section page-section--center">
 	<h2 class="section-title">
-		Summary of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : '(production)'; ?>
+		Summary of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : ''; ?>
 	</h2>
 	<div id="osgLog_summary"></div>
 </section>
