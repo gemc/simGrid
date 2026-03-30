@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-list_owner_submissions.py
+list_owner_submission.py
 
 Build a combined view of:
 1. HTCondor batches for one owner (via get_owner_batches)
@@ -19,19 +19,18 @@ Behavior:
   - no options => print help and exit
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
 
 from htcondor_utils import get_owner_batches, format_submitted_time
 from database import Database, DEFAULT_CREDENTIALS_FILE
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser():
+	# type: () -> argparse.ArgumentParser
 	parser = argparse.ArgumentParser(
 		description="List HTCondor owner batches joined with MySQL submissions."
 	)
@@ -55,8 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument(
 		"-c",
 		"--credentials",
-		default=str(DEFAULT_RECENT_CREDENTIALS_FILE()),
-		help=f"MySQL credential file. Default: {DEFAULT_RECENT_CREDENTIALS_FILE()}",
+		default=str(DEFAULT_CREDENTIALS_FILE),
+		help="MySQL credential file. Default: {0}".format(DEFAULT_CREDENTIALS_FILE),
 	)
 	parser.add_argument(
 		"-d",
@@ -66,11 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
 	return parser
 
 
-def DEFAULT_RECENT_CREDENTIALS_FILE() -> Path:
-	return Path(DEFAULT_CREDENTIALS_FILE).expanduser()
-
-
-def safe_int(value: Any) -> int | None:
+def safe_int(value):
+	# type: (Any) -> Optional[int]
 	if value is None:
 		return None
 	try:
@@ -79,7 +75,8 @@ def safe_int(value: Any) -> int | None:
 		return None
 
 
-def build_condor_entry(cluster_id: int, batch: dict[str, Any]) -> dict[str, Any]:
+def build_condor_entry(cluster_id, batch):
+	# type: (int, Dict[str, Any]) -> Dict[str, Any]
 	total = safe_int(batch.get("total_submit_procs")) or 0
 	counts = batch.get("counts", {})
 
@@ -88,7 +85,7 @@ def build_condor_entry(cluster_id: int, batch: dict[str, Any]) -> dict[str, Any]
 	hold = safe_int(counts.get("HOLD")) or 0
 	other = safe_int(counts.get("OTHER")) or 0
 
-	# DONE is what has left the queue out of the original submitted total.
+	# DONE = original total minus jobs still resident in queue
 	done = max(total - run - idle - hold - other, 0)
 
 	return {
@@ -109,7 +106,8 @@ def build_condor_entry(cluster_id: int, batch: dict[str, Any]) -> dict[str, Any]
 	}
 
 
-def main() -> int:
+def main():
+	# type: () -> int
 	parser = build_parser()
 
 	# no options => -h behavior
@@ -124,18 +122,16 @@ def main() -> int:
 		return 1
 
 	try:
-		# 1. submissions = get_owner_batches(owner)
 		batches = get_owner_batches(args.owner)
 
-		results: list[dict[str, Any]] = []
-		seen_submission_ids: set[int] = set()
-		seen_pool_nodes: set[str] = set()
+		results = []  # type: List[Dict[str, Any]]
+		seen_submission_ids = set()  # type: Set[int]
 
 		with Database(
 			credentials_file=args.credentials,
 			database_name=args.database,
 		) as db:
-			# 2. for each condor batch, find mysql row where pool_node matches job id
+
 			for cluster_id in sorted(batches):
 				batch = batches[cluster_id]
 				entry = build_condor_entry(cluster_id, batch)
@@ -157,12 +153,11 @@ def main() -> int:
 				)
 
 				if mysql_row is not None:
-					entry["osg id"] = (
-						str(mysql_row["user_submission_id"])
-						if mysql_row.get("user_submission_id") is not None
-						else None
-					)
-					entry["user_submission_id"] = mysql_row.get("user_submission_id")
+					if mysql_row.get("user_submission_id") is not None:
+						entry["osg id"] = str(mysql_row["user_submission_id"])
+						entry["user_submission_id"] = mysql_row["user_submission_id"]
+						seen_submission_ids.add(int(mysql_row["user_submission_id"]))
+
 					entry["mysql_status"] = mysql_row.get("run_status")
 					entry["mysql_client_time"] = mysql_row.get("client_time")
 					entry["priority"] = mysql_row.get("priority", entry["priority"])
@@ -170,15 +165,8 @@ def main() -> int:
 					if mysql_row.get("user") is not None:
 						entry["user"] = mysql_row["user"]
 
-					if mysql_row.get("user_submission_id") is not None:
-						seen_submission_ids.add(int(mysql_row["user_submission_id"]))
-
-					if mysql_row.get("pool_node") is not None:
-						seen_pool_nodes.add(str(mysql_row["pool_node"]))
-
 				results.append(entry)
 
-			# 4. add all mysql jobs with submitted = "Not Submitted"
 			not_submitted_rows = db.query(
 				"""
 				SELECT user,
@@ -196,9 +184,8 @@ def main() -> int:
 
 			for row in not_submitted_rows:
 				submission_id = safe_int(row.get("user_submission_id"))
-				pool_node = str(row.get("pool_node") or "")
+				pool_node = row.get("pool_node")
 
-				# Avoid duplicates if already matched above
 				if submission_id is not None and submission_id in seen_submission_ids:
 					continue
 
@@ -212,7 +199,7 @@ def main() -> int:
 					"idle": None,
 					"hold": None,
 					"osg id": str(submission_id) if submission_id is not None else None,
-					"pool_node": row.get("pool_node"),
+					"pool_node": pool_node,
 					"mysql_status": row.get("run_status"),
 					"mysql_client_time": row.get("client_time"),
 					"user_submission_id": submission_id,
@@ -231,13 +218,18 @@ def main() -> int:
 
 		if args.json_file:
 			output_path = Path(args.json_file).expanduser()
-			output_path.parent.mkdir(parents=True, exist_ok=True)
-			output_path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+			output_dir = output_path.parent
+			if not output_dir.exists():
+				output_dir.mkdir(parents=True)
+
+			with output_path.open("w") as fh:
+				json.dump(payload, fh, indent=2, default=str)
+				fh.write("\n")
 
 		return 0
 
 	except Exception as exc:
-		print(f"Error: {exc}", file=sys.stderr)
+		print("Error: {0}".format(exc), file=sys.stderr)
 		return 1
 
 
