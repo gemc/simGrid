@@ -791,7 +791,7 @@ function fairshareToTable() {
 			var txt = "<table align=\"center\" style=\"width:90%;text-align:center\"><tr>";
 			var headers = [
 				"user",
-				"user_submission_id",
+				"osg id",
 				"date",
 				"order",
 				"wait_time (h)",

@@ -85,6 +85,7 @@ td {
 	text-align: center;
 	vertical-align: top;
 	border: 1px solid var(--border);
+	white-space: nowrap;
 }
 
 th {
@@ -486,10 +487,6 @@ input[type=number]::-webkit-outer-spin-button {
 	height: 1100px;
 }
 
-#osgLog td,
-#osgLog_summary td {
-	white-space: nowrap;
-}
 
 .submission-table {
 	width: 80%;
