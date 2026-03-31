@@ -7,5 +7,5 @@ $IS_MAIN_MODE  = !$IS_DEVEL_MODE;
 $submit_script = '../db_io/upload_submission.py';
 
 $portalTitle = $IS_DEVEL_MODE
-	? 'CLAS12 Monte-Carlo TEST Submission Portal'
-	: 'CLAS12 Monte-Carlo Job Submission Portal';
+	? 'CLAS12 Monte-Carlo TEST OSG Portal'
+	: 'CLAS12 Monte-Carlo OSG Portal';
