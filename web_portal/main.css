@@ -505,7 +505,17 @@ input[type=number]::-webkit-outer-spin-button {
 	white-space: nowrap;
 }
 
+.submission-table tr:hover,
 .submission-table tr:hover td {
 	background-color: transparent !important;
 	color: inherit !important;
+}
+
+.submission-table td:first-child {
+	width: 40%;
+	text-align: center;
+}
+
+.submission-table td:nth-child(2) {
+	text-align: left;
 }

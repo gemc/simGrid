@@ -10,7 +10,7 @@
 
 <section class="page-section page-section--center">
 	<form action="submit_type2.php" method="POST">
-		<table id="submission_table" style="width: 70%; margin: 0 auto; text-align: center;">
+		<table id="submission_table" class="submission-table" style="width: 70%; margin: 0 auto; text-align: center;">
 			<tr>
 				<td>Configuration</td>
 				<td>
