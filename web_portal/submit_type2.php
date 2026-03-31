@@ -76,23 +76,22 @@
 
 			$cmd_with_log = $command . ' >> ' . escapeshellarg($log_file) . ' 2>&1';
 
-			$lines = [];
-			$return_code = 0;
-			exec($cmd_with_log, $lines, $return_code);
+	$lines = [];
+	$return_code = 0;
+	exec($cmd_with_log, $lines, $return_code);
 
-			$output = implode("\n", $lines);
-			$submission_ok = ($return_code === 0);
+	$output = implode("\n", $lines);
+	$submission_ok = ($return_code === 0);
 	}
 	else {
-		echo "All field are required";
-		die();
+	echo "All field are required";
+	die();
 	}
 	?>
 
 
 	<?php if ($submission_ok): ?>
-	<h4>Your job was successfully submitted with the following parameters.</h4>
-	<table style="text-align: center;width: 50%;" align="center">
+	<h4 style="text-align: center;">Your job was successfully submitted with the following parameters.</h4>
 	<?php else: ?>
 	<h4>Submission failed.</h4>
 	<p>Please contact support and include this log file:</p>
@@ -100,10 +99,10 @@
 	<?php endif; ?>
 
 	<?php if ($submission_ok): ?>
-	<table style="text-align: center;width: 50%;" align="center">
+	<table class="submission-table" style="width: 50%; margin: 0 auto; border-collapse: collapse;">
 		<tr>
 			<td>Project</td>
-			<td> <?php echo($project); ?> </td>
+			<td><?php echo($project); ?></td>
 		</tr>
 		<tr>
 			<td>Configuration</td>
@@ -119,39 +118,40 @@
 		</tr>
 		<tr>
 			<td>Lund File Location</td>
-			<td> <?php echo($lundFiles); ?> </td>
-		</tr>
-		<td> Target Position and Length</td>
-		<td><?php echo($zposition); ?></td>
+			<td><?php echo($lundFiles); ?></td>
 		</tr>
 		<tr>
-			<td> Beamspot</td>
+			<td>Target Position and Length</td>
+			<td><?php echo($zposition); ?></td>
+		</tr>
+		<tr>
+			<td>Beamspot</td>
 			<td><?php echo($beam); ?></td>
 		</tr>
 		<tr>
-			<td> Raster</td>
+			<td>Raster</td>
 			<td><?php echo($raster); ?></td>
 		</tr>
-
 		<tr>
-			<td> User Choice: <br/> 0=ignore generator vertex <br/> 1=relative to generator vertex</td>
+			<td>User Choice: <br/> 0=ignore generator vertex <br/> 1=relative to generator vertex</td>
 			<td><?php echo($vertex_choice); ?></td>
 		</tr>
 		<tr>
-			<td> Background Merging</td>
-			<td> <?php echo($bkmerging); ?> M</td>
+			<td>Background Merging</td>
+			<td><?php echo($bkmerging); ?> M</td>
 		</tr>
 		<tr>
-			<td> Output Type</td>
-			<td> <?php echo($output_type); ?></td>
+			<td>Output Type</td>
+			<td><?php echo($output_type); ?></td>
 		</tr>
 		<tr>
-			<td> String Identifier:</td>
+			<td>String Identifier:</td>
 			<td><?php echo($string_id); ?></td>
 		</tr>
 	</table>
-	<h4>Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
+	<h4 style="text-align: center;">Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
 	<?php endif; ?>
+
 
 </div>
 </body>

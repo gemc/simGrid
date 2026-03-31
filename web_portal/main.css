@@ -512,7 +512,7 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .submission-table td:first-child {
-	width: 40%;
+	width: 60%;
 	text-align: center;
 }
 

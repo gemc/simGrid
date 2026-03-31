@@ -88,12 +88,12 @@
 
 			$cmd_with_log = $command . ' >> ' . escapeshellarg($log_file) . ' 2>&1';
 
-			$lines = [];
-			$return_code = 0;
-			exec($cmd_with_log, $lines, $return_code);
+	$lines = [];
+	$return_code = 0;
+	exec($cmd_with_log, $lines, $return_code);
 
-			$output = implode("\n", $lines);
-			$submission_ok = ($return_code === 0);
+	$output = implode("\n", $lines);
+	$submission_ok = ($return_code === 0);
 	}
 	else {
 	echo("<h2> All fields are required </h2>");
@@ -102,88 +102,88 @@
 
 	?>
 
-<?php if ($submission_ok): ?>
-<h4 style="text-align: center;">Your job was successfully submitted with the following parameters.</h4>
-<?php else: ?>
-<h4>Submission failed.</h4>
-<p>Please contact support and include this log file:</p>
-<p><code><?php echo htmlspecialchars($log_file, ENT_QUOTES, 'UTF-8'); ?></code></p>
-<?php endif; ?>
+	<?php if ($submission_ok): ?>
+	<h4 style="text-align: center;">Your job was successfully submitted with the following parameters.</h4>
+	<?php else: ?>
+	<h4>Submission failed.</h4>
+	<p>Please contact support and include this log file:</p>
+	<p><code><?php echo htmlspecialchars($log_file, ENT_QUOTES, 'UTF-8'); ?></code></p>
+	<?php endif; ?>
 
-<?php if ($submission_ok): ?>
-<table class="submission-table" style="width: 50%; margin: 0 auto; border-collapse: collapse;">
-	<tr>
-		<td style="width: 40%; text-align: center;">Project</td>
-		<td style="text-align: left;"> <?php echo($project); ?> </td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Configuration</td>
-		<td style="text-align: left;"><?php echo($configuration); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Software Versions</td>
-		<td style="text-align: left;"><?php echo($softwarev); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">MC Gen Versions</td>
-		<td style="text-align: left;"><?php echo($mcgenv); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Magnetic Fields</td>
-		<td style="text-align: left;"><?php echo($fields); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Generator</td>
-		<td style="text-align: left;"> <?php echo($generator); ?> </td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Generator Options</td>
-		<td style="text-align: left;"><?php echo($genOptions); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Target Position and Length</td>
-		<td style="text-align: left;"><?php echo($zposition); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Beamspot</td>
-		<td style="text-align: left;"><?php echo($beam); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Raster</td>
-		<td style="text-align: left;"><?php echo($raster); ?></td>
-	</tr>
+	<?php if ($submission_ok): ?>
+	<table class="submission-table" style="width: 50%; margin: 0 auto; border-collapse: collapse;">
+		<tr>
+			<td style="width: 40%; text-align: center;">Project</td>
+			<td style="text-align: left;"> <?php echo($project); ?> </td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Configuration</td>
+			<td style="text-align: left;"><?php echo($configuration); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Software Versions</td>
+			<td style="text-align: left;"><?php echo($softwarev); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">MC Gen Versions</td>
+			<td style="text-align: left;"><?php echo($mcgenv); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Magnetic Fields</td>
+			<td style="text-align: left;"><?php echo($fields); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Generator</td>
+			<td style="text-align: left;"> <?php echo($generator); ?> </td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Generator Options</td>
+			<td style="text-align: left;"><?php echo($genOptions); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Target Position and Length</td>
+			<td style="text-align: left;"><?php echo($zposition); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Beamspot</td>
+			<td style="text-align: left;"><?php echo($beam); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Raster</td>
+			<td style="text-align: left;"><?php echo($raster); ?></td>
+		</tr>
 
-	<tr>
-		<td style="width: 40%; text-align: center;"> User Choice: <br/> 0=ignore generator vertex <br/> 1=relative to generator vertex</td>
-		<td style="text-align: left;"><?php echo($vertex_choice); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Number of Events per Job</td>
-		<td style="text-align: left;"><?php echo($nevents); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;">Number of Jobs</td>
-		<td style="text-align: left;"><?php echo($jobs); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Total Number of Events</td>
-		<td style="text-align: left;"><?php echo($totalevents); ?> M</td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Background Merging</td>
-		<td style="text-align: left;"> <?php echo($bkmerging); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> Output Type</td>
-		<td style="text-align: left;"> <?php echo($output_type); ?></td>
-	</tr>
-	<tr>
-		<td style="width: 40%; text-align: center;"> String Identifier:</td>
-		<td style="text-align: left;"><?php echo($string_id); ?></td>
-	</tr>
-</table>
-<h4 style="text-align: center;">Output will be at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
-<?php endif; ?>
+		<tr>
+			<td style="width: 40%; text-align: center;"> User Choice: <br/> 0=ignore generator vertex <br/> 1=relative to generator vertex</td>
+			<td style="text-align: left;"><?php echo($vertex_choice); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Number of Events per Job</td>
+			<td style="text-align: left;"><?php echo($nevents); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;">Number of Jobs</td>
+			<td style="text-align: left;"><?php echo($jobs); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Total Number of Events</td>
+			<td style="text-align: left;"><?php echo($totalevents); ?> M</td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Background Merging</td>
+			<td style="text-align: left;"> <?php echo($bkmerging); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> Output Type</td>
+			<td style="text-align: left;"> <?php echo($output_type); ?></td>
+		</tr>
+		<tr>
+			<td style="width: 40%; text-align: center;"> String Identifier:</td>
+			<td style="text-align: left;"><?php echo($string_id); ?></td>
+		</tr>
+	</table>
+	<h4 style="text-align: center;">Output will be at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
+	<?php endif; ?>
 </div>
 
 </body>
