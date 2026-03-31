@@ -29,7 +29,8 @@
 			</tr>
 			<tr>
 				<td><a target="_blank" href="https://github.com/JeffersonLab/clas12-mcgen#readme">MC Gen Versions</a>
-				 <br>Consider <a href="about.html#gen-test">testing the generators</a> before submission.</td>
+					<br>Consider <a href="about.html#gen-test">testing the generators</a> before submission.
+				</td>
 				<td>
 					<select name="mcgenv" id="mcgenv" required>
 					</select>
@@ -99,8 +100,8 @@
 			</tr>
 			<tr>
 				<td>Generator Options</td>
-				<td><input type="text" name="genOptions" id="genOptions" style="min-width: 200px;"></td>
 				<td>
+					<input type="text" name="genOptions" id="genOptions" style="min-width: 200px;">
 					<div id="generatorLink">
 						<a href="#" target="_blank"></a>
 					</div>

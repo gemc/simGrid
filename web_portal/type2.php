@@ -10,7 +10,7 @@
 
 <section class="page-section page-section--center">
 	<form action="submit_type2.php" method="POST">
-		<table id="submission_table" class="submission-table" >
+		<table id="submission_table" class="submission-table">
 			<tr>
 				<td>Configuration</td>
 				<td>
@@ -71,7 +71,9 @@
 			</tr>
 			<tr>
 				<td>Example</td>
-				<td><pre>/volatile/clas12/ungaro/lund/</pre></td>
+				<td>
+					<pre>/volatile/clas12/ungaro/lund/</pre>
+				</td>
 			</tr>
 			<tr>
 				<td>Background Merging</td>

@@ -27,7 +27,7 @@ function navLink(string $file, string $label, string $currentPage): string
 	</nav>
 
 	<div class="site-header__brand">
-		<h1 id="title" class="site-title"><?php echo htmlspecialchars($portalTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
+		<h2 id="title" class="site-title"><?php echo htmlspecialchars($portalTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
 		<?php $user = $_SERVER['REMOTE_USER'] ?? 'no auth user'; ?>
 		<p class="site-user">Logged in as <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?></p>
 	</div>
