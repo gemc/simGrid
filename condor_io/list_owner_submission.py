@@ -72,6 +72,22 @@ def build_parser():
 		action="store_true",
 		help="Use test database CLAS12TEST instead of production CLAS12OCR.",
 	)
+	parser.add_argument(
+		"--store-db",
+		action="store_true",
+		help="Store the generated payload into owner_submission_snapshots.",
+	)
+	parser.add_argument(
+		"--from-db",
+		action="store_true",
+		help="Read the latest payload from owner_submission_snapshots instead of rebuilding it.",
+	)
+	parser.add_argument(
+		"--keep-last",
+		type=int,
+		default=100,
+		help="How many snapshots to keep per database/owner. Default: %(default)s",
+	)
 	return parser
 
 
@@ -99,21 +115,22 @@ def build_condor_entry(cluster_id, batch):
 	condor_osg_id = str(cluster_id)
 
 	return {
-		"user": batch.get("owner"),
-		"job id": None,
-		"submitted": format_submitted_time(batch.get("submitted_epoch")),
-		"total": total,
-		"done": done,
-		"run": run,
-		"idle": idle,
-		"hold": hold,
-		"osg id": condor_osg_id,
-		"pool_node": condor_osg_id,
-		"mysql_status": None,
-		"mysql_client_time": None,
+		"user":               batch.get("owner"),
+		"job id":             None,
+		"submitted":          format_submitted_time(batch.get("submitted_epoch")),
+		"total":              total,
+		"done":               done,
+		"run":                run,
+		"idle":               idle,
+		"hold":               hold,
+		"osg id":             condor_osg_id,
+		"pool_node":          condor_osg_id,
+		"mysql_status":       None,
+		"mysql_client_time":  None,
 		"user_submission_id": None,
-		"priority": batch.get("current_priority"),
+		"priority":           batch.get("current_priority"),
 	}
+
 
 def empty_db_payload(database_name, owner, timestamp):
 	# type: (str, str, str) -> Dict[str, Any]
@@ -240,34 +257,72 @@ def main():
 
 	args = parser.parse_args()
 
-	if not args.print_screen and not args.json_file:
-		print("Error: use -q and/or -j FILE", file=sys.stderr)
+	if (
+			not args.print_screen
+			and not args.json_file
+			and not args.store_db
+			and not args.from_db
+	):
+		print(
+			"Error: use -q and/or -j FILE and/or --store-db and/or --from-db",
+			file=sys.stderr,
+		)
 		return 1
 
 	selected_database = TEST_DATABASE if args.dev else PRODUCTION_DATABASE
 	update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 	try:
-		selected_payload = collect_for_database(
-			owner=args.owner,
-			credentials=args.credentials,
-			database_name=selected_database,
-		)
+		with Database(
+				credentials_file=args.credentials,
+				database_name=selected_database,
+		) as db:
 
-		final_payload = {
-			"CLAS12OCR":  empty_db_payload(PRODUCTION_DATABASE, args.owner, update_time),
-			"CLAS12TEST": empty_db_payload(TEST_DATABASE, args.owner, update_time),
-		}
+			if args.from_db:
+				final_payload = db.export_latest_owner_submission_payload(
+					database_name=selected_database,
+					owner=args.owner,
+				)
+				if final_payload is None:
+					raise RuntimeError(
+						"No stored snapshot found for database={0}, owner={1}".format(
+							selected_database, args.owner
+						)
+					)
+			else:
+				selected_payload = collect_for_database(
+					owner=args.owner,
+					credentials=args.credentials,
+					database_name=selected_database,
+				)
 
-		final_payload[selected_database] = {
-			"update_timestamp": {
-				"time": update_time,
-			},
-			"database":         selected_payload["database"],
-			"owner":            selected_payload["owner"],
-			"count":            selected_payload["count"],
-			"results":          selected_payload["results"],
-		}
+				final_payload = {
+					"CLAS12OCR":  empty_db_payload(
+						PRODUCTION_DATABASE, args.owner, update_time
+					),
+					"CLAS12TEST": empty_db_payload(
+						TEST_DATABASE, args.owner, update_time
+					),
+				}
+
+				final_payload[selected_database] = {
+					"update_timestamp": {
+						"time": update_time,
+					},
+					"database":         selected_payload["database"],
+					"owner":            selected_payload["owner"],
+					"count":            selected_payload["count"],
+					"results":          selected_payload["results"],
+				}
+
+				if args.store_db:
+					db.insert_owner_submission_snapshot(
+						database_name=selected_database,
+						owner=args.owner,
+						update_time=update_time,
+						payload=final_payload,
+						keep_last=args.keep_last,
+					)
 
 		if args.print_screen:
 			print(json.dumps(final_payload, indent=2, default=str))

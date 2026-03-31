@@ -45,10 +45,10 @@ class Database(object):
 	"""Small MySQL wrapper built on top of pymysql."""
 
 	def __init__(
-		self,
-		credentials_file=None,   # type: Optional[str]
-		autocommit=True,        # type: bool
-		database_name=None      # type: Optional[str]
+			self,
+			credentials_file=None,  # type: Optional[str]
+			autocommit=True,  # type: bool
+			database_name=None  # type: Optional[str]
 	):
 		# type: (...) -> None
 		self.credentials_file = (
@@ -91,9 +91,9 @@ class Database(object):
 			database = self.database_name
 
 		return {
-			"user": client["user"].strip().strip("'").strip('"'),
+			"user":     client["user"].strip().strip("'").strip('"'),
 			"password": client["password"].strip().strip("'").strip('"'),
-			"host": client["host"].strip().strip("'").strip('"'),
+			"host":     client["host"].strip().strip("'").strip('"'),
 			"database": database,
 		}
 
@@ -189,16 +189,16 @@ class Database(object):
 		return created_user_id
 
 	def insert_submission(
-		self,
-		username,                   # type: str
-		user_id,                    # type: int
-		client_time,                # type: str
-		pool_node,                  # type: str
-		scard,                      # type: str
-		run_status="Not Submitted", # type: str
-		client_ip=None,             # type: Optional[str]
-		priority=0,                 # type: int
-		debug_enabled=False         # type: bool
+			self,
+			username,  # type: str
+			user_id,  # type: int
+			client_time,  # type: str
+			pool_node,  # type: str
+			scard,  # type: str
+			run_status="Not Submitted",  # type: str
+			client_ip=None,  # type: Optional[str]
+			priority=0,  # type: int
+			debug_enabled=False  # type: bool
 	):
 		# type: (...) -> int
 		"""Insert a row into submissions and return user_submission_id."""
@@ -274,9 +274,9 @@ class Database(object):
 		return affected_rows
 
 	def get_submissions_with_status(
-		self,
-		days_past=None,                          # type: Optional[int]
-		client_time_format="%Y-%m-%d %H:%i:%s"   # type: str
+			self,
+			days_past=None,  # type: Optional[int]
+			client_time_format="%Y-%m-%d %H:%i:%s"  # type: str
 	):
 		# type: (...) -> List[Dict[str, Any]]
 		"""Return submission rows including run_status."""
@@ -303,9 +303,9 @@ class Database(object):
 		)
 
 	def get_submission_times(
-		self,
-		days_past=None,                          # type: Optional[int]
-		client_time_format="%Y-%m-%d %H:%i:%s"   # type: str
+			self,
+			days_past=None,  # type: Optional[int]
+			client_time_format="%Y-%m-%d %H:%i:%s"  # type: str
 	):
 		# type: (...) -> List[Dict[str, Any]]
 		"""Return submission rows with timing fields only."""
@@ -327,6 +327,168 @@ class Database(object):
 			""",
 			[client_time_format, days_past],
 		)
+
+	def insert_owner_submission_snapshot(
+			self,
+			database_name,  # type: str
+			owner,  # type: str
+			update_time,  # type: str
+			payload,  # type: Dict[str, Any]
+			keep_last=100,  # type: int
+			debug_enabled=False  # type: bool
+	):
+		# type: (...) -> int
+		"""Insert one owner-submission JSON snapshot and keep only the newest N rows."""
+		payload_json = json.dumps(payload, default=str)
+
+		debug(
+			debug_enabled,
+			"Inserting owner submission snapshot for database={0}, owner={1}".format(
+				database_name, owner
+			),
+		)
+
+		sql = """
+			INSERT INTO owner_submission_snapshots (
+				database_name,
+				owner,
+				update_time,
+				payload_json
+			) VALUES (%s, %s, %s, %s)
+		"""
+		self.execute(sql, [database_name, owner, update_time, payload_json])
+
+		row = self.query_one("SELECT LAST_INSERT_ID() AS snapshot_id")
+		if row is None or row.get("snapshot_id") is None:
+			raise RuntimeError("Failed to retrieve snapshot_id after INSERT")
+
+		snapshot_id = int(row["snapshot_id"])
+
+		self.prune_owner_submission_snapshots(
+			database_name=database_name,
+			owner=owner,
+			keep_last=keep_last,
+			debug_enabled=debug_enabled,
+		)
+
+		return snapshot_id
+
+	def prune_owner_submission_snapshots(
+			self,
+			database_name,  # type: str
+			owner,  # type: str
+			keep_last=100,  # type: int
+			debug_enabled=False  # type: bool
+	):
+		# type: (...) -> int
+		"""Delete older owner-submission snapshots, keeping only the newest N."""
+		if keep_last <= 0:
+			raise ValueError("keep_last must be > 0")
+
+		debug(
+			debug_enabled,
+			"Pruning owner submission snapshots for database={0}, owner={1}, keep_last={2}".format(
+				database_name, owner, keep_last
+			),
+		)
+
+		sql = """
+			DELETE FROM owner_submission_snapshots
+			WHERE database_name = %s
+			  AND owner = %s
+			  AND snapshot_id NOT IN (
+				  SELECT snapshot_id
+				  FROM (
+					  SELECT snapshot_id
+					  FROM owner_submission_snapshots
+					  WHERE database_name = %s
+					    AND owner = %s
+					  ORDER BY update_time DESC, snapshot_id DESC
+					  LIMIT %s
+				  ) AS kept
+			  )
+		"""
+		return self.execute(sql, [database_name, owner, database_name, owner, keep_last])
+
+	def get_latest_owner_submission_snapshot(
+			self,
+			database_name,  # type: str
+			owner  # type: str
+	):
+		# type: (...) -> Optional[Dict[str, Any]]
+		"""Return the latest stored owner-submission payload as a Python dict."""
+		row = self.query_one(
+			"""
+			SELECT snapshot_id, update_time, payload_json
+			FROM owner_submission_snapshots
+			WHERE database_name = %s
+			  AND owner = %s
+			ORDER BY update_time DESC, snapshot_id DESC
+			LIMIT 1
+			""",
+			[database_name, owner],
+		)
+
+		if row is None:
+			return None
+
+		payload = row["payload_json"]
+		if isinstance(payload, str):
+			payload = json.loads(payload)
+
+		return {
+			"snapshot_id": row["snapshot_id"],
+			"update_time": row["update_time"],
+			"payload":     payload,
+		}
+
+	def get_owner_submission_snapshots(
+			self,
+			database_name,  # type: str
+			owner,  # type: str
+			limit=100  # type: int
+	):
+		# type: (...) -> List[Dict[str, Any]]
+		"""Return up to limit stored owner-submission payloads, newest first."""
+		rows = self.query(
+			"""
+			SELECT snapshot_id, update_time, payload_json
+			FROM owner_submission_snapshots
+			WHERE database_name = %s
+			  AND owner = %s
+			ORDER BY update_time DESC, snapshot_id DESC
+			LIMIT %s
+			""",
+			[database_name, owner, limit],
+		)
+
+		results = []
+		for row in rows:
+			payload = row["payload_json"]
+			if isinstance(payload, str):
+				payload = json.loads(payload)
+
+			results.append(
+				{
+					"snapshot_id": row["snapshot_id"],
+					"update_time": row["update_time"],
+					"payload":     payload,
+				}
+			)
+
+		return results
+
+	def export_latest_owner_submission_payload(
+			self,
+			database_name,  # type: str
+			owner  # type: str
+	):
+		# type: (...) -> Optional[Dict[str, Any]]
+		"""Compatibility helper: return only the latest JSON payload."""
+		row = self.get_latest_owner_submission_snapshot(database_name, owner)
+		if row is None:
+			return None
+		return row["payload"]
 
 	def __enter__(self):
 		# type: () -> "Database"
@@ -401,9 +563,9 @@ def main():
 
 	try:
 		with Database(
-			args.credentials,
-			autocommit=not args.no_autocommit,
-			database_name=args.database,
+				args.credentials,
+				autocommit=not args.no_autocommit,
+				database_name=args.database,
 		) as db:
 			if args.execute:
 				payload = {"affected_rows": db.execute(args.query, args.params)}

@@ -524,7 +524,7 @@ function osgLogtoTable(mode) {
 
 			var footer = "";
 			if (selectedBlock.update_timestamp && selectedBlock.update_timestamp.time) {
-				footer += "Updated: " + escapeHtml(selectedBlock.update_timestamp.time);
+				footer += "<br/>Updated: " + escapeHtml(selectedBlock.update_timestamp.time);
 			}
 			if (selectedBlock.database) {
 				if (footer) footer += " | ";
