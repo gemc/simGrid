@@ -82,7 +82,7 @@ table {
 th,
 td {
 	padding: 12px 14px;
-	text-align: left;
+	text-align: center;
 	vertical-align: top;
 	border: 1px solid var(--border);
 }
