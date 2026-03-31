@@ -216,11 +216,10 @@ input[type=number]::-webkit-outer-spin-button {
 	text-decoration: none;
 	color: inherit;
 	border-radius: var(--radius);
-	transition:
-		transform 0.12s ease,
-		box-shadow 0.12s ease,
-		background-color 0.12s ease,
-		border-color 0.12s ease;
+	transition: transform 0.12s ease,
+	box-shadow 0.12s ease,
+	background-color 0.12s ease,
+	border-color 0.12s ease;
 }
 
 .card-link:hover {
@@ -239,10 +238,9 @@ input[type=number]::-webkit-outer-spin-button {
 	border-radius: var(--radius);
 	box-shadow: var(--shadow-md);
 	padding: 20px;
-	transition:
-		border-color 0.12s ease,
-		box-shadow 0.12s ease,
-		background-color 0.12s ease;
+	transition: border-color 0.12s ease,
+	box-shadow 0.12s ease,
+	background-color 0.12s ease;
 }
 
 .card-link:hover .card {
@@ -503,6 +501,12 @@ input[type=number]::-webkit-outer-spin-button {
 #osgLog td,
 #osgLog_summary td {
 	white-space: nowrap;
+}
+
+.submission-table {
+	width: 70%
+	margin: 0 auto;
+	border-collapse: collapse;
 }
 
 .submission-table tr:hover,

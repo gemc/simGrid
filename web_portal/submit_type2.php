@@ -99,7 +99,7 @@
 	<?php endif; ?>
 
 	<?php if ($submission_ok): ?>
-	<table class="submission-table" style="width: 50%; margin: 0 auto; border-collapse: collapse;">
+	<table class="submission-table">
 		<tr>
 			<td>Project</td>
 			<td><?php echo($project); ?></td>
@@ -149,7 +149,7 @@
 			<td><?php echo($string_id); ?></td>
 		</tr>
 	</table>
-	<h4 style="text-align: center;">Output is synced hourly at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
+	<h4 style="text-align: center;">Output will be at /volatile/clas12/osg/<?php echo($username); ?>.</h4>
 	<?php endif; ?>
 
 
