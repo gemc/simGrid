@@ -202,6 +202,9 @@ class Database(object):
 	):
 		# type: (...) -> int
 		"""Insert a row into submissions and return user_submission_id."""
+		if self.database_name == "CLAS12TEST":
+			priority = 1
+
 		debug(debug_enabled, "Inserting submission row")
 		sql = """
             INSERT INTO submissions (

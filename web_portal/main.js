@@ -565,6 +565,7 @@ function osgLogtoTable(mode) {
 					"mysql_status",
 					"mysql_client_time",
 					"priority",
+					"pool_node",
 					"user_submission_id"
 				].includes(key);
 			});
