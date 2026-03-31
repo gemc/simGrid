@@ -66,18 +66,6 @@ a:hover {
 	text-decoration: underline;
 }
 
-/* =========================
-   Sticky header support
-   ========================= */
-.sticky {
-	position: fixed;
-	top: 0;
-	width: 100%;
-}
-
-.sticky + .content {
-	padding-top: 70px;
-}
 
 /* =========================
    Tables
