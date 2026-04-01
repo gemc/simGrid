@@ -1,5 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=UTF-8');
+require_once __DIR__ . '/common.php';
+$databaseName = $IS_DEVEL_MODE ? 'CLAS12TEST' : 'CLAS12OCR';
 
 $response = [
 	'requested_id' => $_GET['id'] ?? null
@@ -49,7 +51,7 @@ if (!is_readable($defaultsFile)) {
 	exit;
 }
 
-$sql = "use CLAS12OCR; select user, scard from submissions where user_submission_id=$id;";
+$sql = "SELECT user, scard FROM `$databaseName`.submissions WHERE user_submission_id=$id;";
 $cmd = 'mysql --defaults-extra-file=' . escapeshellarg($defaultsFile) . ' -Bse ' . escapeshellarg($sql) . ' 2>&1';
 
 $output = shell_exec($cmd);
