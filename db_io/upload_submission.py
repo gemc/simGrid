@@ -19,7 +19,7 @@ from typing import Optional
 from database import Database, current_timestamp, debug
 
 
-DEFAULT_POOL = "Not Submitted"
+DEFAULT_POOL = "NULL"
 DEFAULT_RUN_STATUS = "Not Submitted"
 
 

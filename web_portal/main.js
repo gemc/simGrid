@@ -599,6 +599,13 @@ function osgLogtoTable(mode) {
 					if (key === jobIdKey) {
 						txt += "<a href=\"#\" class=\"job-id-link\" data-job-id=\"" +
 							escapeHtml(val[key]) + "\">" + escapeHtml(val[key]) + "</a>";
+					} else if (String(key).toLowerCase().trim() === "osg id") {
+						var poolNode = String(val.pool_node || "").trim();
+						if (poolNode === "" || poolNode.toUpperCase() === "NULL" || poolNode.toLowerCase() === "null") {
+							txt += escapeHtml(val.mysql_status);
+						} else {
+							txt += escapeHtml(val.pool_node);
+						}
 					} else {
 						txt += escapeHtml(val[key]);
 					}
