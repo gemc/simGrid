@@ -530,10 +530,10 @@ function osgLogtoTable(mode) {
 				if (footer) footer += " | ";
 				footer += "Database: " + escapeHtml(selectedBlock.database);
 			}
-			if (selectedBlock.owner) {
-				if (footer) footer += " | ";
-				footer += "Owner: " + escapeHtml(selectedBlock.owner);
-			}
+			// if (selectedBlock.owner) {
+			// 	if (footer) footer += " | ";
+			// 	footer += "Owner: " + escapeHtml(selectedBlock.owner);
+			// }
 			if (selectedBlock.count !== undefined && selectedBlock.count !== null) {
 				if (footer) footer += " | ";
 				footer += "Count: " + escapeHtml(selectedBlock.count);
