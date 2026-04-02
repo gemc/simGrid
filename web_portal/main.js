@@ -820,7 +820,7 @@ function fairshareToTable() {
 				"osg id",
 				"date",
 				"time since submission [days]",
-				"order"
+				"queue position"
 			];
 
 			for (var j = 0; j < headers.length; j++) {
