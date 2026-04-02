@@ -813,14 +813,14 @@ function fairshareToTable() {
 			txt += "</tr>";
 
 			// Per-job priorities table
+// Per-job priorities table
 			var txt = "<table align=\"center\" style=\"width:90%;text-align:center\"><tr>";
 			var headers = [
 				"user",
 				"osg id",
 				"date",
 				"time since submission [days]",
-				"order",
-				"pending"
+				"order"
 			];
 
 			for (var j = 0; j < headers.length; j++) {
@@ -837,12 +837,11 @@ function fairshareToTable() {
 				txt += "<td>" + escapeHtml(row.client_time) + "</td>";
 				txt += "<td>" + escapeHtml(row.age_days == null ? "n/a" : formatAgeDays(row.age_days)) + "</td>";
 				txt += "<td>" + escapeHtml(row.priority) + "</td>";
-				txt += "<td>" + escapeHtml(row.pending_jobs_for_user) + "</td>";
 				txt += "</tr>";
 			}
 
 			if (priorities.length === 0) {
-				txt += "<tr><td colspan=\"6\">No fairshare entries found.</td></tr>";
+				txt += "<tr><td colspan=\"5\">No fairshare entries found.</td></tr>";
 			}
 
 			txt += "</table>";
