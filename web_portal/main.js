@@ -812,30 +812,37 @@ function fairshareToTable() {
 			}
 			txt += "</tr>";
 
+			// Per-job priorities table
+			var txt = "<table align=\"center\" style=\"width:90%;text-align:center\"><tr>";
+			var headers = [
+				"user",
+				"osg id",
+				"date",
+				"time since submission [days]",
+				"order",
+				"pending"
+			];
+
+			for (var j = 0; j < headers.length; j++) {
+				txt += "<th>" + headers[j] + "</th>";
+			}
+			txt += "</tr>";
+
 			for (var rowIndex = 0; rowIndex < priorities.length; rowIndex++) {
 				var row = priorities[rowIndex];
-
-				var waitTime = "";
-				var clientMs = Date.parse(row.client_time ? row.client_time.replace(" ", "T") : "");
-				if (!isNaN(clientMs)) {
-					var hours = (Date.now() - clientMs) / 3600000;
-					if (hours >= 0) waitTime = hours.toFixed(1);
-				}
 
 				txt += "<tr>";
 				txt += "<td>" + escapeHtml(row.user) + "</td>";
 				txt += "<td>" + escapeHtml(row.user_submission_id) + "</td>";
 				txt += "<td>" + escapeHtml(row.client_time) + "</td>";
-				txt += "<td>" + escapeHtml(row.priority) + "</td>";
-				txt += "<td>" + escapeHtml(waitTime) + "</td>";
-				txt += "<td>" + escapeHtml(row.pending_jobs_for_user) + "</td>";
-				txt += "<td>" + escapeHtml(formatNumber(row.score)) + "</td>";
 				txt += "<td>" + escapeHtml(row.age_days == null ? "n/a" : formatAgeDays(row.age_days)) + "</td>";
+				txt += "<td>" + escapeHtml(row.priority) + "</td>";
+				txt += "<td>" + escapeHtml(row.pending_jobs_for_user) + "</td>";
 				txt += "</tr>";
 			}
 
 			if (priorities.length === 0) {
-				txt += "<tr><td colspan=\"8\">No fairshare entries found.</td></tr>";
+				txt += "<tr><td colspan=\"6\">No fairshare entries found.</td></tr>";
 			}
 
 			txt += "</table>";
