@@ -264,8 +264,18 @@ input[type=number]::-webkit-outer-spin-button {
 
 .card-text {
 	text-align: left;
-	font-weight: normal;
+	font-weight: 400;
 	margin: 0;
+	padding-left: 20px;
+}
+
+.card-text li {
+	font-weight: 400;
+	margin: 6px 0;
+}
+
+.card {
+	padding: 20px;
 }
 
 .page-section--narrow {

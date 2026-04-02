@@ -21,16 +21,15 @@ header("Expires: 0");
 	<h2 class="section-title">Submit to OSG:</h2>
 
 	<div class="card-grid">
-
 		<a class="card-grid__item card-link" href="type1.php">
 			<div class="card card--submit">
 				<h3>Generator</h3>
 				<div class="card-icon">⚙️</div>
-				<p class="card-text">
-					<li> clas12-mcgen or gemc internal generator </li>
-					<li> Arbitrary number of jobs (max 10,000) </li>
-					<li> Arbitrary number of events per job (max 5,000) </li>
-				</p>
+				<ul class="card-text">
+					<li>clas12-mcgen or gemc internal generator</li>
+					<li>Arbitrary number of jobs (max 10,000)</li>
+					<li>Arbitrary number of events per job (max 5,000)</li>
+				</ul>
 			</div>
 		</a>
 
@@ -38,11 +37,11 @@ header("Expires: 0");
 			<div class="card card--submit">
 				<h3>LUND Files</h3>
 				<div class="card-icon">📂</div>
-				<p class="card-text">
-					<li> LUND files (.txt) from a web location</li>
-					<li> One job per LUND file</li>
-					<li> File content defines number of events per job (max 5,000)</li>
-				</p>
+				<ul class="card-text">
+					<li>LUND files (.txt) from a web location</li>
+					<li>One job per LUND file</li>
+					<li>File content defines number of events per job (max 5,000)</li>
+				</ul>
 			</div>
 		</a>
 	</div>
