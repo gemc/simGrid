@@ -357,7 +357,14 @@ input[type=number]::-webkit-outer-spin-button {
 	border-radius: var(--radius);
 	box-shadow: var(--shadow-md);
 	padding: 12px;
-	overflow: hidden;
+	overflow: visible;
+}
+
+.iframe-card iframe {
+	display: block;
+	width: 100%;
+	height: 1200px;   /* or whatever is large enough */
+	border: 0;
 }
 
 .dashboard-frame {
