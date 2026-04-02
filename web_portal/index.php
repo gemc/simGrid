@@ -27,9 +27,9 @@ header("Expires: 0");
 				<h3>Generator</h3>
 				<div class="card-icon">⚙️</div>
 				<p class="card-text">
-					- clas12-mcgen or gemc internal generator <br/>
-					- Arbitrary number of jobs (max 10,000) <br/>
-					- Arbitrary number of events per job (max 5,000) <br/>
+					<li> clas12-mcgen or gemc internal generator </li>
+					<li> Arbitrary number of jobs (max 10,000) </li>
+					<li> Arbitrary number of events per job (max 5,000) </li>
 				</p>
 			</div>
 		</a>
@@ -39,9 +39,9 @@ header("Expires: 0");
 				<h3>LUND Files</h3>
 				<div class="card-icon">📂</div>
 				<p class="card-text">
-					- LUND files (.txt) from a web location <br/>
-					- One job per LUND file <br/>
-					- File define number of events per job (max 10,000) <br/>
+					<li> LUND files (.txt) from a web location</li>
+					<li> One job per LUND file</li>
+					<li> File content defines number of events per job (max 5,000)</li>
 				</p>
 			</div>
 		</a>
