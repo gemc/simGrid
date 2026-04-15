@@ -550,8 +550,8 @@ function osgLogtoTable(mode) {
 
 			var data_summary = {
 				"user": [],
-				"submission": [],
-				"total": [],
+				"submissions": [],
+				"jobs": [],
 				"done": [],
 				"run": [],
 				"idle": []

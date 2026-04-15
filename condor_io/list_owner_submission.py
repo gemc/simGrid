@@ -116,9 +116,9 @@ def build_condor_entry(cluster_id, batch):
 
 	return {
 		"user":               batch.get("owner"),
-		"job id":             None,
-		"submitted":          format_submitted_time(batch.get("submitted_epoch")),
-		"total":              total,
+		"submission id":      None,
+		"submitted on":       format_submitted_time(batch.get("submitted_epoch")),
+		"jobs":              total,
 		"done":               done,
 		"run":                run,
 		"idle":               idle,
@@ -184,7 +184,7 @@ def collect_for_database(owner, credentials, database_name):
 				continue
 
 			if mysql_row.get("user_submission_id") is not None:
-				entry["job id"] = mysql_row["user_submission_id"]
+				entry["submission id"] = mysql_row["user_submission_id"]
 				entry["user_submission_id"] = mysql_row["user_submission_id"]
 				seen_submission_ids.add(int(mysql_row["user_submission_id"]))
 
@@ -224,9 +224,9 @@ def collect_for_database(owner, credentials, database_name):
 
 			entry = {
 				"user":               row.get("user"),
-				"job id":             submission_id,
-				"submitted":          row.get("client_time"),
-				"total":              None,
+				"submission id":      submission_id,
+				"submitted on":       row.get("client_time"),
+				"jobs":               None,
 				"done":               None,
 				"run":                None,
 				"idle":               None,
