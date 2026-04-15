@@ -14,7 +14,7 @@ if (!isset($_GET['id']) || !preg_match('/^\d+$/', $_GET['id'])) {
 }
 
 $id = $_GET['id'];
-$defaultsPath = '../../../../msql_conn.txt';
+$defaultsPath = '../db_io/msql_conn.txt';
 $defaultsFile = realpath($defaultsPath);
 
 if ($defaultsFile === false) {
