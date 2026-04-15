@@ -100,7 +100,8 @@ def safe_int(value):
 		return None
 
 
-def build_condor_entry(cluster_id, batch, format_submitted_time):
+def build_condor_entry(cluster_id, batch):
+	from htcondor_utils import format_submitted_time
 	total = safe_int(batch.get("total_submit_procs")) or 0
 	counts = batch.get("counts", {})
 
