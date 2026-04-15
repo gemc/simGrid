@@ -32,7 +32,6 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
-from htcondor_utils import get_owner_batches, format_submitted_time
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE
 
 PRODUCTION_DATABASE = "CLAS12OCR"
@@ -101,7 +100,7 @@ def safe_int(value):
 		return None
 
 
-def build_condor_entry(cluster_id, batch):
+def build_condor_entry(cluster_id, batch, format_submitted_time):
 	total = safe_int(batch.get("total_submit_procs")) or 0
 	counts = batch.get("counts", {})
 
@@ -145,8 +144,9 @@ def empty_db_payload(database_name, owner, timestamp):
 	}
 
 
+## type: (str, str, str) -> Dict[str, Any]
 def collect_for_database(owner, credentials, database_name):
-	# type: (str, str, str) -> Dict[str, Any]
+	from htcondor_utils import get_owner_batches
 	batches = get_owner_batches(owner)
 
 	results = []  # type: List[Dict[str, Any]]

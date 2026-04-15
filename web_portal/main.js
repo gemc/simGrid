@@ -478,11 +478,10 @@ function showJobDetails(jobId) {
 }
 
 function osgLogtoTable(mode) {
-	var logFile = "data/osgLog.json";
+	var logFile = "data/osg-production.json";
 	var dictionaryName = null;
 
 	if (mode === "production") {
-		logFile = "data/osg-production.json";
 		dictionaryName = "CLAS12OCR";
 	} else if (mode === "devel") {
 		logFile = "data/osg-devel.json";
