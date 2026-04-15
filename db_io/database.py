@@ -27,8 +27,7 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"WHERE STR_TO_DATE(client_time, '%Y-%m-%d %H:%i:%s') > NOW() - INTERVAL 1 DAY ;"
 )
 
-DEFAULT_CREDENTIALS_FILE = Path("/home/gemc/msql_conn.txt").expanduser()
-
+DEFAULT_CREDENTIALS_FILE = (Path(__file__).resolve().parent / "msql_conn.txt")
 
 def debug(enabled, message):
 	"""Print a debug message when enabled."""
@@ -51,11 +50,17 @@ class Database(object):
 			database_name=None  # type: Optional[str]
 	):
 		# type: (...) -> None
-		self.credentials_file = (
-			Path(credentials_file).expanduser()
-			if credentials_file is not None
-			else DEFAULT_CREDENTIALS_FILE
-		)
+		module_dir = Path(__file__).resolve().parent
+
+		if credentials_file is None:
+			resolved_credentials_file = DEFAULT_CREDENTIALS_FILE
+		else:
+			cred_path = Path(credentials_file).expanduser()
+			if not cred_path.is_absolute():
+				cred_path = module_dir / cred_path
+			resolved_credentials_file = cred_path
+
+		self.credentials_file = resolved_credentials_file
 		self.autocommit = autocommit
 		self.database_name = database_name
 		self.connection = None  # type: Optional[pymysql.connections.Connection]
