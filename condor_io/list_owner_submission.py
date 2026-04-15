@@ -118,7 +118,7 @@ def build_condor_entry(cluster_id, batch):
 		"user":               batch.get("owner"),
 		"submission id":      None,
 		"submitted on":       format_submitted_time(batch.get("submitted_epoch")),
-		"jobs":              total,
+		"jobs":               total,
 		"done":               done,
 		"run":                run,
 		"idle":               idle,

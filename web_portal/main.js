@@ -550,8 +550,8 @@ function osgLogtoTable(mode) {
 
 			var data_summary = {
 				"user": [],
-				"submissions": [],
-				"jobs": [],
+				"submission": [],
+				"total": [],
 				"done": [],
 				"run": [],
 				"idle": []
@@ -571,7 +571,7 @@ function osgLogtoTable(mode) {
 
 			var jobIdKey = null;
 			for (var k = 0; k < keys.length; k++) {
-				if (String(keys[k]).toLowerCase().replace(/\s+/g, "") === "jobid") {
+				if (String(keys[k]).toLowerCase().replace(/\s+/g, "") === "submissionid") {
 					jobIdKey = keys[k];
 					break;
 				}
@@ -616,15 +616,15 @@ function osgLogtoTable(mode) {
 
 				if (data_summary.user.includes(val.user)) {
 					var idx = data_summary.user.indexOf(val.user);
-					data_summary.total[idx] += Number(val.total || 0);
+					data_summary.jobs[idx] += Number(val.jobs || 0);
 					data_summary.done[idx] += Number(val.done || 0);
 					data_summary.run[idx] += Number(val.run || 0);
 					data_summary.idle[idx] += Number(val.idle || 0);
-					data_summary.submission[idx] += 1;
+					data_summary.submissions[idx] += 1;
 				} else {
 					data_summary.user.push(val.user || "");
-					data_summary.submission.push(1);
-					data_summary.total.push(Number(val.total || 0));
+					data_summary.submissions.push(1);
+					data_summary.jobs.push(Number(val.jobs || 0));
 					data_summary.done.push(Number(val.done || 0));
 					data_summary.run.push(Number(val.run || 0));
 					data_summary.idle.push(Number(val.idle || 0));
@@ -636,18 +636,18 @@ function osgLogtoTable(mode) {
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
 				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.submission[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.total[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.submissions[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.jobs[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.done[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.run[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
 			}
 
-			txt_summary += "</tr><tr><td>total</td>";
-			txt_summary += "<td>" + data_summary.submission.reduce(function (a, b) {
+			txt_summary += "</tr><tr><td>totals</td>";
+			txt_summary += "<td>" + data_summary.submissions.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.total.reduce(function (a, b) {
+			txt_summary += "<td>" + data_summary.jobs.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0) + "</td>";
 			txt_summary += "<td>" + data_summary.done.reduce(function (a, b) {
@@ -659,7 +659,6 @@ function osgLogtoTable(mode) {
 			txt_summary += "<td>" + data_summary.idle.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0) + "</td>";
-			txt_summary += "</tr></table>";
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
