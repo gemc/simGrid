@@ -91,7 +91,7 @@
 			<p>
 				A priority system is in place to ensure that the resources are shared among all submissions.<br/>
 				Analysis groups can submit the
-				<a href="OSG_Priority_Request_Form.pdf">Priority Permission Increase Form</a>
+				<a href="Priority_Permission_Increase_Form.pdf">Priority Permission Increase Form</a>
 				to increase an account priority.
 			</p>
 		</div>
