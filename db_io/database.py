@@ -29,6 +29,7 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 
 DEFAULT_CREDENTIALS_FILE = (Path(__file__).resolve().parent / "msql_conn.txt")
 
+
 def debug(enabled, message):
 	"""Print a debug message when enabled."""
 	if enabled:
@@ -38,6 +39,56 @@ def debug(enabled, message):
 def current_timestamp():
 	"""Return current local time formatted for the submissions table."""
 	return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_scalar_for_tsv(value):
+	# type: (Any) -> str
+	"""Convert a scalar value to a printable string."""
+	if value is None:
+		return "NULL"
+	return str(value)
+
+
+def print_payload_as_tsv(payload):
+	# type: (Any) -> None
+	"""Print payload in aligned columns."""
+	if payload is None:
+		return
+
+	if isinstance(payload, list):
+		if not payload:
+			return
+
+		if all(isinstance(row, dict) for row in payload):
+			columns = list(payload[0].keys())
+			string_rows = []
+
+			for row in payload:
+				string_rows.append(
+					[format_scalar_for_tsv(row.get(column)) for column in columns]
+				)
+
+			widths = []
+			for index in range(len(columns)):
+				widths.append(max(len(values[index]) for values in string_rows))
+
+			for values in string_rows:
+				print("  ".join(
+					values[index].ljust(widths[index])
+					for index in range(len(values))
+				))
+			return
+
+		for row in payload:
+			print(format_scalar_for_tsv(row))
+		return
+
+	if isinstance(payload, dict):
+		values = [format_scalar_for_tsv(value) for value in payload.values()]
+		print("  ".join(values))
+		return
+
+	print(format_scalar_for_tsv(payload))
 
 
 class Database(object):
@@ -125,15 +176,35 @@ class Database(object):
 			self.connection.close()
 			self.connection = None
 
+	def _normalize_params(self, params):
+		# type: (Optional[Sequence[Any]]) -> Optional[Sequence[Any]]
+		"""Normalize SQL params so empty params are treated as no params."""
+		if params is None:
+			return None
+
+		if isinstance(params, (str, bytes)):
+			return [params]
+
+		normalized = list(params)
+		if not normalized:
+			return None
+
+		return normalized
+
 	def query(self, sql, params=None):
 		# type: (str, Optional[Sequence[Any]]) -> List[Dict[str, Any]]
 		"""Run a SELECT-style query and return all rows."""
 		if self.connection is None:
 			self.connect()
 
+		normalized_params = self._normalize_params(params)
+
 		assert self.connection is not None
 		with self.connection.cursor() as cursor:
-			cursor.execute(sql, tuple(params) if params is not None else None)
+			cursor.execute(
+				sql,
+				tuple(normalized_params) if normalized_params is not None else None
+			)
 			return list(cursor.fetchall())
 
 	def query_one(self, sql, params=None):
@@ -148,10 +219,13 @@ class Database(object):
 		if self.connection is None:
 			self.connect()
 
+		normalized_params = self._normalize_params(params)
+
 		assert self.connection is not None
 		with self.connection.cursor() as cursor:
 			affected_rows = cursor.execute(
-				sql, tuple(params) if params is not None else None
+				sql,
+				tuple(normalized_params) if normalized_params is not None else None
 			)
 			if not self.autocommit:
 				self.connection.commit()
@@ -557,6 +631,12 @@ def build_parser():
 		"--database",
 		help="Override the database name from the credential file."
 	)
+	parser.add_argument(
+		"--output-format",
+		choices=["json", "tsv"],
+		default="json",
+		help="Output format: json or tsv."
+	)
 	return parser
 
 
@@ -579,7 +659,11 @@ def main():
 			else:
 				payload = db.query(args.query, args.params)
 
-			print(json.dumps(payload, indent=args.indent, default=str))
+			if args.output_format == "json":
+				print(json.dumps(payload, indent=args.indent, default=str))
+			else:
+				print_payload_as_tsv(payload)
+
 		return 0
 	except Exception as exc:
 		print("Error: {0}".format(exc), file=sys.stderr)
