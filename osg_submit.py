@@ -4,7 +4,7 @@ osg_submit.py
 
 OSG submission pipeline:
   1. Check condor job capacity (running+idle vs max_submitted_jobs)
-  2. Fetch first non-submitted job from DB
+  2. Fetch first non-submitted job from DB          (-b to target a specific ID)
   3. Build condor submit file and execution script
   4. Submit to OSG
 """
@@ -32,6 +32,13 @@ def build_parser():
 			DEFAULT_MAX_SUBMITTED_JOBS
 		),
 	)
+	parser.add_argument(
+		"-b", "--user-submission-id",
+		type=int,
+		default=None,
+		metavar="ID",
+		help="Process a specific UserSubmissionID instead of the next pending job.",
+	)
 	return parser
 
 
@@ -42,20 +49,43 @@ def main(argv=None):
 
 	args = build_parser().parse_args(argv)
 
-	from condor_io.htcondor_utils import is_under_job_limit
-	if not is_under_job_limit(DEFAULT_OWNER, max_jobs=args.max_submitted_jobs):
-		print("Job limit reached: '{}' has >= {} running+idle jobs. Skipping submission.".format(
-			DEFAULT_OWNER, args.max_submitted_jobs
+	# Step 1: capacity check — requires htcondor2, only available on the submit node.
+	try:
+		from condor_io.htcondor_utils import is_under_job_limit
+		if not is_under_job_limit(DEFAULT_OWNER, max_jobs=args.max_submitted_jobs):
+			print("Job limit reached: '{}' has >= {} running+idle jobs. Skipping.".format(
+				DEFAULT_OWNER, args.max_submitted_jobs
+			))
+			return 1
+		print("Capacity check passed: under {} jobs for owner '{}'.".format(
+			args.max_submitted_jobs, DEFAULT_OWNER
 		))
+	except ImportError:
+		print("htcondor2 not available — skipping capacity check.")
+
+	# Step 2: fetch job from DB.
+	try:
+		from db_io.database import Database, print_job
+	except ImportError:
+		print("pymysql not available — cannot query database.")
 		return 1
 
-	print("Capacity check passed: under {} jobs for owner '{}'.".format(
-		args.max_submitted_jobs, DEFAULT_OWNER
-	))
+	with Database() as db:
+		row = db.return_unsubmitted_job(args.user_submission_id)
 
-	# TODO: fetch first non-submitted job from DB
-	# TODO: build condor submit file and execution script
-	# TODO: submit to OSG
+	if row is None:
+		if args.user_submission_id is not None:
+			print("No submission found with ID {}.".format(args.user_submission_id))
+		else:
+			print("No unsubmitted jobs found in the database.")
+		return 0
+
+	label = "Targeting specific submission:" if args.user_submission_id else "Next unsubmitted job:"
+	print(label)
+	print_job(row)
+
+	# TODO: step 3 — build condor submit file and execution script
+	# TODO: step 4 — submit to OSG
 
 	return 0
 

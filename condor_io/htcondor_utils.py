@@ -153,6 +153,27 @@ def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	)
 
 
+def is_under_job_limit(owner, max_jobs=80000):
+	# type: (str, int) -> bool
+	"""
+	Return True if owner's total running+idle jobs are at or below max_jobs.
+
+	Args:
+		owner:    HTCondor owner string (e.g. "gemc").
+		max_jobs: Maximum allowed running+idle jobs before submission is blocked.
+
+	Returns:
+		True  — under or at the limit, safe to submit.
+		False — over the limit, submission should be deferred.
+	"""
+	batches = get_owner_batches(owner)
+	total = sum(
+		b["counts"]["RUN"] + b["counts"]["IDLE"]
+		for b in batches.values()
+	)
+	return total <= max_jobs
+
+
 def apply_priority_map(priority_map: Dict[int, Dict[str, Any]], skip_zero: bool = True) -> Dict[int, Dict[str, Any]]:
 	"""
 	Apply priorities from the internal priority map to HTCondor JobPrio.
