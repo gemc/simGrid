@@ -31,9 +31,8 @@ def create_executable(scard, user_submission_id):
 		                     The executable block is identical for type-1
 		                     and type-2 submissions; run.sh detects the type
 		                     by inspecting the arguments it receives.
-		user_submission_id:  int, the DB user_submission_id — used to label
-		                     the log subdirectory so logs for different
-		                     submissions do not collide.
+		user_submission_id:  int, the DB user_submission_id — passed as the
+		                     first argument to run.sh on each node.
 
 	Returns:
 		str: HTCondor executable and logging block.
@@ -42,11 +41,11 @@ def create_executable(scard, user_submission_id):
 Executable = run.sh
 
 # Per-job log files ($(Cluster).$(Process) gives unique names per subjob).
-Error  = log/{0}/job.$(Cluster).$(Process).err
-Output = log/{0}/job.$(Cluster).$(Process).out
-Log    = log/{0}/job.$(Cluster).$(Process).log
+Error  = log/job.$(Cluster).$(Process).err
+Output = log/job.$(Cluster).$(Process).out
+Log    = log/job.$(Cluster).$(Process).log
 
 # OSG/XSEDE project for fair-share accounting.
-+ProjectName = "{1}"
++ProjectName = "{0}"
 
-""".format(user_submission_id, scard.project or "CLAS12")
+""".format(scard.project or "CLAS12")

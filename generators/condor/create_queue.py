@@ -28,7 +28,9 @@ def create_queue(scard, user_submission_id):
 
     Args:
         scard:               SConfiguration instance. Uses scard.type,
-                             scard.njobs (type 1), and scard.generator (type 2).
+                             scard.njobs or scard.jobs (type 1), and
+                             scard.generator (type 2). Both njobs and jobs
+                             are accepted because DB scards may use either key.
         user_submission_id:  int, DB user_submission_id passed as first
                              argument to run.sh on each node.
 
@@ -36,17 +38,19 @@ def create_queue(scard, user_submission_id):
         str: HTCondor Arguments and Queue block (always the last section
              of the submit file).
     """
+    njobs_val = scard.njobs or scard.jobs
+
     if scard.type == '2':
         try:
             njobs = count_files(scard.generator)
         except (OSError, Exception) as e:
-            njobs = int(scard.njobs) if scard.njobs else 1
+            njobs = int(njobs_val) if njobs_val else 1
             print(
                 "Warning: pelican lund-file count failed ({}). "
-                "Falling back to scard.njobs = {}.".format(e, njobs)
+                "Falling back to njobs = {}.".format(e, njobs)
             )
     else:
-        njobs = int(scard.njobs) if scard.njobs else 1
+        njobs = int(njobs_val) if njobs_val else 1
 
     return """# Arguments passed to run.sh: <user_submission_id> <subjob_index>
 # $(Process) runs from 0 to {0} - 1, one value per subjob.

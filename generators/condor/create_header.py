@@ -30,9 +30,8 @@ def create_header(scard):
     Other universes (grid, docker, parallel) are not used on the OSG.
 
     SingularityImage points to the CVMFS-hosted Jefferson Lab CLAS12 software
-    container. The image tag is taken from scard.softwarev (e.g.
-    "gemc/5.13 coatjava/10.0.7"). If softwarev is not set, 'production' is
-    used as a safe default that maps to the latest stable release.
+    container. The tag is 'production' unless scard.submission == 'devel',
+    in which case scard.softwarev is used (e.g. "gemc/5.14 coatjava/10.0.7").
 
     SingularityBindCVMFS = True instructs the pilot to bind-mount the full
     /cvmfs namespace inside the container, making all CVMFS repositories
@@ -50,7 +49,7 @@ def create_header(scard):
     Returns:
         str: HTCondor header block ready to prepend to a submit file.
     """
-    image_tag = scard.softwarev if scard.softwarev else "production"
+    image_tag = scard.softwarev if scard.submission == 'devel' else "production"
     rank_expr = _build_rank_expression(SITE_RANKS, DEFAULT_SITE_RANK)
 
     return """# SimGrid HTCondor Submission Script

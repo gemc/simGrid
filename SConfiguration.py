@@ -40,6 +40,7 @@ class SConfiguration():
 		self.genOptions    = None
 		self.nevents       = None
 		self.njobs         = None
+		self.jobs          = None
 		self.client_ip     = None
 		self.fields        = None
 		self.torus         = None
