@@ -43,6 +43,13 @@ def build_parser():
 		help="Process a specific UserSubmissionID instead of the next pending job.",
 	)
 	parser.add_argument(
+		"--target-site",
+		default=None,
+		metavar="SITE",
+		help="Pin all jobs to a single GLIDEIN_Site (e.g. CNAF). "
+		     "Adds (GLIDEIN_Site == \"SITE\") to Requirements.",
+	)
+	parser.add_argument(
 		"--print-condor-card",
 		action="store_true",
 		default=False,
@@ -99,7 +106,8 @@ def main(argv=None):
 
 	# Step 4: build condor submit file.
 	from generators.condor.generate_condor_card import generate_condor_card
-	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'])
+	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'],
+	                                   target_site=args.target_site)
 	if args.print_condor_card:
 		print()
 		print(condor_card)

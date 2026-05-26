@@ -1,4 +1,4 @@
-def create_requirements(scard):
+def create_requirements(scard, target_site=None):
 	"""
 	Generate the HTCondor Requirements expression for OSG execution slots.
 
@@ -26,18 +26,25 @@ def create_requirements(scard):
 	    bugs affecting file transfer and environment setup.
 
 	Args:
-		scard: SConfiguration instance (not used directly; included for
-		       consistency with all other generator signatures). Slot
-		       requirements are identical for type-1 and type-2 submissions.
+		scard:       SConfiguration instance (not used directly; included for
+		             consistency with all other generator signatures). Slot
+		             requirements are identical for type-1 and type-2 submissions.
+		target_site: str, GLIDEIN_Site name to pin jobs to a single site
+		             (e.g. "CNAF"). None means no site restriction.
 
 	Returns:
 		str: HTCondor Requirements line.
 	"""
+	site_clause = (
+		' && \\\n               (GLIDEIN_Site == "{}")'.format(target_site)
+		if target_site else ""
+	)
+
 	return """# OSG slot requirements.
 Requirements = (HAS_SINGULARITY =?= TRUE) && \\
                (HAS_CVMFS_oasis_opensciencegrid_org =?= True) && \\
                (OSG_HOST_KERNEL_VERSION >= 21700) && \\
                (CVMFS_oasis_opensciencegrid_org_REVISION >= 16688) && \\
-               (OSG_GLIDEIN_VERSION >= 534)
+               (OSG_GLIDEIN_VERSION >= 534){0}
 
-"""
+""".format(site_clause)
