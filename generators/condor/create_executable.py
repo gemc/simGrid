@@ -46,7 +46,7 @@ Error  = log/{0}/job.$(Cluster).$(Process).err
 Output = log/{0}/job.$(Cluster).$(Process).out
 Log    = log/{0}/job.$(Cluster).$(Process).log
 
-# OSG/XSEDE project for fair-share accounting. Must match an active project.
+# OSG/XSEDE project for fair-share accounting.
 +ProjectName = "{1}"
 
 """.format(user_submission_id, scard.project or "CLAS12")

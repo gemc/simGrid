@@ -25,9 +25,6 @@ def create_requirements(scard):
 	    Minimum OSG pilot (glidein) version. Earlier pilots have known
 	    bugs affecting file transfer and environment setup.
 
-	The commented-out Microarch block can be re-enabled to restrict jobs
-	to x86_64-v2/v3/v4 micro-architecture levels for AVX-dependent code.
-
 	Args:
 		scard: SConfiguration instance (not used directly; included for
 		       consistency with all other generator signatures). Slot
@@ -37,10 +34,6 @@ def create_requirements(scard):
 		str: HTCondor Requirements line.
 	"""
 	return """# OSG slot requirements.
-# To restrict to a specific x86_64 micro-architecture level uncomment:
-# Requirements = (TARGET.Microarch =!= UNDEFINED) &&
-#   (TARGET.Microarch =?= "x86_64-v2" || TARGET.Microarch =?= "x86_64-v3" || TARGET.Microarch =?= "x86_64-v4") &&
-#   (HAS_SINGULARITY =?= TRUE) && ...
 Requirements = (HAS_SINGULARITY =?= TRUE) && \\
                (HAS_CVMFS_oasis_opensciencegrid_org =?= True) && \\
                (OSG_HOST_KERNEL_VERSION >= 21700) && \\

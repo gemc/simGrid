@@ -90,6 +90,7 @@ def main(argv=None):
 		return 0
 
 	label = "Targeting specific submission:" if args.user_submission_id else "Next unsubmitted job:"
+	print()
 	print(label)
 	print_job(row)
 
@@ -100,6 +101,7 @@ def main(argv=None):
 	from generators.condor.generate_condor_card import generate_condor_card
 	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'])
 	if args.print_condor_card:
+		print()
 		print(condor_card)
 
 	# TODO: step 5 — build bash node execution script (generators/bash/)

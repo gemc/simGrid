@@ -36,8 +36,6 @@ def create_header(scard):
 
 Universe = vanilla
 
-# Singularity container pulled from CVMFS.
-# Image tag comes from scard.softwarev; defaults to 'production' if unset.
 +SingularityImage     = "/cvmfs/singularity.opensciencegrid.org/jeffersonlab/clas12software:{0}"
 +SingularityBindCVMFS = True
 

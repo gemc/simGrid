@@ -24,8 +24,6 @@ def create_authentication(scard):
 		str: HTCondor OAuth services block.
 	"""
 	return """# Pelican / OSDF authentication token.
-# The CredMon on the submit node provisions a short-lived OAuth2 token
-# for jlab_clas12 and injects it via BEARER_TOKEN_FILE into the job.
 use_oauth_services = jlab_clas12
 
 """
