@@ -43,4 +43,4 @@ def create_undesired(scard, undesired_sites=None):
 	sites = undesired_sites if undesired_sites is not None else DEFAULT_UNDESIRED_SITES
 	sites_value = ",".join(sites)
 
-	return '+UNDESIRED_Sites = "{0}"\n\n'.format(sites_value)
+	return '# Comma-separated, no spaces between entries.\n+UNDESIRED_Sites = "{0}"\n\n'.format(sites_value)

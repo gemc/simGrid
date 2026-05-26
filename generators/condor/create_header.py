@@ -62,7 +62,7 @@ Universe = vanilla
 +SingularityImage     = "/cvmfs/singularity.opensciencegrid.org/jeffersonlab/clas12software:{0}"
 +SingularityBindCVMFS = True
 
-# Site ranking (higher = more preferred). Edit SITE_RANKS in create_header.py.
+# Site ranking (higher = more preferred).
 Rank = {1}
 
 """.format(image_tag, rank_expr)
