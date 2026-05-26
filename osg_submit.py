@@ -15,6 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from SConfiguration import SConfiguration
+from statuses import NOTSUBMITTED, PROCESSING, SUBMITTED, SCRIPTS_GENERATED
+
 DEFAULT_MAX_SUBMITTED_JOBS = 80000
 DEFAULT_OWNER = "gemc"
 
@@ -38,6 +41,12 @@ def build_parser():
 		default=None,
 		metavar="ID",
 		help="Process a specific UserSubmissionID instead of the next pending job.",
+	)
+	parser.add_argument(
+		"--print-condor-card",
+		action="store_true",
+		default=False,
+		help="Print the generated HTCondor submit file to stdout.",
 	)
 	return parser
 
@@ -84,8 +93,17 @@ def main(argv=None):
 	print(label)
 	print_job(row)
 
-	# TODO: step 3 — build condor submit file and execution script
-	# TODO: step 4 — submit to OSG
+	# Step 3: build SConfiguration from scard
+	scard = SConfiguration.from_string(row['scard'])
+
+	# Step 4: build condor submit file.
+	from generators.condor.generate_condor_card import generate_condor_card
+	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'])
+	if args.print_condor_card:
+		print(condor_card)
+
+	# TODO: step 5 — build bash node execution script (generators/bash/)
+	# TODO: step 6 — submit to OSG
 
 	return 0
 

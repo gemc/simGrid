@@ -14,7 +14,7 @@ Priorities are assigned only to rows where:
     run_status = 'Not Submitted'
 
 The assigned priority is a sequential integer from 1 to N, where:
-- N is the total number of "Not Submitted" jobs considered
+- N is the total number of NOTSUBMITTED jobs considered
 - 1 is the highest priority
 
 Supported priority algorithms
@@ -109,12 +109,18 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 from database import Database
+from statuses import NOTSUBMITTED
 ESTIMATE_HOURS_PER_JOB = 10.0
 
 
@@ -271,7 +277,7 @@ def get_total_not_submitted_queue_hours(
 
 	for row in rows:
 		status = str(row.get("run_status", "")).strip()
-		if status != "Not Submitted":
+		if status != NOTSUBMITTED:
 			continue
 
 		client_time = str(row.get("client_time", "")).strip()
@@ -372,7 +378,7 @@ def compute_history_loads(
 
 		status = str(row.get("run_status", "")).strip()
 
-		if status == "Not Submitted":
+		if status == NOTSUBMITTED:
 			# Pending jobs count as exactly 1 each, no decay —
 			# unless --no-queue-penalty is set, in which case they contribute 0.
 			if not no_queue_penalty:
@@ -459,7 +465,7 @@ def compute_priorities(
 
 	pending_rows = [
 		row for row in rows
-		if str(row.get("run_status", "")).strip() == "Not Submitted"
+		if str(row.get("run_status", "")).strip() == NOTSUBMITTED
 	]
 
 	pending_counts = Counter(str(row.get("user", "")) for row in pending_rows)
@@ -638,7 +644,7 @@ def print_table(rows: list[dict]) -> None:
 			value = row.get("priority")
 			return "" if value is None else str(value)
 		elif header == "wait_time":
-			if str(row.get("run_status", "")).strip() != "Not Submitted":
+			if str(row.get("run_status", "")).strip() != NOTSUBMITTED:
 				return ""
 			client_time = str(row.get("client_time", "")).strip()
 			if not client_time:
@@ -721,7 +727,7 @@ def print_summary(
 		if user not in estimate_time_by_user:
 			estimate_time_by_user[user] = 0.0
 
-		if status == "Not Submitted":
+		if status == NOTSUBMITTED:
 			estimate_time_by_user[user] += ESTIMATE_HOURS_PER_JOB / 24.0
 
 	summary_rows = [
@@ -769,7 +775,7 @@ def print_summary(
 		)
 
 	total_pending = sum(
-		1 for row in rows if str(row.get("run_status", "")).strip() == "Not Submitted"
+		1 for row in rows if str(row.get("run_status", "")).strip() == NOTSUBMITTED
 	)
 	total_submissions = row["total_submissions"]
 
@@ -824,7 +830,7 @@ def write_priority_json(
 	pending_hours_by_user: dict[str, float] = {}
 	for row in all_rows:
 		user = str(row.get("user", ""))
-		if str(row.get("run_status", "")).strip() == "Not Submitted":
+		if str(row.get("run_status", "")).strip() == NOTSUBMITTED:
 			pending_hours_by_user[user] = pending_hours_by_user.get(user, 0.0) + ESTIMATE_HOURS_PER_JOB
 
 	summary_jobs_per_user = [
@@ -901,7 +907,7 @@ def main() -> int:
 					  AND STR_TO_DATE(client_time, %s) IS NOT NULL
 					  AND STR_TO_DATE(client_time, %s) < NOW() - INTERVAL %s DAY
 					""",
-					["Not Submitted", "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", args.days],
+					[NOTSUBMITTED, "%Y-%m-%d %H:%i:%s", "%Y-%m-%d %H:%i:%s", args.days],
 				)
 
 				if old_pending["n"] > 0:
@@ -972,7 +978,7 @@ def main() -> int:
 			with Database(args.credentials) as db:
 				db.execute(
 					"UPDATE submissions SET priority = '0' WHERE run_status != %s",
-					["Not Submitted"],
+					[NOTSUBMITTED],
 				)
 				updated = db.update_priorities(prioritized_pending_rows)
 			print(f"Updated {updated} row(s) in the database.")

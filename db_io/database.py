@@ -13,6 +13,7 @@ This module centralizes:
 import argparse
 import configparser
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,11 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import pymysql
 from pymysql.cursors import DictCursor
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+from statuses import NOTSUBMITTED, SUBMITTED, SCRIPTS_GENERATED
 
 DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"select user, client_time, user_submission_id, pool_node, run_status, priority "
@@ -352,7 +358,7 @@ class Database(object):
 			client_time,  # type: str
 			pool_node,  # type: str
 			scard,  # type: str
-			run_status="Not Submitted",  # type: str
+			run_status=NOTSUBMITTED,  # type: str
 			client_ip=None,  # type: Optional[str]
 			priority=0,  # type: int
 			debug_enabled=False  # type: bool
@@ -653,7 +659,7 @@ class Database(object):
 
 		If user_submission_id is given, fetch that specific row.
 		Otherwise fetch the highest-priority row whose run_status is not
-		already 'Submitted to…' or 'Submission scripts generated…'.
+		already SUBMITTED or SCRIPTS_GENERATED.
 
 		Returns the row as a dict, or None if nothing is found.
 		"""
@@ -671,12 +677,13 @@ class Database(object):
 			"""
 			SELECT user, user_submission_id, client_time, server_time, run_status, priority, scard
 			FROM submissions
-			WHERE run_status NOT LIKE 'Submitted to%'
-			  AND run_status NOT LIKE 'Submission scripts generated%'
+			WHERE run_status != %s
+			  AND run_status != %s
 			  AND priority > '0'
 			ORDER BY CAST(priority AS UNSIGNED) ASC
 			LIMIT 1
-			"""
+			""",
+			[SUBMITTED, SCRIPTS_GENERATED],
 		)
 
 	def __enter__(self):
