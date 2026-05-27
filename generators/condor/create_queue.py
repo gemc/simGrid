@@ -1,4 +1,4 @@
-from generators.lund_helper import count_files
+from generators.lund_helper import LUND_FILES
 
 
 def create_queue(scard, user_submission_id):
@@ -6,31 +6,22 @@ def create_queue(scard, user_submission_id):
     Generate the HTCondor Arguments and Queue block.
 
     Type 1 — generator-based
-        The number of subjobs is read from scard.njobs (set in the scard by
-        the user).  Each subjob runs the same generator executable with a
-        different random seed derived from $(Process).
+        Queue N where N = scard.njobs (or scard.jobs).
+        Each subjob receives: <user_submission_id> <$(Process)>
+        $(Process) is used by nodeScript.sh as a random seed.
 
     Type 2 — lund-file-based
-        The number of subjobs equals the number of lund files found at the
-        directory given by scard.generator.  count_files() queries the OSDF
-        via `pelican object ls` and counts entries with .dat/.txt/.lund
-        extensions.  Each subjob reads one lund file, selected by $(Process).
-        If pelican is not installed or the query fails, falls back to
-        scard.njobs (with a warning printed to stdout).
-
-    Arguments
-        Two positional arguments are passed to run.sh for each subjob:
-          1. user_submission_id — DB row identifier for this batch.
-          2. $(Process) — HTCondor per-subjob index (0, 1, 2, …).
-
-    Queue N
-        Creates N subjobs (ProcId 0 … N-1) in a single cluster.
+        Uses HTCondor itemdata syntax:
+          Arguments = <user_submission_id> $(Process) $(lundFile)
+          queue lundFile from lund_files
+        HTCondor reads lund_files line by line (one OSDF URI per line)
+        and creates one subjob per entry, injecting the URI as $(lundFile).
+        The lund_files file must be written by write_lund_files() before
+        condor_submit is called and staged via transfer_input_files.
 
     Args:
         scard:               SConfiguration instance. Uses scard.type,
-                             scard.njobs or scard.jobs (type 1), and
-                             scard.generator (type 2). Both njobs and jobs
-                             are accepted because DB scards may use either key.
+                             scard.njobs or scard.jobs (type 1).
         user_submission_id:  int, DB user_submission_id passed as first
                              argument to run.sh on each node.
 
@@ -38,22 +29,15 @@ def create_queue(scard, user_submission_id):
         str: HTCondor Arguments and Queue block (always the last section
              of the submit file).
     """
-    njobs_val = scard.njobs or scard.jobs
-
     if scard.type == '2':
-        try:
-            njobs = count_files(scard.generator)
-        except (OSError, Exception) as e:
-            njobs = int(njobs_val) if njobs_val else 1
-            print(
-                "Warning: pelican lund-file count failed ({}). "
-                "Falling back to njobs = {}.".format(e, njobs)
-            )
-    else:
-        njobs = int(njobs_val) if njobs_val else 1
+        return """# One subjob per lund file — HTCondor expands {lund_files} line by line.
+Arguments = {uid} $(Process) $(lundFile)
+queue lundFile from {lund_files}
+""".format(uid=user_submission_id, lund_files=LUND_FILES)
 
+    njobs_val = scard.njobs or scard.jobs
+    njobs = int(njobs_val) if njobs_val else 1
     return """# Arguments passed to run.sh: <user_submission_id> <subjob_index>
-# $(Process) runs from 0 to {0} - 1, one value per subjob.
-Arguments = {1} $(Process)
-Queue {0}
-""".format(njobs, user_submission_id)
+Arguments = {uid} $(Process)
+Queue {n}
+""".format(uid=user_submission_id, n=njobs)

@@ -22,6 +22,14 @@ DEFAULT_MAX_SUBMITTED_JOBS = 80000
 DEFAULT_OWNER = "gemc"
 
 
+def _print_test_warning(lines):
+	border = "=" * 64
+	print(border)
+	for line in lines:
+		print("  {}".format(line))
+	print(border)
+
+
 def build_parser():
 	# type: () -> argparse.ArgumentParser
 	parser = argparse.ArgumentParser(
@@ -41,6 +49,13 @@ def build_parser():
 		default=None,
 		metavar="ID",
 		help="Process a specific UserSubmissionID instead of the next pending job.",
+	)
+	parser.add_argument(
+		"--test",
+		action="store_true",
+		default=False,
+		help="Test mode: skip htcondor2 capacity check and use a pelican mockup "
+		     "for type-2 lund files. Without this flag, missing dependencies fail.",
 	)
 	parser.add_argument(
 		"--target-site",
@@ -77,7 +92,13 @@ def main(argv=None):
 			args.max_submitted_jobs, DEFAULT_OWNER
 		))
 	except ImportError:
-		print("htcondor2 not available — skipping capacity check.")
+		if not args.test:
+			print("htcondor2 not available. Use --test to skip the capacity check.")
+			return 1
+		_print_test_warning([
+			"TEST MODE: htcondor2 not found.",
+			"Skipping job capacity check.",
+		])
 
 	# Step 2: fetch job from DB.
 	try:
@@ -107,7 +128,7 @@ def main(argv=None):
 	# Step 4: build condor submit file.
 	from generators.condor.generate_condor_card import generate_condor_card
 	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'],
-	                                   target_site=args.target_site)
+	                                   target_site=args.target_site, test=args.test)
 	if args.print_condor_card:
 		print()
 		print(condor_card)

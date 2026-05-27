@@ -25,11 +25,12 @@ from generators.condor.create_hardware      import create_hardware
 from generators.condor.create_executable    import create_executable
 from generators.condor.create_file_transfer import create_file_transfer
 from generators.condor.create_queue         import create_queue
+from generators.lund_helper                 import write_lund_files, LUND_FILES
 
 
 def generate_condor_card(scard, user_submission_id, extra_input_files=None,
                          undesired_sites=None, target_site=None,
-                         cpus=None, memory=None, disk=None):
+                         cpus=None, memory=None, disk=None, test=False):
 	"""
 	Build and return the full HTCondor submit file as a single string.
 
@@ -47,6 +48,8 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		cpus:                int, CPU cores per slot. None → default (1).
 		memory:              str, memory per slot. None → default ("2.256 GB").
 		disk:                str, scratch disk per slot. None → default ("2 GB").
+		test:                bool, enable fallbacks for missing dependencies
+		                     (pelican mockup). Default False — missing deps fail.
 
 	Returns:
 		str: complete HTCondor submit file content.
@@ -54,6 +57,8 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 	all_input_files = list(extra_input_files) if extra_input_files else []
 	if scard.bkmerging:
 		all_input_files.append("bg_merge_bk_file.sh")
+	if scard.type == '2':
+		write_lund_files(scard.generator, test=test)
 
 	sections = [
 		create_header(scard),
