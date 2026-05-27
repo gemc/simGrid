@@ -41,7 +41,14 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         "setup_container_environment\n",
         "setup_job_files\n",
         "setup_pelican\n",
-        "run_timed setup_background_merging\n" if sconfiguration.bkmerging
+        (
+            '\necho "setup_background_merging: /{configuration}/{fields}/{bkmerging}"\n'
+            "run_timed setup_background_merging\n"
+        ).format(
+            configuration=sconfiguration.configuration or "",
+            fields=sconfiguration.fields or "",
+            bkmerging=sconfiguration.bkmerging or "",
+        ) if sconfiguration.bkmerging
             else 'echo "Background merging not requested — skipping."\n',
         "\n\nprint_timing_summary\n",
     ]
