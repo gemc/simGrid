@@ -22,7 +22,7 @@ def _build_rank_expression(site_ranks, default_rank):
     return expr
 
 
-def create_header(scard):
+def create_header(scard, devel=False):
     """
     Generate the HTCondor submit file header block.
 
@@ -30,8 +30,8 @@ def create_header(scard):
     Other universes (grid, docker, parallel) are not used on the OSG.
 
     SingularityImage points to the CVMFS-hosted Jefferson Lab CLAS12 software
-    container. The tag is 'production' unless scard.submission == 'devel',
-    in which case scard.softwarev is used (e.g. "gemc/5.14 coatjava/10.0.7").
+    container. The tag is 'production' by default; passing devel=True selects
+    the 'devel' tag.
 
     SingularityBindCVMFS = True instructs the pilot to bind-mount the full
     /cvmfs namespace inside the container, making all CVMFS repositories
@@ -42,14 +42,13 @@ def create_header(scard):
     the submit-file template. Sites not in the dict get DEFAULT_SITE_RANK.
 
     Args:
-        scard: SConfiguration instance. Uses scard.softwarev for the container
-               tag. Applies identically to type-1 (generator) and type-2
-               (lund-file) submissions — both run inside the same container.
+        scard: SConfiguration instance.
+        devel: bool, use the 'devel' singularity image tag. Default False.
 
     Returns:
         str: HTCondor header block ready to prepend to a submit file.
     """
-    image_tag = scard.softwarev if scard.submission == 'devel' else "production"
+    image_tag = "devel" if devel else "production"
     rank_expr = _build_rank_expression(SITE_RANKS, DEFAULT_SITE_RANK)
 
     return """# SimGrid HTCondor Submission Script

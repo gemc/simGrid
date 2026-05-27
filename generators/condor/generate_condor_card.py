@@ -30,7 +30,7 @@ from generators.lund_helper                 import write_lund_files, LUND_FILES
 
 def generate_condor_card(scard, user_submission_id, extra_input_files=None,
                          undesired_sites=None, target_site=None,
-                         cpus=None, memory=None, disk=None, test=False):
+                         cpus=None, memory=None, disk=None, test=False, devel=False):
 	"""
 	Build and return the full HTCondor submit file as a single string.
 
@@ -50,6 +50,7 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		disk:                str, scratch disk per slot. None → default ("2 GB").
 		test:                bool, enable fallbacks for missing dependencies
 		                     (pelican mockup). Default False — missing deps fail.
+		devel:               bool, use the devel singularity image. Default False.
 
 	Returns:
 		str: complete HTCondor submit file content.
@@ -61,7 +62,7 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		write_lund_files(scard.generator, test=test)
 
 	sections = [
-		create_header(scard),
+		create_header(scard, devel=devel),
 		create_retry_policy(scard),
 		create_requirements(scard, target_site=target_site),
 		create_undesired(scard, undesired_sites=undesired_sites),

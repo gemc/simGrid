@@ -106,10 +106,11 @@ print_timing_summary() {
     echo "}"
 }
 
-# ── container_environment ─────────────────────────────────────────────────────
+# ── setup_container_environment ──────────────────────────────────────────────
 # Print job header, clear LMOD environment, initialise the module system,
-# add CLAS12/Geant4 module paths, and unload any pre-loaded conflicting modules.
-container_environment() {
+# add CLAS12/Geant4 module paths, unload conflicting modules, and load
+# the versioned software required by this job.
+setup_container_environment() {
     printf 'Job running on node: '; /bin/hostname
     printf 'Job submitted by: %s\n' "${USER:-unknown}"
     echo "Running directory: $(pwd)"
@@ -155,13 +156,62 @@ container_environment() {
     module unload jdk
     module unload root
     module unload mcgen
+
+    module load denoise/"$DENOISE_VERSION"
+    module load sqlite/"$GEMC_VERSION"
 }
 
-# ── define_exit_codes ─────────────────────────────────────────────────────────
+# ── define_exit_codes ────────────────────────────────────────────────────────
 # Confirm exit codes are loaded. Constants are defined at the top of this file
 # and are available as soon as functions.sh is sourced.
 define_exit_codes() {
     echo "Exit codes loaded."
+}
+
+# ── setup_job_parameters ─────────────────────────────────────────────────────
+# Set and export the job configuration variables used by downstream functions.
+# Called via: run_timed setup_job_parameters <submission_type> <coatjava_version> <gemc_version> <configuration>
+setup_job_parameters() {
+    SUBMISSION_TYPE="$1"
+    COATJAVA_VERSION="$2"
+    GEMC_VERSION="$3"
+    CONFIGURATION="$4"
+    DENOISE_VERSION="4.2.3"
+    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION DENOISE_VERSION
+    echo "SUBMISSION_TYPE  : $SUBMISSION_TYPE"
+    echo "COATJAVA_VERSION : $COATJAVA_VERSION"
+    echo "GEMC_VERSION     : $GEMC_VERSION"
+    echo "CONFIGURATION    : $CONFIGURATION"
+    echo "DENOISE_VERSION  : $DENOISE_VERSION"
+}
+
+# ── setup_job_files ───────────────────────────────────────────────────────────
+# Build and verify paths to required CVMFS configuration files.
+#
+# Reads globals (set by the generated nodescript.sh):
+#   SUBMISSION_TYPE   — "prod" or "dev"
+#   COATJAVA_VERSION  — e.g. "10.0.7"
+#   GEMC_VERSION      — e.g. "5.14"
+#   CONFIGURATION     — detector config name, e.g. "rga_fall2018"
+#
+# Sets and exports:
+#   coatjava_yaml   — full path to the coatjava YAML reconstruction config
+#   gemc_gcard      — full path to the gemc geometry card
+#
+# Exits with EC_FILE_DOES_NOT_EXIST if either file is absent.
+setup_job_files() {
+    local c12f_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${SUBMISSION_TYPE}"
+
+    coatjava_yaml="${c12f_home}/coatjava/${COATJAVA_VERSION}/${CONFIGURATION}.yaml"
+    gemc_gcard="${c12f_home}/gemc/${GEMC_VERSION}/${CONFIGURATION}.gcard"
+
+    export coatjava_yaml gemc_gcard
+
+    echo "coatjava_yaml : $coatjava_yaml"
+    echo "gemc_gcard    : $gemc_gcard"
+
+    check_file_exists "$coatjava_yaml"
+    check_file_exists "$gemc_gcard"
 }
 
 # ── check_file_exists ─────────────────────────────────────────────────────────

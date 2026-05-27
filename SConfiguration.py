@@ -92,7 +92,21 @@ class SConfiguration():
 				self._extra[key] = value
 
 		self._resolve_type()
+		self._resolve_software_versions()
 		print('SConfiguration: parsed {} successfully (type {})'.format(label, self.type))
+
+	def _resolve_software_versions(self):
+		"""Populate gemcv and coatjavav from softwarev (e.g. 'gemc/5.10 coatjava/10.0.7')."""
+		if not self.softwarev:
+			return
+		for token in self.softwarev.split():
+			if '/' not in token:
+				continue
+			name, _, version = token.partition('/')
+			if name == 'gemc':
+				self.gemcv = version
+			elif name == 'coatjava':
+				self.coatjavav = version
 
 	def _resolve_type(self):
 		"""Set self.type to '1' or '2' when the scard does not include it.

@@ -5,24 +5,27 @@ Assemble nodescript.sh — the bash simulation script executed on the OSG
 worker node — by calling each section generator in order.
 
 Section order:
-  1. preamble  — shebang, args, source functions.sh, define_exit_codes,
-                 container_environment
+  1. preamble          — shebang, args, source functions.sh,
+                         define_exit_codes, container_environment
+  2. job_parameters    — run_timed setup_job_parameters with scard values
+  3. job_files         — run_timed setup_job_files (reads parameters above)
 """
 
 import os
 
-from generators.bash.create_preamble import create_preamble
+from generators.bash.create_preamble        import create_preamble
+from generators.bash.create_job_parameters  import create_job_parameters
 
 NODESCRIPT   = "nodescript.sh"
 FUNCTIONS_SH = "functions.sh"
 
 
-def generate_nodescript(scard, user_submission_id, test=False,
+def generate_nodescript(sconfiguration, user_submission_id, test=False,
                         output_file=NODESCRIPT):
     """Write nodescript.sh and return the file path.
 
     Args:
-        scard:               SConfiguration instance populated from the DB.
+        sconfiguration:      SConfiguration instance populated from the DB.
         user_submission_id:  int, DB user_submission_id for this batch.
         test:                bool, test mode flag passed from osg_submit.py.
         output_file:         str, destination path. Defaults to 'nodescript.sh'.
@@ -31,10 +34,13 @@ def generate_nodescript(scard, user_submission_id, test=False,
         str: path of the written file.
     """
     sections = [
-        create_preamble(scard, user_submission_id),
+        create_preamble(sconfiguration, user_submission_id),
+        create_job_parameters(sconfiguration),
+        "run_timed setup_container_environment\n",
+        "run_timed setup_job_files\n",
         # print_timing_summary is always the last call — it summarises all
         # run_timed invocations that preceded it in the script.
-        "print_timing_summary\n",
+        "\n\nprint_timing_summary\n",
     ]
 
     script = "".join(sections)

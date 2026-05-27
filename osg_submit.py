@@ -70,6 +70,18 @@ def build_parser():
 		default=False,
 		help="Print the generated HTCondor submit file to stdout.",
 	)
+	parser.add_argument(
+		"--print-nodescript",
+		action="store_true",
+		default=False,
+		help="Print the generated nodescript.sh to stdout.",
+	)
+	parser.add_argument(
+		"--devel",
+		action="store_true",
+		default=False,
+		help="Use the CLAS12TEST database and the devel singularity image instead of production.",
+	)
 	return parser
 
 
@@ -107,7 +119,8 @@ def main(argv=None):
 		print("pymysql not available — cannot query database.")
 		return 1
 
-	with Database() as db:
+	db_name = "CLAS12TEST" if args.devel else "CLAS12OCR"
+	with Database(database_name=db_name) as db:
 		row = db.return_unsubmitted_job(args.user_submission_id)
 
 	if row is None:
@@ -128,15 +141,20 @@ def main(argv=None):
 	# Step 4: build condor submit file.
 	from generators.condor.generate_condor_card import generate_condor_card
 	condor_card = generate_condor_card(scard, user_submission_id=row['user_submission_id'],
-	                                   target_site=args.target_site, test=args.test)
+	                                   target_site=args.target_site, test=args.test,
+	                                   devel=args.devel)
 	if args.print_condor_card:
 		print()
 		print(condor_card)
 
 	# Step 5: build bash node execution script.
 	from generators.bash.generate_nodescript import generate_nodescript
-	generate_nodescript(scard, user_submission_id=row['user_submission_id'],
-	                    test=args.test)
+	nodescript_path = generate_nodescript(scard, user_submission_id=row['user_submission_id'],
+	                                      test=args.test)
+	if args.print_nodescript:
+		with open(nodescript_path) as f:
+			print()
+			print(f.read())
 
 	# TODO: step 6 — submit to OSG
 

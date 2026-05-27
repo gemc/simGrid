@@ -1,14 +1,13 @@
-def create_preamble(scard, user_submission_id):
+def create_preamble(sconfiguration, user_submission_id):
     """
     Generate the nodescript.sh opening block.
 
     Includes shebang, argument documentation, set -euo pipefail,
-    argument parsing, and the source + run_timed calls that every
-    node script begins with.  The lundFile argument line is only
-    emitted for type-2 (lund-file-based) submissions.
+    argument parsing, and the source + initial run_timed calls.
+    The lundFile argument line is only emitted for type-2 submissions.
 
     Args:
-        scard:               SConfiguration instance.
+        sconfiguration:      SConfiguration instance.
         user_submission_id:  int, DB user_submission_id for this batch.
 
     Returns:
@@ -16,7 +15,7 @@ def create_preamble(scard, user_submission_id):
     """
     lund_arg_doc = (
         "#   3. lundFile         — OSDF URI of the lund input file\n"
-        if scard.type == '2' else ""
+        if sconfiguration.type == '2' else ""
     )
 
     return """\
@@ -41,5 +40,4 @@ lundFile=${{3:-}}
 source functions.sh
 
 run_timed define_exit_codes
-run_timed container_environment
 """.format(uid=user_submission_id, lund_arg_doc=lund_arg_doc)
