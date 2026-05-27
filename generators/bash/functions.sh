@@ -1,38 +1,122 @@
 #!/bin/bash
 # functions.sh — bash functions sourced by nodescript.sh on OSG worker nodes.
 
-# Execute a named function with emphasized start/end timestamp banners.
+# ── Exit codes ────────────────────────────────────────────────────────────────
+# Defined at top level so every function in this file can reference them
+# as soon as functions.sh is sourced, before define_exit_codes is called.
+# HTCondor periodic_release retries jobs that exit with codes 202-215, 230.
+EC_INFRASTRUCTURE=202   # generic infrastructure failure
+EC_GENERATOR=203        # event generator failure
+EC_GEMC=204             # gemc simulation failure
+EC_EVIO2HIPO=205        # evio → hipo conversion failure
+EC_BG_MERGE=206         # background merge failure
+EC_RECON=207            # recon-util reconstruction failure
+EC_HIPO_UTILS=208       # hipo-utils / DST creation failure
+EC_BG_MISSING=210       # background hipo file not found
+EC_LS_STAT=211          # ls / stat / df command failure
+EC_BG_FETCH=212         # background file fetch failure
+EC_DISK=213             # disk space check failure
+EC_HIPO_INTEGRITY=214   # hipo file integrity check failure
+EC_HIPO_SIZE=215        # hipo file below minimum size
+EC_DENOISE=230          # denoiser failure
+EC_ENVIRONMENT=241      # environment / module system setup failure
+EC_FILE_DOES_NOT_EXIST=242  # required file not found
+
+# ── Timing registry ───────────────────────────────────────────────────────────
+# Parallel indexed arrays, compatible with bash 3+.
+# Each run_timed call appends one entry; indices are kept in sync.
+_TIMING_FUNCS=()
+_TIMING_STARTS=()
+_TIMING_ENDS=()
+_TIMING_STATUS=()   # "ok" or "failed" per entry
+
+_HR="======================================================================"
+
+# ── run_timed ─────────────────────────────────────────────────────────────────
+# Execute a named function and record its start/end epoch in the timing registry.
 # Usage: run_timed <function_name> [args...]
-# Each banner prints the unix epoch followed by the human-readable date,
-# surrounded by blank lines so sections are visually separated in logs.
 # The return code of the wrapped function is preserved.
 run_timed() {
     local fn="$1"; shift
+    local t_start
+    t_start=$(date +%s)
+    _TIMING_FUNCS+=("$fn")
+    _TIMING_STARTS+=("$t_start")
     echo
-    echo "==================================================================="
-    echo ">>> START ${fn}: $(date +%s)  $(date)"
-    echo "==================================================================="
+    echo "$_HR"
+    echo "Starting ${fn} on $(date)"
     echo
     "${fn}" "$@"
     local rc=$?
+    local t_end
+    t_end=$(date +%s)
+    _TIMING_ENDS+=("$t_end")
+    if [[ $rc -ne 0 ]]; then
+        _TIMING_STATUS+=("failed")
+        echo
+        echo "$_HR"
+        echo "Completed ${fn} in $(( t_end - t_start ))s  ($(date))"
+        echo "${fn} failed"
+        exit $rc
+    fi
+    _TIMING_STATUS+=("ok")
     echo
-    echo "==================================================================="
-    echo ">>> END ${fn}: $(date +%s)  $(date)"
-    echo "==================================================================="
+    echo "$_HR"
+    echo "Completed ${fn} in $(( t_end - t_start ))s  ($(date))"
     echo
-    return $rc
 }
 
-# Print job header, clear LMOD environment, initialise the module system.
-# Called first in nodescript.sh to establish a clean, reproducible environment
-# before any module load or software invocation.
+# ── print_timing_summary ──────────────────────────────────────────────────────
+# Print a human-readable summary followed by a JSON timing block.
+# Failed steps are highlighted. JSON is parseable with:
+#   python3 -c "import json, sys; print(json.load(sys.stdin))"
+print_timing_summary() {
+    local n=${#_TIMING_FUNCS[@]}
+    local i
+    echo
+    echo "$_HR"
+    echo "Summary:"
+    for (( i=0; i<n; i++ )); do
+        local fn=${_TIMING_FUNCS[$i]}
+        local start=${_TIMING_STARTS[$i]}
+        local end=${_TIMING_ENDS[$i]:-$start}
+        local duration=$(( end - start ))
+        if [[ "${_TIMING_STATUS[$i]}" == "failed" ]]; then
+            printf "  %-30s FAILED in %ds\n" "$fn" "$duration"
+        else
+            printf "  %-30s completed in %ds\n" "$fn" "$duration"
+        fi
+    done
+    echo "$_HR"
+    echo
+    echo "{"
+    echo '  "timing": ['
+    for (( i=0; i<n; i++ )); do
+        local fn=${_TIMING_FUNCS[$i]}
+        local start=${_TIMING_STARTS[$i]}
+        local end=${_TIMING_ENDS[$i]:-$start}
+        local duration=$(( end - start ))
+        local status=${_TIMING_STATUS[$i]:-ok}
+        local comma=","
+        (( i + 1 == n )) && comma=""
+        printf '    {"function": "%s", "start": %d, "end": %d, "duration_s": %d, "status": "%s"}%s\n' \
+            "$fn" "$start" "$end" "$duration" "$status" "$comma"
+    done
+    echo '  ]'
+    echo "}"
+}
+
+# ── container_environment ─────────────────────────────────────────────────────
+# Print job header, clear LMOD environment, initialise the module system,
+# add CLAS12/Geant4 module paths, and unload any pre-loaded conflicting modules.
 container_environment() {
     printf 'Job running on node: '; /bin/hostname
     printf 'Job submitted by: %s\n' "${USER:-unknown}"
     echo "Running directory: $(pwd)"
+    echo "Bash version: $BASH_VERSION"
 
     echo "Directory $(pwd) content:"
-    ls -l || { echo "ls failure"; exit 211; }
+    ls -l
 
     # Clear LMOD state — recommended by OSG to prevent conflicts with pilot env.
     unset ENABLE_LMOD \
@@ -58,47 +142,36 @@ container_environment() {
           MODULESHOME
 
     # Initialise the environment module system.
-    if [[ -f /etc/profile.d/modules.sh ]]; then
-        # shellcheck source=/dev/null
-        source /etc/profile.d/modules.sh
-    else
-        echo "WARNING: /etc/profile.d/modules.sh not found — module command unavailable"
-    fi
+    # shellcheck source=/dev/null
+    source /etc/profile.d/modules.sh || { echo "ERROR: failed to source /etc/profile.d/modules.sh"; exit $EC_ENVIRONMENT; }
+
+    # Add CLAS12 software and Geant4 module paths.
+    module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
+    module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules
+
+    # Unload any modules that may have been pre-loaded by the pilot environment.
+    module unload gemc
+    module unload coatjava
+    module unload jdk
+    module unload root
+    module unload mcgen
 }
 
-# Define and print all exit codes used by the simulation pipeline.
-# HTCondor's periodic_release expression uses these codes to distinguish
-# transient infrastructure failures (worth retrying) from job bugs (hold).
-# Variables are exported so downstream functions can reference them by name.
+# ── define_exit_codes ─────────────────────────────────────────────────────────
+# Confirm exit codes are loaded. Constants are defined at the top of this file
+# and are available as soon as functions.sh is sourced.
 define_exit_codes() {
-    export EC_INFRASTRUCTURE=202   # generic infrastructure failure
-    export EC_GENERATOR=203        # event generator failure
-    export EC_GEMC=204             # gemc simulation failure
-    export EC_EVIO2HIPO=205        # evio → hipo conversion failure
-    export EC_BG_MERGE=206         # background merge failure
-    export EC_RECON=207            # recon-util reconstruction failure
-    export EC_HIPO_UTILS=208       # hipo-utils / DST creation failure
-    export EC_BG_MISSING=210       # background hipo file not found
-    export EC_LS_STAT=211          # ls / stat / df command failure
-    export EC_BG_FETCH=212         # background file fetch failure
-    export EC_DISK=213             # disk space check failure
-    export EC_HIPO_INTEGRITY=214   # hipo file integrity check failure
-    export EC_HIPO_SIZE=215        # hipo file below minimum size
-    export EC_DENOISE=230          # denoiser failure
+    echo "Exit codes loaded."
+}
 
-    echo "Exit codes:"
-    printf "  %3d  %-20s %s\n"  202  "EC_INFRASTRUCTURE"  "generic infrastructure failure"
-    printf "  %3d  %-20s %s\n"  203  "EC_GENERATOR"       "event generator failure"
-    printf "  %3d  %-20s %s\n"  204  "EC_GEMC"            "gemc simulation failure"
-    printf "  %3d  %-20s %s\n"  205  "EC_EVIO2HIPO"       "evio → hipo conversion failure"
-    printf "  %3d  %-20s %s\n"  206  "EC_BG_MERGE"        "background merge failure"
-    printf "  %3d  %-20s %s\n"  207  "EC_RECON"           "recon-util reconstruction failure"
-    printf "  %3d  %-20s %s\n"  208  "EC_HIPO_UTILS"      "hipo-utils / DST creation failure"
-    printf "  %3d  %-20s %s\n"  210  "EC_BG_MISSING"      "background hipo file not found"
-    printf "  %3d  %-20s %s\n"  211  "EC_LS_STAT"         "ls / stat / df command failure"
-    printf "  %3d  %-20s %s\n"  212  "EC_BG_FETCH"        "background file fetch failure"
-    printf "  %3d  %-20s %s\n"  213  "EC_DISK"            "disk space check failure"
-    printf "  %3d  %-20s %s\n"  214  "EC_HIPO_INTEGRITY"  "hipo file integrity check failure"
-    printf "  %3d  %-20s %s\n"  215  "EC_HIPO_SIZE"       "hipo file below minimum size"
-    printf "  %3d  %-20s %s\n"  230  "EC_DENOISE"         "denoiser failure"
+# ── check_file_exists ─────────────────────────────────────────────────────────
+# Verify that a required file exists; exit with EC_FILE_DOES_NOT_EXIST if not.
+# Usage: check_file_exists <path>
+check_file_exists() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        echo "ERROR: required file not found: $file"
+        exit $EC_FILE_DOES_NOT_EXIST
+    fi
+    echo "Found: $file"
 }

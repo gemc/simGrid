@@ -32,6 +32,9 @@ def generate_nodescript(scard, user_submission_id, test=False,
     """
     sections = [
         create_preamble(scard, user_submission_id),
+        # print_timing_summary is always the last call — it summarises all
+        # run_timed invocations that preceded it in the script.
+        "print_timing_summary\n",
     ]
 
     script = "".join(sections)
