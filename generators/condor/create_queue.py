@@ -8,7 +8,7 @@ def create_queue(scard, user_submission_id):
     Type 1 — generator-based
         Queue N where N = scard.njobs (or scard.jobs).
         Each subjob receives: <user_submission_id> <$(Process)>
-        $(Process) is used by nodeScript.sh as a random seed.
+        $(Process) is used by nodescript.sh as a random seed.
 
     Type 2 — lund-file-based
         Uses HTCondor itemdata syntax:

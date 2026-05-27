@@ -42,7 +42,7 @@ generate_condor_card(scard, user_submission_id)
 │       +ProjectName          (from scard.project)
 │
 ├─ 8. create_file_transfer(scard, extra_input_files=None)
-│       transfer_input_files    = run.sh, nodeScript.sh  [+ extras]
+│       transfer_input_files    = run.sh, nodescript.sh  [+ extras]
 │       should_transfer_files   = YES
 │       when_to_transfer_output = ON_EXIT
 │       transfer_output_files   = output

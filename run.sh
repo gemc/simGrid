@@ -17,7 +17,7 @@ FarmSubmissionID=$1
 sjob=$2
 lundFile=${3:-}
 
-nodeScript="nodeScript.sh"
+nodeScript="nodescript.sh"
 outDir="output"
 
 mkdir -p "$outDir"

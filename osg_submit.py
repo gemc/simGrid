@@ -133,7 +133,11 @@ def main(argv=None):
 		print()
 		print(condor_card)
 
-	# TODO: step 5 — build bash node execution script (generators/bash/)
+	# Step 5: build bash node execution script.
+	from generators.bash.generate_nodescript import generate_nodescript
+	generate_nodescript(scard, user_submission_id=row['user_submission_id'],
+	                    test=args.test)
+
 	# TODO: step 6 — submit to OSG
 
 	return 0

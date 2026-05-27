@@ -55,6 +55,10 @@ class SConfiguration():
 		self.string_id     = None
 		self.output_type   = None
 		self.submission    = None
+		self.gemcv         = None
+		self.coatjavav     = None
+		self.genExecutable = None
+		self.user_string   = None
 		self._extra        = {}
 
 	def parseSCard(self, scardContent):
