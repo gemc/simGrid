@@ -57,6 +57,7 @@ class SConfiguration():
 		self.submission    = None
 		self.gemcv         = None
 		self.coatjavav     = None
+		self.mcgenv        = None
 		self.genExecutable = None
 		self.user_string   = None
 		self._extra        = {}
@@ -107,6 +108,8 @@ class SConfiguration():
 				self.gemcv = version
 			elif name == 'coatjava':
 				self.coatjavav = version
+			elif name == 'mcgen':
+				self.mcgenv = version
 
 	def _resolve_type(self):
 		"""Set self.type to '1' or '2' when the scard does not include it.

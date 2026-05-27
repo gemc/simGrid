@@ -64,6 +64,12 @@ run_timed() {
     echo "$_HR"
     echo "Completed ${fn} in $(( t_end - t_start ))s  ($(date))"
     echo
+    ls -l || {
+        echo "ls failure"
+        echo "removing data files and exiting"
+        rm -f *.hipo *.evio *.sqlite
+        exit $EC_LS_STAT
+    }
 }
 
 # ── print_timing_summary ──────────────────────────────────────────────────────
@@ -111,8 +117,12 @@ print_timing_summary() {
 # add CLAS12/Geant4 module paths, unload conflicting modules, and load
 # the versioned software required by this job.
 setup_container_environment() {
+    local submitted_by="$1"
+    local denoise_version="$2"
+    local gemc_version="$3"
+
     printf 'Job running on node: '; /bin/hostname
-    printf 'Job submitted by: %s\n' "$SUBMITTED_BY"
+    printf 'Job submitted by: %s\n' "$submitted_by"
     echo "Running directory: $(pwd)"
     echo "Bash version: $BASH_VERSION"
 
@@ -157,8 +167,8 @@ setup_container_environment() {
     module unload root
     module unload mcgen
 
-    module load denoise/"$DENOISE_VERSION"
-    module load sqlite/"$GEMC_VERSION"
+    module load denoise/"$denoise_version"
+    module load sqlite/"$gemc_version"
 }
 
 # ── define_exit_codes ────────────────────────────────────────────────────────
@@ -168,47 +178,20 @@ define_exit_codes() {
     echo "Exit codes loaded."
 }
 
-# ── setup_job_parameters ─────────────────────────────────────────────────────
-# Set and export the job configuration variables used by downstream functions.
-# Called via: run_timed setup_job_parameters <submission_type> <coatjava_version> <gemc_version> <configuration>
-setup_job_parameters() {
-    SUBMISSION_TYPE="$1"
-    COATJAVA_VERSION="$2"
-    GEMC_VERSION="$3"
-    CONFIGURATION="$4"
-    SUBMITTED_BY="$5"
-    FIELDS="$6"
-    BKMERGING="$7"
-    DENOISE_VERSION="4.2.3"
-    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION SUBMITTED_BY FIELDS BKMERGING DENOISE_VERSION
-    echo "SUBMISSION_TYPE  : $SUBMISSION_TYPE"
-    echo "COATJAVA_VERSION : $COATJAVA_VERSION"
-    echo "GEMC_VERSION     : $GEMC_VERSION"
-    echo "CONFIGURATION    : $CONFIGURATION"
-    echo "FIELDS           : $FIELDS"
-    echo "BKMERGING        : $BKMERGING"
-    echo "DENOISE_VERSION  : $DENOISE_VERSION"
-}
-
 # ── setup_job_files ───────────────────────────────────────────────────────────
 # Build and verify paths to required CVMFS configuration files.
-#
-# Reads globals (set by the generated nodescript.sh):
-#   SUBMISSION_TYPE   — "prod" or "dev"
-#   COATJAVA_VERSION  — e.g. "10.0.7"
-#   GEMC_VERSION      — e.g. "5.14"
-#   CONFIGURATION     — detector config name, e.g. "rga_fall2018"
-#
-# Sets and exports:
-#   coatjava_yaml   — full path to the coatjava YAML reconstruction config
-#   gemc_gcard      — full path to the gemc geometry card
-#
+# Args: <submission_type> <coatjava_version> <gemc_version> <configuration>
+# Sets and exports: coatjava_yaml, gemc_gcard.
 # Exits with EC_FILE_DOES_NOT_EXIST if either file is absent.
 setup_job_files() {
-    local c12f_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${SUBMISSION_TYPE}"
+    local submission_type="$1"
+    local coatjava_version="$2"
+    local gemc_version="$3"
+    local configuration="$4"
+    local c12f_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${submission_type}"
 
-    coatjava_yaml="${c12f_home}/coatjava/${COATJAVA_VERSION}/${CONFIGURATION}.yaml"
-    gemc_gcard="${c12f_home}/gemc/${GEMC_VERSION}/${CONFIGURATION}.gcard"
+    coatjava_yaml="${c12f_home}/coatjava/${coatjava_version}/${configuration}.yaml"
+    gemc_gcard="${c12f_home}/gemc/${gemc_version}/${configuration}.gcard"
 
     export coatjava_yaml gemc_gcard
 
@@ -219,12 +202,49 @@ setup_job_files() {
     check_file_exists "$gemc_gcard"
 }
 
+# ── use_generator ────────────────────────────────────────────────────────────
+# Load the mcgen module, generate a seed, run the external event generator,
+# and remove any stray ROOT files it produces.
+# Reads globals: MCGEN_VERSION, GENERATOR, GEN_OPTIONS, NEVENTS.
+# Exits with EC_GENERATOR on generator failure.
+use_generator() {
+    local mcgen_version="$1"
+    local generator="$2"
+    local gen_options="$3"
+    local nevents="$4"
+
+    module load mcgen/"$mcgen_version"
+
+    echo "GENERATOR START: $(date +%s)"
+
+    generate-seeds.py generate
+    local seed
+    seed=$(generate-seeds.py read --row 1)
+    echo "Generator seed from generate-seeds, row 1: $seed"
+
+    echo
+    echo "Running $nevents events with generator $generator with options: $gen_options"
+    echo "Generator:"
+    which "$generator"
+    echo
+
+    "$generator" --trig "$nevents" --docker $gen_options --seed "$seed" || {
+        echo "GENERATOR ERROR >$generator< failed."
+        exit $EC_GENERATOR
+    }
+
+    rm -f *.root
+}
+
 # ── setup_background_merging ──────────────────────────────────────────────────
 # Fetch a random background hipo file from OSDF for background merging.
 # Reads globals: CONFIGURATION, FIELDS, BKMERGING (exported by setup_job_parameters).
 # Exits with EC_BG_MISSING if ls fails or no files found, EC_BG_FETCH if download fails.
 setup_background_merging() {
-    local xdir="osdf:///jlab-osdf/clas12/osgpool/backgroundfiles/${CONFIGURATION}/${FIELDS}/${BKMERGING}/10k"
+    local configuration="$1"
+    local fields="$2"
+    local bkmerging="$3"
+    local xdir="osdf:///jlab-osdf/clas12/osgpool/backgroundfiles/${configuration}/${fields}/${bkmerging}/10k"
 
     echo "Executing: pelican object ls $xdir"
     local ls_output
