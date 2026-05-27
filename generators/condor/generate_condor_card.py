@@ -51,6 +51,10 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 	Returns:
 		str: complete HTCondor submit file content.
 	"""
+	all_input_files = list(extra_input_files) if extra_input_files else []
+	if scard.bkmerging:
+		all_input_files.append("bg_merge_bk_file.sh")
+
 	sections = [
 		create_header(scard),
 		create_retry_policy(scard),
@@ -59,7 +63,7 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		create_authentication(scard),
 		create_hardware(scard, cpus=cpus, memory=memory, disk=disk),
 		create_executable(scard, user_submission_id),
-		create_file_transfer(scard, extra_input_files=extra_input_files),
+		create_file_transfer(scard, extra_input_files=all_input_files or None),
 		create_queue(scard, user_submission_id),
 	]
 	return "".join(sections)
