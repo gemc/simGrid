@@ -10,6 +10,7 @@ Section order:
   3. setup_container_environment
   4. setup_job_files
   5. setup_pelican
+  6. setup_background_merging  (only when bkmerging is set)
 """
 
 import os
@@ -40,6 +41,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         "setup_container_environment\n",
         "setup_job_files\n",
         "setup_pelican\n",
+        "run_timed setup_background_merging\n" if sconfiguration.bkmerging
+            else 'echo "Background merging not requested — skipping."\n',
         "\n\nprint_timing_summary\n",
     ]
 

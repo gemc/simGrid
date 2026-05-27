@@ -14,10 +14,12 @@ def create_job_parameters(sconfiguration):
     """
     submission_type = "dev" if sconfiguration.submission == "devel" else "prod"
 
-    return 'setup_job_parameters "{submission_type}" "{coatjavav}" "{gemcv}" "{configuration}" "{username}"\n'.format(
+    return 'setup_job_parameters "{submission_type}" "{coatjavav}" "{gemcv}" "{configuration}" "{username}" "{fields}" "{bkmerging}"\n'.format(
         submission_type=submission_type,
         coatjavav=sconfiguration.coatjavav or "latest",
         gemcv=sconfiguration.gemcv or "latest",
         configuration=sconfiguration.configuration or "default",
         username=sconfiguration.username or "unknown",
+        fields=sconfiguration.fields or "",
+        bkmerging=sconfiguration.bkmerging or "",
     )

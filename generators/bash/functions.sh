@@ -5,22 +5,22 @@
 # Defined at top level so every function in this file can reference them
 # as soon as functions.sh is sourced, before define_exit_codes is called.
 # HTCondor periodic_release retries jobs that exit with codes 202-215, 230.
+EC_FILE_DOES_NOT_EXIST=242  # required file not found
 EC_INFRASTRUCTURE=202   # generic infrastructure failure
+EC_ENVIRONMENT=241      # environment / module system setup failure
+EC_BG_MISSING=210       # background hipo file not found
+EC_BG_FETCH=212         # background file fetch failure
+EC_BG_MERGE=206         # background merge failure
 EC_GENERATOR=203        # event generator failure
 EC_GEMC=204             # gemc simulation failure
 EC_EVIO2HIPO=205        # evio → hipo conversion failure
-EC_BG_MERGE=206         # background merge failure
 EC_RECON=207            # recon-util reconstruction failure
 EC_HIPO_UTILS=208       # hipo-utils / DST creation failure
-EC_BG_MISSING=210       # background hipo file not found
-EC_LS_STAT=211          # ls / stat / df command failure
-EC_BG_FETCH=212         # background file fetch failure
-EC_DISK=213             # disk space check failure
 EC_HIPO_INTEGRITY=214   # hipo file integrity check failure
+EC_LS_STAT=211          # ls / stat / df command failure
 EC_HIPO_SIZE=215        # hipo file below minimum size
+EC_DISK=213             # disk space check failure
 EC_DENOISE=230          # denoiser failure
-EC_ENVIRONMENT=241      # environment / module system setup failure
-EC_FILE_DOES_NOT_EXIST=242  # required file not found
 
 # ── Timing registry ───────────────────────────────────────────────────────────
 # Parallel indexed arrays, compatible with bash 3+.
@@ -177,12 +177,16 @@ setup_job_parameters() {
     GEMC_VERSION="$3"
     CONFIGURATION="$4"
     SUBMITTED_BY="$5"
+    FIELDS="$6"
+    BKMERGING="$7"
     DENOISE_VERSION="4.2.3"
-    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION SUBMITTED_BY DENOISE_VERSION
+    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION SUBMITTED_BY FIELDS BKMERGING DENOISE_VERSION
     echo "SUBMISSION_TYPE  : $SUBMISSION_TYPE"
     echo "COATJAVA_VERSION : $COATJAVA_VERSION"
     echo "GEMC_VERSION     : $GEMC_VERSION"
     echo "CONFIGURATION    : $CONFIGURATION"
+    echo "FIELDS           : $FIELDS"
+    echo "BKMERGING        : $BKMERGING"
     echo "DENOISE_VERSION  : $DENOISE_VERSION"
 }
 
@@ -213,6 +217,35 @@ setup_job_files() {
 
     check_file_exists "$coatjava_yaml"
     check_file_exists "$gemc_gcard"
+}
+
+# ── setup_background_merging ──────────────────────────────────────────────────
+# Fetch a random background hipo file from OSDF for background merging.
+# Reads globals: CONFIGURATION, FIELDS, BKMERGING (exported by setup_job_parameters).
+# Exits with EC_BG_MISSING if ls fails or no files found, EC_BG_FETCH if download fails.
+setup_background_merging() {
+    local xdir="osdf:///jlab-osdf/clas12/osgpool/backgroundfiles/${CONFIGURATION}/${FIELDS}/${BKMERGING}/10k"
+
+    echo "Executing: pelican object ls $xdir"
+    local ls_output
+    ls_output=$(pelican object ls "$xdir") || {
+        echo "pelican object ls failed for $xdir"
+        exit $EC_BG_MISSING
+    }
+
+    local NFILES
+    NFILES=$(echo "$ls_output" | wc -l)
+    if [[ $NFILES -eq 0 ]]; then
+        echo "No background files found at $xdir"
+        exit $EC_BG_FETCH
+    fi
+
+    local R=$(( RANDOM % NFILES + 1 ))
+    local bgfile="${xdir}/$(printf '%05d' "$R").hipo"
+    echo "Selected background file: $bgfile"
+
+    echo "Executing: pelican object get $bgfile ."
+    pelican object get "$bgfile" . || exit $EC_BG_FETCH
 }
 
 # ── setup_pelican ─────────────────────────────────────────────────────────────
