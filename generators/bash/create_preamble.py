@@ -39,5 +39,5 @@ lundFile=${{3:-}}
 # shellcheck source=functions.sh
 source functions.sh
 
-run_timed define_exit_codes
+define_exit_codes
 """.format(uid=user_submission_id, lund_arg_doc=lund_arg_doc)

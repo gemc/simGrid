@@ -112,7 +112,7 @@ print_timing_summary() {
 # the versioned software required by this job.
 setup_container_environment() {
     printf 'Job running on node: '; /bin/hostname
-    printf 'Job submitted by: %s\n' "${USER:-unknown}"
+    printf 'Job submitted by: %s\n' "$SUBMITTED_BY"
     echo "Running directory: $(pwd)"
     echo "Bash version: $BASH_VERSION"
 
@@ -176,8 +176,9 @@ setup_job_parameters() {
     COATJAVA_VERSION="$2"
     GEMC_VERSION="$3"
     CONFIGURATION="$4"
+    SUBMITTED_BY="$5"
     DENOISE_VERSION="4.2.3"
-    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION DENOISE_VERSION
+    export SUBMISSION_TYPE COATJAVA_VERSION GEMC_VERSION CONFIGURATION SUBMITTED_BY DENOISE_VERSION
     echo "SUBMISSION_TYPE  : $SUBMISSION_TYPE"
     echo "COATJAVA_VERSION : $COATJAVA_VERSION"
     echo "GEMC_VERSION     : $GEMC_VERSION"
@@ -212,6 +213,17 @@ setup_job_files() {
 
     check_file_exists "$coatjava_yaml"
     check_file_exists "$gemc_gcard"
+}
+
+# ── setup_pelican ─────────────────────────────────────────────────────────────
+# Configure Pelican/OSDF authentication using the HTCondor credential directory.
+# _CONDOR_CREDS is set by HTCondor before the job starts.
+setup_pelican() {
+    echo "Setting Pelican environment variables"
+    echo "_CONDOR_CREDS: $_CONDOR_CREDS"
+    export BEARER_TOKEN_FILE="$_CONDOR_CREDS/jlab_clas12.use"
+    echo " BEARER_TOKEN_FILE: $BEARER_TOKEN_FILE"
+    echo " pelican: $(which pelican)"
 }
 
 # ── check_file_exists ─────────────────────────────────────────────────────────

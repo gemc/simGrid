@@ -5,10 +5,11 @@ Assemble nodescript.sh — the bash simulation script executed on the OSG
 worker node — by calling each section generator in order.
 
 Section order:
-  1. preamble          — shebang, args, source functions.sh,
-                         define_exit_codes, container_environment
-  2. job_parameters    — run_timed setup_job_parameters with scard values
-  3. job_files         — run_timed setup_job_files (reads parameters above)
+  1. preamble                   — shebang, args, source functions.sh, define_exit_codes
+  2. job_parameters             — setup_job_parameters with scard values
+  3. setup_container_environment
+  4. setup_job_files
+  5. setup_pelican
 """
 
 import os
@@ -36,10 +37,9 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     sections = [
         create_preamble(sconfiguration, user_submission_id),
         create_job_parameters(sconfiguration),
-        "run_timed setup_container_environment\n",
-        "run_timed setup_job_files\n",
-        # print_timing_summary is always the last call — it summarises all
-        # run_timed invocations that preceded it in the script.
+        "setup_container_environment\n",
+        "setup_job_files\n",
+        "setup_pelican\n",
         "\n\nprint_timing_summary\n",
     ]
 

@@ -135,8 +135,9 @@ def main(argv=None):
 	print(label)
 	print_job(row)
 
-	# Step 3: build SConfiguration from scard
+	# Step 3: build SConfiguration from scard; backfill username from the DB row.
 	scard = SConfiguration.from_string(row['scard'])
+	scard.username = row['user']
 
 	# Step 4: build condor submit file.
 	from generators.condor.generate_condor_card import generate_condor_card
