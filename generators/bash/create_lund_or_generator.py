@@ -30,7 +30,7 @@ def create_lund_or_generator(sconfiguration):
         ).format(genoptions=sconfiguration.genOptions or "")
 
     return (
-        '\nrun_timed use_generator "{mcgenv}" "{generator}" "{genoptions}" "{nevents}"\n'
+        '\nrun_timed run_generator "{mcgenv}" "{generator}" "{genoptions}" "{nevents}"\n'
     ).format(
         generator=sconfiguration.generator or "",
         nevents=sconfiguration.nevents or "0",

@@ -9,8 +9,8 @@ Section order:
   2. setup_container_environment
   3. setup_job_files
   4. setup_pelican
-  5. setup_background_merging  (only when bkmerging is set)
-  6. lund_or_generator         — pelican fetch (type-2) or generator announcement (type-1/gemc)
+  5. fetch_background_file  (only when bkmerging is set)
+  6. lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
 """
 
 import os
@@ -52,7 +52,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             configuration=sconfiguration.configuration or "default",
         ),
         "setup_pelican\n",
-        'run_timed setup_background_merging "{configuration}" "{fields}" "{bkmerging}"\n'.format(
+        '\nrun_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'.format(
             configuration=sconfiguration.configuration or "",
             fields=sconfiguration.fields or "",
             bkmerging=sconfiguration.bkmerging or "",

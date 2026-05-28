@@ -202,12 +202,12 @@ setup_job_files() {
     check_file_exists "$gemc_gcard"
 }
 
-# ── use_generator ────────────────────────────────────────────────────────────
+# ── run_generator ────────────────────────────────────────────────────────────
 # Load the mcgen module, generate a seed, run the external event generator,
 # and remove any stray ROOT files it produces.
-# Reads globals: MCGEN_VERSION, GENERATOR, GEN_OPTIONS, NEVENTS.
+# Args: <mcgen_version> <generator> <gen_options> <nevents>
 # Exits with EC_GENERATOR on generator failure.
-use_generator() {
+run_generator() {
     local mcgen_version="$1"
     local generator="$2"
     local gen_options="$3"
@@ -215,32 +215,34 @@ use_generator() {
 
     module load mcgen/"$mcgen_version"
 
-    echo "GENERATOR START: $(date +%s)"
-
     generate-seeds.py generate
     local seed
     seed=$(generate-seeds.py read --row 1)
     echo "Generator seed from generate-seeds, row 1: $seed"
 
+    # Build command array — used for both logging and execution.
+    # shellcheck disable=SC2206
+    local -a cmd=("$generator" --trig "$nevents" --docker $gen_options --seed "$seed")
+
     echo
-    echo "Running $nevents events with generator $generator with options: $gen_options"
-    echo "Generator:"
-    which "$generator"
+    echo "Generator path: $(which "$generator")"
+    echo "Running: ${cmd[*]}"
     echo
 
-    "$generator" --trig "$nevents" --docker $gen_options --seed "$seed" || {
+    "${cmd[@]}" || {
         echo "GENERATOR ERROR >$generator< failed."
         exit $EC_GENERATOR
     }
 
+
     rm -f *.root
 }
 
-# ── setup_background_merging ──────────────────────────────────────────────────
+# ── fetch_background_file ──────────────────────────────────────────────────
 # Fetch a random background hipo file from OSDF for background merging.
 # Reads globals: CONFIGURATION, FIELDS, BKMERGING (exported by setup_job_parameters).
 # Exits with EC_BG_MISSING if ls fails or no files found, EC_BG_FETCH if download fails.
-setup_background_merging() {
+fetch_background_file() {
     local configuration="$1"
     local fields="$2"
     local bkmerging="$3"
