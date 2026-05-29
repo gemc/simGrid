@@ -47,24 +47,27 @@ def create_test_hipo(sconfiguration):
     return '\nrun_timed test_hipo_file\n'
 
 
-def create_dst_section(sconfiguration):
-    """Emit run_timed create_dst with the output filename prefix.
+def create_dst_section(sconfiguration, user_submission_id):
+    """Emit run_timed create_dst with the output filename prefix and literal submission ID.
 
     If dstOUT is not 'yes', emit an informational echo and set OUTPUT_FILE
     to recon.hipo so that write_to_jlab still has a target.
     """
     dst_prefix = (sconfiguration.string_id or "output").strip('-')
     if sconfiguration.dstOUT == 'yes':
-        return '\nrun_timed create_dst "{dst_prefix}"\n'.format(dst_prefix=dst_prefix)
+        return '\nrun_timed create_dst "{dst_prefix}" "{submission_id}"\n'.format(
+            dst_prefix=dst_prefix,
+            submission_id=user_submission_id,
+        )
     return (
         '\necho "DST not requested (dstOUT={dstOUT})."\n'
         'OUTPUT_FILE="recon.hipo"\n'
     ).format(dstOUT=sconfiguration.dstOUT or "no")
 
 
-def create_write_to_jlab(sconfiguration):
-    """Emit run_timed write_to_jlab with username and submission ID."""
+def create_write_to_jlab(sconfiguration, user_submission_id):
+    """Emit run_timed write_to_jlab with username and literal submission ID."""
     username = sconfiguration.username or "unknown"
     return (
-        '\nrun_timed write_to_jlab "{username}" "$FarmSubmissionID"\n'
-    ).format(username=username)
+        '\nrun_timed write_to_jlab "{username}" "{submission_id}"\n'
+    ).format(username=username, submission_id=user_submission_id)

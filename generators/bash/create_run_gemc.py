@@ -4,24 +4,6 @@ import re
 # two GEMC options — an artifact of the old generator format.
 _INTER_OPT_COMMA_RE = re.compile(r'(["\'])\s*,\s*(-)')
 
-_GEN_OUTPUT = {
-    'clasdis':           'clasdis.dat',
-    'MCEGENpiN_radcorr': 'MCEGENpiN_radcorr.dat',
-    'claspyth':          'claspyth.dat',
-    'dvcsgen':           'dvcsgen.dat',
-    'genKYandOnePion':   'genKYandOnePion.dat',
-    'inclusive-dis-rad': 'inclusive-dis-rad.dat',
-    'JPsiGen':           'JPsiGen.dat',
-    'TCSGen':            'TCSGen.dat',
-    'twopeg':            'twopeg.dat',
-    'clas12-elSpectro':  'clas12-elSpectro.dat',
-    'deep-pipi-gen':     'deep-pipi-gen.dat',
-    'genepi':            'genepi.dat',
-    'onepigen':          'onepigen.dat',
-    'gibuu':             'gibuu.dat',
-    'clas-stringspinner':'clas-stringspinner.dat',
-}
-
 
 def _vertex_value(raw, vertex_choice):
     """Append ', reset ' when vertex_choice is '0' (default)."""
@@ -56,7 +38,7 @@ def create_run_gemc(sconfiguration):
     elif generator == 'gemc':
         input_gen_file = ""
     else:
-        dat_file = _GEN_OUTPUT.get(generator, generator + ".dat")
+        dat_file = generator + ".dat"
         input_gen_file = "lund, {}".format(dat_file)
 
     # Additional GEMC options for gemc-internal generator

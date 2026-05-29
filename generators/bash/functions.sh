@@ -431,20 +431,21 @@ test_hipo_file() {
 
 # ── create_dst ────────────────────────────────────────────────────────────────
 # Filter recon.hipo into a DST file and set OUTPUT_FILE global.
-# Args: <dst_prefix>  (e.g. "rga_spring19_inb")
+# Args: <dst_prefix> <submission_id>  (e.g. "rga_spring19_inb" "6697")
 # For type-2 (lund-file) jobs the lund file basename is inserted between the
-# prefix and the submission/job IDs; FarmSubmissionID, sjob, and lundFile are
-# script-level variables set in the preamble.
+# prefix and the submission/job IDs; sjob and lundFile are script-level
+# variables set in the preamble.
 create_dst() {
     local dst_prefix="$1"
+    local submission_id="$2"
     local output_file
 
     if [[ -n "${lundFile:-}" ]]; then
         local lund_base="${lundFile##*/}"
         lund_base="${lund_base%.*}"
-        output_file="${dst_prefix}-${lund_base}-${FarmSubmissionID}-${sjob}.hipo"
+        output_file="${dst_prefix}-${lund_base}-${submission_id}-${sjob}.hipo"
     else
-        output_file="${dst_prefix}-${FarmSubmissionID}-${sjob}.hipo"
+        output_file="${dst_prefix}-${submission_id}-${sjob}.hipo"
     fi
     OUTPUT_FILE="$output_file"
 

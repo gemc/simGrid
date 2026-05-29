@@ -91,9 +91,9 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 
         create_test_hipo(sconfiguration),
 
-        create_dst_section(sconfiguration),
+        create_dst_section(sconfiguration, user_submission_id),
 
-        create_write_to_jlab(sconfiguration),
+        create_write_to_jlab(sconfiguration, user_submission_id),
 
         "\n\nprint_timing_summary\n",
     ]
