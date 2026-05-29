@@ -13,31 +13,41 @@ def create_preamble(sconfiguration, user_submission_id):
     Returns:
         str: opening block of nodescript.sh.
     """
-    lund_arg_doc = (
-        "#   3. lundFile         — OSDF URI of the lund input file\n"
-        if sconfiguration.type == '2' else ""
-    )
+    if sconfiguration.type == '2':
+        arg_invocation = "./nodescript.sh <sjob> <lundFile>"
+        arg_doc        = (
+            "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
+            "#   2. lundFile         — OSDF URI of the lund input file\n"
+        )
+        arg_parse = "sjob=$1\nlundFile=$2\n"
+    else:
+        arg_invocation = "./nodescript.sh <sjob>"
+        arg_doc        = "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
+        arg_parse      = "sjob=$1\n"
 
     return """\
 #!/bin/bash
 # nodescript.sh — CLAS12 simulation script executed on the OSG worker node.
+# Submission ID: {uid}
 #
-# Invoked by run.sh with:
-#   ./nodescript.sh <FarmSubmissionID> <sjob> [lundFile]
+# Invoked directly by HTCondor:
+#   {arg_invocation}
 #
 # Arguments:
-#   1. FarmSubmissionID — DB user_submission_id for this batch ({uid})
-#   2. sjob             — subjob index (HTCondor $(Process), 0-based)
-{lund_arg_doc}
+{arg_doc}
 set -euo pipefail
 
-FarmSubmissionID=$1
-sjob=$2
-lundFile=${{3:-}}
+{arg_parse}
+# Create the output directory, copy all staged files into it, and run there
+# so every output file lands where HTCondor's transfer_output_files expects it.
+mkdir -p output
+{{ cp -- * output/ 2>/dev/null; }} || true
+cd output
 
 # Source shared bash functions (run_timed, container_environment, define_exit_codes).
 # shellcheck source=functions.sh
 source functions.sh
 
 define_exit_codes
-""".format(uid=user_submission_id, lund_arg_doc=lund_arg_doc)
+""".format(uid=user_submission_id, arg_invocation=arg_invocation,
+           arg_doc=arg_doc, arg_parse=arg_parse)

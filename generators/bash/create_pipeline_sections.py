@@ -48,26 +48,30 @@ def create_test_hipo(sconfiguration):
 
 
 def create_dst_section(sconfiguration, user_submission_id):
-    """Emit run_timed create_dst with the output filename prefix and literal submission ID.
-
-    If dstOUT is not 'yes', emit an informational echo and set OUTPUT_FILE
-    to recon.hipo so that write_to_jlab still has a target.
+    """Emit create_dst (which calls get_output_filename internally), or rename
+    recon.hipo for the no-DST case.
     """
-    dst_prefix = (sconfiguration.string_id or "output").strip('-')
+    string_id = (sconfiguration.string_id or "output").strip('-')
     if sconfiguration.dstOUT == 'yes':
-        return '\nrun_timed create_dst "{dst_prefix}" "{submission_id}"\n'.format(
-            dst_prefix=dst_prefix,
+        return '\nrun_timed create_dst "{string_id}" "{submission_id}" "$sjob"\n'.format(
+            string_id=string_id,
             submission_id=user_submission_id,
         )
     return (
-        '\necho "DST not requested (dstOUT={dstOUT})."\n'
-        'OUTPUT_FILE="recon.hipo"\n'
-    ).format(dstOUT=sconfiguration.dstOUT or "no")
+        '\nget_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
+        'echo "DST not requested (dstOUT={dstOUT}) — renaming recon.hipo to $OUTPUT_FILE"\n'
+        'mv recon.hipo "$OUTPUT_FILE"\n'
+    ).format(
+        string_id=string_id,
+        submission_id=user_submission_id,
+        dstOUT=sconfiguration.dstOUT or "no",
+    )
 
 
 def create_write_to_jlab(sconfiguration, user_submission_id):
-    """Emit run_timed write_to_jlab with username and literal submission ID."""
+    """Emit run_timed write_to_jlab with username, string_id, submission_id, sjob."""
     username = sconfiguration.username or "unknown"
+    string_id = (sconfiguration.string_id or "output").strip('-')
     return (
-        '\nrun_timed write_to_jlab "{username}" "{submission_id}"\n'
-    ).format(username=username, submission_id=user_submission_id)
+        '\nrun_timed write_to_jlab "{username}" "{string_id}" "{submission_id}" "$sjob"\n'
+    ).format(username=username, string_id=string_id, submission_id=user_submission_id)

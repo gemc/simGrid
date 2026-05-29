@@ -429,25 +429,31 @@ test_hipo_file() {
     echo "recon.hipo integrity OK, size ${fsize} bytes"
 }
 
-# ── create_dst ────────────────────────────────────────────────────────────────
-# Filter recon.hipo into a DST file and set OUTPUT_FILE global.
-# Args: <dst_prefix> <submission_id>  (e.g. "rga_spring19_inb" "6697")
-# For type-2 (lund-file) jobs the lund file basename is inserted between the
-# prefix and the submission/job IDs; sjob and lundFile are script-level
-# variables set in the preamble.
-create_dst() {
-    local dst_prefix="$1"
+# ── get_output_filename ───────────────────────────────────────────────────────
+# Set OUTPUT_FILE from string_id, submission_id, and sjob.
+# For type-2 jobs the lund file basename is inserted between string_id and the IDs.
+# lundFile is a script-level variable set in the preamble (empty for type-1).
+# Args: <string_id> <submission_id> <sjob>
+get_output_filename() {
+    local string_id="$1"
     local submission_id="$2"
-    local output_file
+    local sjob="$3"
 
     if [[ -n "${lundFile:-}" ]]; then
         local lund_base="${lundFile##*/}"
         lund_base="${lund_base%.*}"
-        output_file="${dst_prefix}-${lund_base}-${submission_id}-${sjob}.hipo"
+        OUTPUT_FILE="${string_id}-${lund_base}-${submission_id}-${sjob}.hipo"
     else
-        output_file="${dst_prefix}-${submission_id}-${sjob}.hipo"
+        OUTPUT_FILE="${string_id}-${submission_id}-${sjob}.hipo"
     fi
-    OUTPUT_FILE="$output_file"
+    echo "Output filename: ${OUTPUT_FILE}"
+}
+
+# ── create_dst ────────────────────────────────────────────────────────────────
+# Filter recon.hipo into a DST hipo file.
+# Args: <string_id> <submission_id> <sjob>
+create_dst() {
+    get_output_filename "$1" "$2" "$3"
 
     local DST_BANKS='RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,REC::*,RECFT::*,MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,MC::Lund,MC::Event,RICH::Particle,RICH::Ring'
     local -a cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
@@ -455,21 +461,21 @@ create_dst() {
     echo
     "${cmd[@]}" || { echo "hipo-utils filter failed."; exit $EC_HIPO_UTILS; }
 
-    echo "Moving dst.hipo to ${output_file}"
-    mv dst.hipo "$output_file" || { echo "mv failed."; exit $EC_HIPO_UTILS; }
+    echo "Moving dst.hipo to ${OUTPUT_FILE}"
+    mv dst.hipo "$OUTPUT_FILE" || { echo "mv failed."; exit $EC_HIPO_UTILS; }
 
-    hipo-utils -test "$output_file" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    hipo-utils -test "$OUTPUT_FILE" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
     rm -f recon.hipo
-    echo "DST file created: ${output_file}"
+    echo "DST file created: ${OUTPUT_FILE}"
 }
 
 # ── write_to_jlab ─────────────────────────────────────────────────────────────
-# Upload OUTPUT_FILE to OSDF via pelican and clean up working directory.
-# Args: <username> <submission_id>
-# Reads global: OUTPUT_FILE (set by create_dst).
+# Upload the output hipo file to OSDF via pelican and clean up working directory.
+# Args: <username> <string_id> <submission_id> <sjob>
 write_to_jlab() {
     local username="$1"
-    local submission_id="$2"
+    get_output_filename "$2" "$3" "$4"
+    local submission_id="$3"
 
     echo "pelican ls for ${username}:"
     pelican object ls "osdf:///jlab-osdf/clas12/volatile/osg/${username}"
@@ -485,6 +491,6 @@ write_to_jlab() {
     echo "Additional cleanup"
     rm -f core* *.gcard
     rm -f recon.hipo gemc.hipo gemc.merged.hipo gemc_denoised.hipo
-    rm -f run.sh bg_merge_bk_file.sh nodeScript.sh condor_exec.exe
+    rm -f bg_merge_bk_file.sh nodescript.sh condor_exec.exe
     rm -f RNDMSTATUS random-seeds.txt Null gemc.evio *.hipo
 }

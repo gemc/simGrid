@@ -29,11 +29,15 @@ def create_lund_or_generator(sconfiguration):
             "echo 'GEMC internal generator — options passed to run_gemc'\n"
         )
 
+    # Replace double quotes with single quotes so genOptions can be safely
+    # embedded inside the double-quoted bash argument without breaking quoting
+    # (e.g. --misc "--opt=1" becomes --misc '--opt=1').
+    genoptions = (sconfiguration.genOptions or "").replace('"', "'")
     return (
         '\nrun_timed run_generator "{mcgenv}" "{generator}" "{genoptions}" "{nevents}"\n'
     ).format(
         generator=sconfiguration.generator or "",
         nevents=sconfiguration.nevents or "0",
         mcgenv=sconfiguration.mcgenv or "latest",
-        genoptions=sconfiguration.genOptions or "",
+        genoptions=genoptions,
     )

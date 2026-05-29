@@ -11,7 +11,7 @@ Section order matches the conventions expected by condor_submit:
   4. undesired       — excluded sites (+UNDESIRED_Sites)
   5. authentication  — OAuth token for Pelican/OSDF
   6. hardware        — CPUs, memory, disk
-  7. executable      — run.sh path, log files, +ProjectName
+  7. executable      — nodescript.sh, log files, +ProjectName
   8. file_transfer   — input staging and output retrieval
   9. queue           — Arguments and Queue N  (must be last)
 """
@@ -68,8 +68,8 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		create_undesired(scard, undesired_sites=undesired_sites),
 		create_authentication(scard),
 		create_hardware(scard, cpus=cpus, memory=memory, disk=disk),
-		create_executable(scard, user_submission_id),
+		create_executable(scard),
 		create_file_transfer(scard, extra_input_files=all_input_files or None),
-		create_queue(scard, user_submission_id),
+		create_queue(scard),
 	]
 	return "".join(sections)
