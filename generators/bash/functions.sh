@@ -115,11 +115,18 @@ print_timing_summary() {
 # ── setup_container_environment ──────────────────────────────────────────────
 # Print job header, clear LMOD environment, initialise the module system,
 # add CLAS12/Geant4 module paths, unload conflicting modules, and load
-# the versioned software required by this job.
+# the sqlite module (tied to gemc version).
+# Exports CLAS12_CONFIG — the clas12-config base path used by all subsequent
+# functions. Versioned loads for gemc, coatjava, and denoise are done in
+# their respective run_* functions.
+# Args: <submitted_by> <gemc_version> <submission_type>  (prod | dev)
 setup_container_environment() {
     local submitted_by="$1"
-    local denoise_version="$2"
-    local gemc_version="$3"
+    local gemc_version="$2"
+    local submission_type="$3"
+
+    export CLAS12_CONFIG="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${submission_type}"
+    echo "CLAS12_CONFIG: ${CLAS12_CONFIG}"
 
     printf 'Job running on node: '; /bin/hostname
     printf 'Job submitted by: %s\n' "$submitted_by"
@@ -167,8 +174,11 @@ setup_container_environment() {
     module unload root
     module unload mcgen
 
-    module load denoise/"$denoise_version"
     module load sqlite/"$gemc_version"
+    module avail
+    export RCDB_CONNECTION=mysql://null
+
+    echo "SQLITE Version: ${gemc_version}"
 }
 
 # ── define_exit_codes ────────────────────────────────────────────────────────
@@ -179,21 +189,17 @@ define_exit_codes() {
 }
 
 # ── setup_job_files ───────────────────────────────────────────────────────────
-# Build and verify paths to required CVMFS configuration files.
-# Args: <submission_type> <coatjava_version> <gemc_version> <configuration>
-# Sets and exports: coatjava_yaml, gemc_gcard.
+# Verify that the gcard and yaml files required by this job exist under
+# $CLAS12_CONFIG (exported by setup_container_environment).
+# Args: <coatjava_version> <gemc_version> <configuration>
 # Exits with EC_FILE_DOES_NOT_EXIST if either file is absent.
 setup_job_files() {
-    local submission_type="$1"
-    local coatjava_version="$2"
-    local gemc_version="$3"
-    local configuration="$4"
-    local c12f_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${submission_type}"
+    local coatjava_version="$1"
+    local gemc_version="$2"
+    local configuration="$3"
 
-    coatjava_yaml="${c12f_home}/coatjava/${coatjava_version}/${configuration}.yaml"
-    gemc_gcard="${c12f_home}/gemc/${gemc_version}/${configuration}.gcard"
-
-    export coatjava_yaml gemc_gcard
+    local coatjava_yaml="${CLAS12_CONFIG}/coatjava/${coatjava_version}/${configuration}.yaml"
+    local gemc_gcard="${CLAS12_CONFIG}/gemc/${gemc_version}/${configuration}.gcard"
 
     echo "coatjava_yaml : $coatjava_yaml"
     echo "gemc_gcard    : $gemc_gcard"
@@ -268,6 +274,8 @@ fetch_background_file() {
 
     echo "Executing: pelican object get $bgfile ."
     pelican object get "$bgfile" . || exit $EC_BG_FETCH
+    BG_FILE=$(basename "$bgfile")
+    echo "Background file downloaded: ${BG_FILE}"
 }
 
 # ── setup_pelican ─────────────────────────────────────────────────────────────
@@ -291,4 +299,191 @@ check_file_exists() {
         exit $EC_FILE_DOES_NOT_EXIST
     fi
     echo "Found: $file"
+}
+
+# ── run_gemc ──────────────────────────────────────────────────────────────────
+# Load gemc module and run the simulation.
+# Args: <gemc_version> <gcard> <nevents> <input_gen_file> <genoptions>
+#       <zposition> <beam_spot> <raster> <torus_scale> <solenoid_scale>
+# input_gen_file: "lund, <file>.dat" for external/lund-file input; empty for gemc internal generator.
+# genoptions:     additional gemc options (e.g. -BEAM_P=... -SPREAD_P=...) for gemc internal; empty otherwise.
+# zposition/beam_spot/raster: pass "n/a" to omit the corresponding GEMC option.
+run_gemc() {
+    local gemc_version="$1"
+    local gcard="${CLAS12_CONFIG}/$2"
+    local nevents="$3"
+    local input_gen_file="$4"
+    local genoptions="$5"
+    local zposition="$6"
+    local beam_spot="$7"
+    local raster="$8"
+    local torus_scale="$9"
+    local solenoid_scale="${10}"
+
+    module load gemc/"$gemc_version"
+    echo "GEMC Version: ${gemc_version}"
+
+    local -a cmd=(gemc -USE_GUI=0 -NGENP=100 "-N=${nevents}" "$gcard")
+
+    [[ -n "$input_gen_file" ]] && cmd+=("-INPUT_GEN_FILE=${input_gen_file}")
+
+    if [[ -n "$genoptions" ]]; then
+        local -a _gopts
+        # shellcheck disable=SC2206
+        eval "_gopts=(${genoptions})"
+        cmd+=("${_gopts[@]}")
+    fi
+
+    [[ -n "$zposition"  && "$zposition"  != "n/a" ]] && cmd+=("-RANDOMIZE_LUND_VZ=${zposition}")
+    [[ -n "$beam_spot"  && "$beam_spot"  != "n/a" ]] && cmd+=("-BEAM_SPOT=${beam_spot}")
+    [[ -n "$raster"     && "$raster"     != "n/a" ]] && cmd+=("-RASTER_VERTEX=${raster}")
+
+    cmd+=(
+        "-SCALE_FIELD=binary_torus,    ${torus_scale}"
+        "-SCALE_FIELD=binary_solenoid, ${solenoid_scale}"
+        "-OUTPUT=hipo, gemc.hipo"
+        "-INTEGRATEDRAW=*"
+    )
+
+    echo "GEMC path: $(which gemc)"
+    echo "Running: ${cmd[*]}"
+    echo
+
+    "${cmd[@]}" | sed '/G4Exception-START/,/G4Exception-END/d' || {
+        echo "GEMC failed."
+        exit $EC_GEMC
+    }
+
+    rm -f *.dat
+}
+
+# ── merge_background ──────────────────────────────────────────────────────────
+# Merge background hipo file (fetched by fetch_background_file) with gemc output.
+# Reads global: BG_FILE (set by fetch_background_file).
+merge_background() {
+    echo "Background file: ${BG_FILE}"
+    local -a cmd=(bg-merger -b "${BG_FILE}" -i gemc.hipo -o gemc.merged.hipo
+                  -d 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO')
+    echo "Running: ${cmd[*]}"
+    echo
+    "${cmd[@]}" || { echo "bg-merger failed."; exit $EC_BG_MERGE; }
+    rm -f gemc.hipo "${BG_FILE}"
+}
+
+# ── run_denoiser ──────────────────────────────────────────────────────────────
+# Load denoise module and run the ML denoiser on the gemc hipo output.
+# Args: <denoise_version> <input_file>  (gemc.hipo when no bg merging; gemc.merged.hipo otherwise)
+run_denoiser() {
+    local denoise_version="$1"
+    local input_file="$2"
+
+    module load denoise/"$denoise_version"
+    echo "DENOISE Version: ${denoise_version}"
+
+    local -a cmd=(denoise2.exe -i "$input_file" -o gemc_denoised.hipo -t 1 -l 0.01)
+    echo "Running: ${cmd[*]}"
+    echo
+    "${cmd[@]}" || { echo "denoiser failed."; exit $EC_DENOISE; }
+    rm -f "$input_file"
+}
+
+# ── run_reconstruction ────────────────────────────────────────────────────────
+# Load coatjava module and run recon-util reconstruction.
+# Args: <coatjava_version> <coatjava_yaml>
+run_reconstruction() {
+    local coatjava_version="$1"
+    local yaml="${CLAS12_CONFIG}/$2"
+
+    module load coatjava/"$coatjava_version"
+    echo "COATJAVA Version: ${coatjava_version}"
+
+    echo "content of yaml file ${yaml}:"
+    cat "$yaml"
+    echo
+
+    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
+
+    local -a cmd=(
+        /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/coatjava/bin/recon-util
+        -y "$yaml" -i gemc_denoised.hipo -o recon.hipo -- -Xmx1920m
+    )
+    echo "Running: ${cmd[*]}"
+    echo
+    "${cmd[@]}" || { echo "recon-util failed."; exit $EC_RECON; }
+
+    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
+    rm -f gemc_denoised.hipo
+}
+
+# ── test_hipo_file ────────────────────────────────────────────────────────────
+# Test integrity and minimum size of recon.hipo.
+test_hipo_file() {
+    hipo-utils -test recon.hipo || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    local fsize
+    fsize=$(stat -L -c%s recon.hipo)
+    if [[ $fsize -lt 100 ]]; then
+        echo "recon.hipo too small: ${fsize} bytes"
+        rm -f *.hipo *.evio *.sqlite
+        exit $EC_HIPO_SIZE
+    fi
+    echo "recon.hipo integrity OK, size ${fsize} bytes"
+}
+
+# ── create_dst ────────────────────────────────────────────────────────────────
+# Filter recon.hipo into a DST file and set OUTPUT_FILE global.
+# Args: <dst_prefix>  (e.g. "rga_spring19_inb")
+# For type-2 (lund-file) jobs the lund file basename is inserted between the
+# prefix and the submission/job IDs; FarmSubmissionID, sjob, and lundFile are
+# script-level variables set in the preamble.
+create_dst() {
+    local dst_prefix="$1"
+    local output_file
+
+    if [[ -n "${lundFile:-}" ]]; then
+        local lund_base="${lundFile##*/}"
+        lund_base="${lund_base%.*}"
+        output_file="${dst_prefix}-${lund_base}-${FarmSubmissionID}-${sjob}.hipo"
+    else
+        output_file="${dst_prefix}-${FarmSubmissionID}-${sjob}.hipo"
+    fi
+    OUTPUT_FILE="$output_file"
+
+    local DST_BANKS='RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,REC::*,RECFT::*,MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,MC::Lund,MC::Event,RICH::Particle,RICH::Ring'
+    local -a cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
+    echo "Running: ${cmd[*]}"
+    echo
+    "${cmd[@]}" || { echo "hipo-utils filter failed."; exit $EC_HIPO_UTILS; }
+
+    echo "Moving dst.hipo to ${output_file}"
+    mv dst.hipo "$output_file" || { echo "mv failed."; exit $EC_HIPO_UTILS; }
+
+    hipo-utils -test "$output_file" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    rm -f recon.hipo
+    echo "DST file created: ${output_file}"
+}
+
+# ── write_to_jlab ─────────────────────────────────────────────────────────────
+# Upload OUTPUT_FILE to OSDF via pelican and clean up working directory.
+# Args: <username> <submission_id>
+# Reads global: OUTPUT_FILE (set by create_dst).
+write_to_jlab() {
+    local username="$1"
+    local submission_id="$2"
+
+    echo "pelican ls for ${username}:"
+    pelican object ls "osdf:///jlab-osdf/clas12/volatile/osg/${username}"
+
+    local -a cmd=(
+        /usr/bin/pelican -d object put "${OUTPUT_FILE}"
+        "osdf:///jlab-osdf/clas12/volatile/osg/${username}/${submission_id}/${OUTPUT_FILE}"
+    )
+    echo "Running: ${cmd[*]}"
+    echo
+    "${cmd[@]}" || { echo "pelican upload failed."; exit $EC_INFRASTRUCTURE; }
+
+    echo "Additional cleanup"
+    rm -f core* *.gcard
+    rm -f recon.hipo gemc.hipo gemc.merged.hipo gemc_denoised.hipo
+    rm -f run.sh bg_merge_bk_file.sh nodeScript.sh condor_exec.exe
+    rm -f RNDMSTATUS random-seeds.txt Null gemc.evio *.hipo
 }

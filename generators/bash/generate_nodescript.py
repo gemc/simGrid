@@ -5,21 +5,38 @@ Assemble nodescript.sh — the bash simulation script executed on the OSG
 worker node — by calling each section generator in order.
 
 Section order:
-  1. preamble                   — shebang, args, source functions.sh, define_exit_codes
-  2. setup_container_environment
-  3. setup_job_files
-  4. setup_pelican
-  5. fetch_background_file  (only when bkmerging is set)
-  6. lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
+  1.  preamble                  — shebang, args, source functions.sh, define_exit_codes
+  2.  setup_container_environment
+  3.  setup_job_files
+  4.  setup_pelican
+  5.  fetch_background_file  (only when bkmerging is set)
+  6.  lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
+  7.  run_gemc
+  8.  merge_background          (only when bkmerging is set)
+  9.  run_denoiser
+  10. run_reconstruction
+  11. test_hipo_file
+  12. create_dst                 (creates DST or sets OUTPUT_FILE=recon.hipo)
+  13. write_to_jlab
+  14. print_timing_summary
 """
 
 import os
 
 from generators.bash.create_preamble           import create_preamble
-from generators.bash.create_lund_or_generator import create_lund_or_generator
+from generators.bash.create_lund_or_generator  import create_lund_or_generator
+from generators.bash.create_run_gemc           import create_run_gemc
+from generators.bash.create_pipeline_sections  import (
+    create_merge_background,
+    create_denoiser,
+    create_reconstruction,
+    create_test_hipo,
+    create_dst_section,
+    create_write_to_jlab,
+)
 
-NODESCRIPT     = "nodescript.sh"
-FUNCTIONS_SH   = "functions.sh"
+NODESCRIPT      = "nodescript.sh"
+FUNCTIONS_SH    = "functions.sh"
 DENOISE_VERSION = "4.2.3"
 
 
@@ -40,25 +57,44 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
-        'setup_container_environment "{username}" "{denoise_version}" "{gemcv}"\n'.format(
+
+        'run_timed setup_container_environment "{username}" "{gemcv}" "{submission_type}"\n'.format(
             username=sconfiguration.username or "unknown",
-            denoise_version=DENOISE_VERSION,
             gemcv=sconfiguration.gemcv or "latest",
-        ),
-        'setup_job_files "{submission_type}" "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
             submission_type=submission_type,
+        ),
+
+        'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
             coatjavav=sconfiguration.coatjavav or "latest",
             gemcv=sconfiguration.gemcv or "latest",
             configuration=sconfiguration.configuration or "default",
         ),
-        "setup_pelican\n",
+
+        "run_timed setup_pelican\n",
+
         '\nrun_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'.format(
             configuration=sconfiguration.configuration or "",
             fields=sconfiguration.fields or "",
             bkmerging=sconfiguration.bkmerging or "",
-        ) if sconfiguration.bkmerging
-            else 'echo "Background merging not requested — skipping."\n',
+        ) if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
+            else 'echo "Background merging not requested — skipping fetch."\n',
+
         create_lund_or_generator(sconfiguration),
+
+        create_run_gemc(sconfiguration),
+
+        create_merge_background(sconfiguration),
+
+        create_denoiser(sconfiguration, DENOISE_VERSION),
+
+        create_reconstruction(sconfiguration),
+
+        create_test_hipo(sconfiguration),
+
+        create_dst_section(sconfiguration),
+
+        create_write_to_jlab(sconfiguration),
+
         "\n\nprint_timing_summary\n",
     ]
 

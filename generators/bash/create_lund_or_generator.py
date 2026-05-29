@@ -26,8 +26,8 @@ def create_lund_or_generator(sconfiguration):
     if sconfiguration.generator == 'gemc':
         return (
             "\n"
-            'echo "GEMC Internal generator, using options: {genoptions}"\n'
-        ).format(genoptions=sconfiguration.genOptions or "")
+            "echo 'GEMC internal generator — options passed to run_gemc'\n"
+        )
 
     return (
         '\nrun_timed run_generator "{mcgenv}" "{generator}" "{genoptions}" "{nevents}"\n'

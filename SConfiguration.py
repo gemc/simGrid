@@ -97,19 +97,27 @@ class SConfiguration():
 		print('SConfiguration: parsed {} successfully (type {})'.format(label, self.type))
 
 	def _resolve_software_versions(self):
-		"""Populate gemcv and coatjavav from softwarev (e.g. 'gemc/5.10 coatjava/10.0.7')."""
-		if not self.softwarev:
-			return
-		for token in self.softwarev.split():
-			if '/' not in token:
-				continue
-			name, _, version = token.partition('/')
-			if name == 'gemc':
-				self.gemcv = version
-			elif name == 'coatjava':
-				self.coatjavav = version
-			elif name == 'mcgen':
-				self.mcgenv = version
+		"""Populate gemcv, coatjavav, mcgenv from softwarev; torus/solenoid from fields."""
+		if self.softwarev:
+			for token in self.softwarev.split():
+				if '/' not in token:
+					continue
+				name, _, version = token.partition('/')
+				if name == 'gemc':
+					self.gemcv = version
+				elif name == 'coatjava':
+					self.coatjavav = version
+				elif name == 'mcgen':
+					self.mcgenv = version
+
+		if self.fields and (self.torus is None or self.solenoid is None):
+			parts = self.fields.split('_')
+			if len(parts) == 2:
+				tor_part, sol_part = parts
+				if tor_part.startswith('tor'):
+					self.torus = tor_part[3:]
+				if sol_part.startswith('sol'):
+					self.solenoid = sol_part[3:]
 
 	def _resolve_type(self):
 		"""Set self.type to '1' or '2' when the scard does not include it.
