@@ -4,7 +4,7 @@ generate_nodescript.py
 Assemble nodescript.sh — the bash simulation script executed on the OSG
 worker node — by calling each section generator in order.
 
-Section order:
+Full pipeline (output_type != 1):
   1.  preamble                  — shebang, args, source functions.sh, define_exit_codes
   2.  setup_container_environment
   3.  setup_job_files
@@ -19,6 +19,11 @@ Section order:
   12. create_dst                 (creates DST or sets OUTPUT_FILE=recon.hipo)
   13. write_to_jlab
   14. print_timing_summary
+
+GEMC-only pipeline (output_type == 1):
+  Steps 1–8 are identical; steps 9–12 are replaced by a single rename of the
+  gemc output file (gemc.merged.hipo or gemc.hipo) to the output filename, then
+  write_to_jlab uploads it directly — no denoising or reconstruction.
 """
 
 import os
@@ -33,6 +38,7 @@ from generators.bash.create_pipeline_sections  import (
     create_test_hipo,
     create_dst_section,
     create_write_to_jlab,
+    create_gemc_only_section,
 )
 
 NODESCRIPT      = "nodescript.sh"
@@ -54,6 +60,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         str: path of the written file.
     """
     submission_type = "dev" if sconfiguration.submission == "devel" else "prod"
+    gemc_only = str(sconfiguration.output_type or '').strip() == '1'
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
@@ -84,19 +91,23 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         create_run_gemc(sconfiguration),
 
         create_merge_background(sconfiguration),
-
-        create_denoiser(sconfiguration, DENOISE_VERSION),
-
-        create_reconstruction(sconfiguration),
-
-        create_test_hipo(sconfiguration),
-
-        create_dst_section(sconfiguration, user_submission_id),
-
-        create_write_to_jlab(sconfiguration, user_submission_id),
-
-        "\n\nprint_timing_summary\n",
     ]
+
+    if gemc_only:
+        sections += [
+            create_gemc_only_section(sconfiguration, user_submission_id),
+            create_write_to_jlab(sconfiguration, user_submission_id),
+        ]
+    else:
+        sections += [
+            create_denoiser(sconfiguration, DENOISE_VERSION),
+            create_reconstruction(sconfiguration),
+            create_test_hipo(sconfiguration),
+            create_dst_section(sconfiguration, user_submission_id),
+            create_write_to_jlab(sconfiguration, user_submission_id),
+        ]
+
+    sections.append("\n\nprint_timing_summary\n")
 
     script = "".join(sections)
 

@@ -75,3 +75,25 @@ def create_write_to_jlab(sconfiguration, user_submission_id):
     return (
         '\nrun_timed write_to_jlab "{username}" "{string_id}" "{submission_id}" "$sjob"\n'
     ).format(username=username, string_id=string_id, submission_id=user_submission_id)
+
+
+def create_gemc_only_section(sconfiguration, user_submission_id):
+    """For GEMC-only output (output_type=1): rename the gemc file to the output filename.
+
+    With background merging the source is gemc.merged.hipo; without it is gemc.hipo.
+    write_to_jlab will then upload $OUTPUT_FILE directly.
+    """
+    string_id = (sconfiguration.string_id or "output").strip('-')
+    if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no':
+        gemc_file = "gemc.merged.hipo"
+    else:
+        gemc_file = "gemc.hipo"
+    return (
+        '\nget_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
+        'echo "GEMC-only output: renaming {gemc_file} to $OUTPUT_FILE"\n'
+        'mv "{gemc_file}" "$OUTPUT_FILE" || {{ echo "mv failed."; exit $EC_HIPO_UTILS; }}\n'
+    ).format(
+        string_id=string_id,
+        submission_id=user_submission_id,
+        gemc_file=gemc_file,
+    )
