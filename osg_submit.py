@@ -218,10 +218,11 @@ def main(argv=None):
             print()
             print(f.read())
 
-    # Stage functions.sh — preserve generators/bash/ path expected by transfer_input_files.
-    functions_dst = os.path.join(job_dir, "generators", "bash", "functions.sh")
-    os.makedirs(os.path.dirname(functions_dst), exist_ok=True)
-    shutil.copy2(os.path.join(_REPO_ROOT, "generators", "bash", "functions.sh"), functions_dst)
+    # Stage functions.sh alongside nodescript.sh (referenced as functions.sh in transfer_input_files).
+    shutil.copy2(
+        os.path.join(_REPO_ROOT, "generators", "bash", "functions.sh"),
+        os.path.join(job_dir, "functions.sh"),
+    )
 
     # Stage bg_merge_bk_file.sh — always copied; condor card includes it in
     # transfer_input_files only when bkmerging is requested.
@@ -231,7 +232,35 @@ def main(argv=None):
     )
     print("Staged scripts to {}.".format(job_dir))
 
-    print("\nStep 7: Submit to HTCondor — not yet implemented")
+    print("\nStep 7: Submit to HTCondor")
+    if args.test:
+        print("TEST MODE: skipping condor_submit.")
+        return 0
+
+    import subprocess
+    result = subprocess.run(
+        ["condor_submit", "clas12.condor"],
+        cwd=job_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+    )
+    if result.returncode != 0:
+        error_path = os.path.join(job_dir, "htcondor_submission_error.txt")
+        with open(error_path, 'w') as f:
+            f.write(result.stdout)
+        print("condor_submit failed (exit {}). Error written to {}.".format(
+            result.returncode, error_path
+        ))
+        return 1
+
+    print(result.stdout)
+    with Database(database_name=db_name) as db:
+        db.execute(
+            "UPDATE submissions SET run_status = %s WHERE user_submission_id = %s",
+            [SUBMITTED, user_submission_id],
+        )
+    print("Status → '{}'.".format(SUBMITTED))
 
     return 0
 
