@@ -1,18 +1,11 @@
 def create_lund_or_generator(sconfiguration):
     """
-    Generate the lund-file fetch or generator announcement section.
+    Generate the lund-file fetch or generator command section.
 
-    For type-2 (lund-file) submissions: fetch the lund file from OSDF via
-    pelican using the $lundFile argument passed to nodescript.sh.
-
-    For type-1 (generator) submissions where the generator is 'gemc': print
-    the internal-generator announcement with the genOptions embedded.
-
-    Args:
-        sconfiguration: SConfiguration instance.
-
-    Returns:
-        str: bash snippet for nodescript.sh.
+    For type-2 (lund-file) submissions: fetch the lund file from OSDF via pelican.
+    For type-1 with gemc internal generator: options are embedded in the run_gemc cmd.
+    For type-1 with external generator: emit module load, seed setup, cmd array,
+    echo, and run_timed so the exact command is visible and reproducible.
     """
     if sconfiguration.type == '2':
         return (
@@ -24,20 +17,26 @@ def create_lund_or_generator(sconfiguration):
         )
 
     if sconfiguration.generator == 'gemc':
-        return (
-            "\n"
-            "echo 'GEMC internal generator — options passed to run_gemc'\n"
-        )
+        return "\necho 'GEMC internal generator — options embedded in run_gemc cmd'\n"
 
-    # Replace double quotes with single quotes so genOptions can be safely
-    # embedded inside the double-quoted bash argument without breaking quoting
-    # (e.g. --misc "--opt=1" becomes --misc '--opt=1').
-    genoptions = (sconfiguration.genOptions or "").replace('"', "'")
+    generator  = sconfiguration.generator or ""
+    nevents    = sconfiguration.nevents or "0"
+    mcgenv     = sconfiguration.mcgenv or "latest"
+    genoptions = (sconfiguration.genOptions or "").replace('"', "'").strip()
+
+    cmd_args = [generator, '--trig', nevents, '--docker']
+    if genoptions:
+        cmd_args.append(genoptions)
+    cmd_args += ['--seed', '"$seed"']
+
+    cmd_line = 'cmd=(' + ' '.join(cmd_args) + ')'
+
     return (
-        '\nrun_timed run_generator "{mcgenv}" "{generator}" "{genoptions}" "{nevents}"\n'
-    ).format(
-        generator=sconfiguration.generator or "",
-        nevents=sconfiguration.nevents or "0",
-        mcgenv=sconfiguration.mcgenv or "latest",
-        genoptions=genoptions,
+        '\nmodule load mcgen/{mcgenv}\n'
+        'generate-seeds.py generate\n'
+        'seed=$(generate-seeds.py read --row 1)\n'
+    ).format(mcgenv=mcgenv) + (
+        cmd_line + '\n'
+        'echo "Running Generator: ${cmd[@]}"\n'
+        'run_timed run_generator "${cmd[@]}"\n'
     )

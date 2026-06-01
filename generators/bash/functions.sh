@@ -209,38 +209,12 @@ setup_job_files() {
 }
 
 # ── run_generator ────────────────────────────────────────────────────────────
-# Load the mcgen module, generate a seed, run the external event generator,
-# and remove any stray ROOT files it produces.
-# Args: <mcgen_version> <generator> <gen_options> <nevents>
-# Exits with EC_GENERATOR on generator failure.
+# Run the pre-built generator command passed as "$@" from nodescript.sh.
+# Removes stray ROOT files produced by some generators.
+# Exits with EC_GENERATOR on failure.
 run_generator() {
-    local mcgen_version="$1"
-    local generator="$2"
-    local gen_options="$3"
-    local nevents="$4"
-
-    module load mcgen/"$mcgen_version"
-
-    generate-seeds.py generate
-    local seed
-    seed=$(generate-seeds.py read --row 1)
-    echo "Generator seed from generate-seeds, row 1: $seed"
-
-    # Build command array — used for both logging and execution.
-    # shellcheck disable=SC2206
-    local -a cmd=("$generator" --trig "$nevents" --docker $gen_options --seed "$seed")
-
-    echo
-    echo "Generator path: $(which "$generator")"
-    echo "Running: ${cmd[*]}"
-    echo
-
-    "${cmd[@]}" || {
-        echo "GENERATOR ERROR >$generator< failed."
-        exit $EC_GENERATOR
-    }
-
-
+    echo "Generator path: $(which "$1")"
+    "$@" || { echo "GENERATOR ERROR: $1 failed."; exit $EC_GENERATOR; }
     rm -f *.root
 }
 
@@ -309,51 +283,8 @@ check_file_exists() {
 # genoptions:     additional gemc options (e.g. -BEAM_P=... -SPREAD_P=...) for gemc internal; empty otherwise.
 # zposition/beam_spot/raster: pass "n/a" to omit the corresponding GEMC option.
 run_gemc() {
-    local gemc_version="$1"
-    local gcard="${CLAS12_CONFIG}/$2"
-    local nevents="$3"
-    local input_gen_file="$4"
-    local genoptions="$5"
-    local zposition="$6"
-    local beam_spot="$7"
-    local raster="$8"
-    local torus_scale="$9"
-    local solenoid_scale="${10}"
-
-    module load gemc/"$gemc_version"
-    echo "GEMC Version: ${gemc_version}"
-
-    local -a cmd=(gemc -USE_GUI=0 -NGENP=100 "-N=${nevents}" "$gcard")
-
-    [[ -n "$input_gen_file" ]] && cmd+=("-INPUT_GEN_FILE=${input_gen_file}")
-
-    if [[ -n "$genoptions" ]]; then
-        local -a _gopts
-        # shellcheck disable=SC2206
-        eval "_gopts=(${genoptions})"
-        cmd+=("${_gopts[@]}")
-    fi
-
-    [[ -n "$zposition"  && "$zposition"  != "n/a" ]] && cmd+=("-RANDOMIZE_LUND_VZ=${zposition}")
-    [[ -n "$beam_spot"  && "$beam_spot"  != "n/a" ]] && cmd+=("-BEAM_SPOT=${beam_spot}")
-    [[ -n "$raster"     && "$raster"     != "n/a" ]] && cmd+=("-RASTER_VERTEX=${raster}")
-
-    cmd+=(
-        "-SCALE_FIELD=binary_torus,    ${torus_scale}"
-        "-SCALE_FIELD=binary_solenoid, ${solenoid_scale}"
-        "-OUTPUT=hipo, gemc.hipo"
-        "-INTEGRATEDRAW=*"
-    )
-
     echo "GEMC path: $(which gemc)"
-    echo "Running: ${cmd[*]}"
-    echo
-
-    "${cmd[@]}" | sed '/G4Exception-START/,/G4Exception-END/d' || {
-        echo "GEMC failed."
-        exit $EC_GEMC
-    }
-
+    "$@" | sed '/G4Exception-START/,/G4Exception-END/d' || { echo "GEMC failed."; exit $EC_GEMC; }
     rm -f *.dat
 }
 
@@ -361,12 +292,7 @@ run_gemc() {
 # Merge background hipo file (fetched by fetch_background_file) with gemc output.
 # Reads global: BG_FILE (set by fetch_background_file).
 merge_background() {
-    echo "Background file: ${BG_FILE}"
-    local -a cmd=(bg-merger -b "${BG_FILE}" -i gemc.hipo -o gemc.merged.hipo
-                  -d 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO')
-    echo "Running: ${cmd[*]}"
-    echo
-    "${cmd[@]}" || { echo "bg-merger failed."; exit $EC_BG_MERGE; }
+    "$@" || { echo "bg-merger failed."; exit $EC_BG_MERGE; }
     rm -f gemc.hipo "${BG_FILE}"
 }
 
@@ -374,51 +300,22 @@ merge_background() {
 # Load denoise module and run the ML denoiser on the gemc hipo output.
 # Args: <denoise_version> <input_file>  (gemc.hipo when no bg merging; gemc.merged.hipo otherwise)
 run_denoiser() {
-    local denoise_version="$1"
-    local input_file="$2"
-
-    module load denoise/"$denoise_version"
-    echo "DENOISE Version: ${denoise_version}"
-
-    local -a cmd=(denoise2.exe -i "$input_file" -o gemc_denoised.hipo -t 1 -l 0.01)
-    echo "Running: ${cmd[*]}"
-    echo
-    "${cmd[@]}" || { echo "denoiser failed."; exit $EC_DENOISE; }
-    rm -f "$input_file"
+    "$@" || { echo "denoiser failed."; exit $EC_DENOISE; }
 }
 
 # ── run_reconstruction ────────────────────────────────────────────────────────
 # Load coatjava module and run recon-util reconstruction.
 # Args: <coatjava_version> <coatjava_yaml>
 run_reconstruction() {
-    local coatjava_version="$1"
-    local yaml="${CLAS12_CONFIG}/$2"
-
-    module load coatjava/"$coatjava_version"
-    echo "COATJAVA Version: ${coatjava_version}"
-
-    echo "content of yaml file ${yaml}:"
-    cat "$yaml"
-    echo
-
     df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
-
-    local -a cmd=(
-        /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/coatjava/bin/recon-util
-        -y "$yaml" -i gemc_denoised.hipo -o recon.hipo -- -Xmx1920m
-    )
-    echo "Running: ${cmd[*]}"
-    echo
-    "${cmd[@]}" || { echo "recon-util failed."; exit $EC_RECON; }
-
+    "$@" || { echo "recon-util failed."; exit $EC_RECON; }
     df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
-    rm -f gemc_denoised.hipo
 }
 
 # ── test_hipo_file ────────────────────────────────────────────────────────────
 # Test integrity and minimum size of recon.hipo.
 test_hipo_file() {
-    hipo-utils -test recon.hipo || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    "$@" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
     local fsize
     fsize=$(stat -L -c%s recon.hipo)
     if [[ $fsize -lt 100 ]]; then
@@ -453,17 +350,11 @@ get_output_filename() {
 # Filter recon.hipo into a DST hipo file.
 # Args: <string_id> <submission_id> <sjob>
 create_dst() {
-    get_output_filename "$1" "$2" "$3"
-
-    local DST_BANKS='RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,REC::*,RECFT::*,MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,MC::Lund,MC::Event,RICH::Particle,RICH::Ring'
-    local -a cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
-    echo "Running: ${cmd[*]}"
-    echo
-    "${cmd[@]}" || { echo "hipo-utils filter failed."; exit $EC_HIPO_UTILS; }
-
+    local string_id="$1" submission_id="$2" sjob="$3"; shift 3
+    get_output_filename "$string_id" "$submission_id" "$sjob"
+    "$@" || { echo "hipo-utils filter failed."; exit $EC_HIPO_UTILS; }
     echo "Moving dst.hipo to ${OUTPUT_FILE}"
     mv dst.hipo "$OUTPUT_FILE" || { echo "mv failed."; exit $EC_HIPO_UTILS; }
-
     hipo-utils -test "$OUTPUT_FILE" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
     rm -f recon.hipo
     echo "DST file created: ${OUTPUT_FILE}"

@@ -4,20 +4,43 @@ create_pipeline_sections.py
 Generators for the post-gemc simulation pipeline steps:
   merge_background, run_denoiser, run_reconstruction,
   test_hipo_file, create_dst, write_to_jlab.
+
+Each step emits its full command as a bash cmd=(...) array so the exact
+invocation is visible and reproducible directly in nodescript.sh.
 """
+
+_BG_MERGER_DETECTORS = 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO'
+
+_DST_BANKS = (
+    'RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,'
+    'REC::*,RECFT::*,'
+    'MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,'
+    'MC::Lund,MC::Event,'
+    'RICH::Particle,RICH::Ring'
+)
 
 
 def create_merge_background(sconfiguration):
-    """Emit run_timed merge_background only when bkmerging is requested."""
+    """Emit the bg-merger cmd array and run_timed merge_background."""
     if not sconfiguration.bkmerging or sconfiguration.bkmerging == 'no':
         return 'echo "Background merging not requested — skipping."\n'
-    return '\n# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\nrun_timed merge_background\n'
+    return (
+        '\n# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\n'
+        'cmd=(bg-merger\n'
+        '    -b "$BG_FILE"\n'
+        '    -i gemc.hipo\n'
+        '    -o gemc.merged.hipo\n'
+        "    -d '{detectors}')\n"
+        'echo "Running Background Merger: ${{cmd[@]}}"\n'
+        'run_timed merge_background "${{cmd[@]}}"\n'
+    ).format(detectors=_BG_MERGER_DETECTORS)
 
 
 def create_denoiser(sconfiguration, denoise_version):
-    """Emit run_timed run_denoiser with version and the correct input file.
+    """Emit the denoise2.exe cmd array and run_timed run_denoiser.
 
     Input is gemc.merged.hipo when background was merged, else gemc.hipo.
+    The input file is removed after the denoiser runs.
     """
     if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no':
         input_file = "gemc.merged.hipo"
@@ -25,26 +48,41 @@ def create_denoiser(sconfiguration, denoise_version):
         input_file = "gemc.hipo"
     return (
         '\n# input: {input_file}, output: gemc_denoised.hipo\n'
-        'run_timed run_denoiser "{denoise_version}" "{input_file}"\n'
+        'module load denoise/{denoise_version}\n'
+        'cmd=(denoise2.exe -i {input_file} -o gemc_denoised.hipo -t 1 -l 0.01)\n'
+        'echo "Running Denoiser: ${{cmd[@]}}"\n'
+        'run_timed run_denoiser "${{cmd[@]}}"\n'
+        'rm -f {input_file}\n'
     ).format(denoise_version=denoise_version, input_file=input_file)
 
 
 def create_reconstruction(sconfiguration):
-    """Emit run_timed run_reconstruction passing coatjava version and short yaml path."""
+    """Emit the recon-util cmd array and run_timed run_reconstruction."""
     coatjavav = sconfiguration.coatjavav or "latest"
-    yaml_rel = "coatjava/{}/{}.yaml".format(
-        coatjavav,
-        sconfiguration.configuration or "default",
-    )
+    configuration = sconfiguration.configuration or "default"
     return (
         '\n# input: gemc_denoised.hipo, output: recon.hipo\n'
-        'run_timed run_reconstruction "{coatjavav}" "{yaml_rel}"\n'
-    ).format(coatjavav=coatjavav, yaml_rel=yaml_rel)
+        'module load coatjava/{coatjavav}\n'
+        'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{configuration}.yaml"\n'
+        'cmd=(recon-util\n'
+        '    -y "$yaml"\n'
+        '    -i gemc_denoised.hipo\n'
+        '    -o recon.hipo\n'
+        '    -- -Xmx1920m)\n'
+        'echo "Running Reconstruction: ${{cmd[@]}}"\n'
+        'run_timed run_reconstruction "${{cmd[@]}}"\n'
+        'rm -f gemc_denoised.hipo\n'
+    ).format(coatjavav=coatjavav, configuration=configuration)
 
 
 def create_test_hipo(sconfiguration):
-    """Emit run_timed test_hipo_file."""
-    return '\n# input: recon.hipo\nrun_timed test_hipo_file\n'
+    """Emit the hipo-utils integrity-test cmd array and run_timed test_hipo_file."""
+    return (
+        '\n# input: recon.hipo\n'
+        'cmd=(hipo-utils -test recon.hipo)\n'
+        'echo "Running HIPO Integrity Test: ${cmd[@]}"\n'
+        'run_timed test_hipo_file "${cmd[@]}"\n'
+    )
 
 
 def _output_filename_pattern(sconfiguration, user_submission_id):
@@ -60,16 +98,26 @@ def _output_filename_pattern(sconfiguration, user_submission_id):
 
 
 def create_dst_section(sconfiguration, user_submission_id):
-    """Emit create_dst (which calls get_output_filename internally), or rename
-    recon.hipo for the no-DST case.
+    """Emit the hipo-utils filter cmd array and run_timed create_dst, or rename
+    recon.hipo directly for the no-DST case.
     """
-    string_id = (sconfiguration.string_id or "output").strip('-')
+    string_id   = (sconfiguration.string_id or "output").strip('-')
     output_file = _output_filename_pattern(sconfiguration, user_submission_id)
+
     if sconfiguration.dstOUT == 'yes':
         return (
             '\n# input: recon.hipo, output: {output_file}\n'
-            'run_timed create_dst "{string_id}" "{submission_id}" "$sjob"\n'
-        ).format(output_file=output_file, string_id=string_id, submission_id=user_submission_id)
+            "DST_BANKS='{dst_banks}'\n"
+            'cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)\n'
+            'echo "Running DST Filter: ${{cmd[@]}}"\n'
+            'run_timed create_dst "{string_id}" "{submission_id}" "$sjob" "${{cmd[@]}}"\n'
+        ).format(
+            output_file=output_file,
+            dst_banks=_DST_BANKS,
+            string_id=string_id,
+            submission_id=user_submission_id,
+        )
+
     return (
         '\n# input: recon.hipo, output: {output_file}\n'
         'get_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
@@ -85,8 +133,8 @@ def create_dst_section(sconfiguration, user_submission_id):
 
 def create_write_to_jlab(sconfiguration, user_submission_id):
     """Emit run_timed write_to_jlab with username, string_id, submission_id, sjob."""
-    username = sconfiguration.username or "unknown"
-    string_id = (sconfiguration.string_id or "output").strip('-')
+    username    = sconfiguration.username or "unknown"
+    string_id   = (sconfiguration.string_id or "output").strip('-')
     output_file = _output_filename_pattern(sconfiguration, user_submission_id)
     destination = "osdf:///jlab-osdf/clas12/volatile/osg/{}/{}/{}".format(
         username, user_submission_id, output_file

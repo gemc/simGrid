@@ -15,81 +15,89 @@ def _vertex_value(raw, vertex_choice):
 
 
 def create_run_gemc(sconfiguration):
-    """Generate the run_timed run_gemc call for nodescript.sh.
+    """Generate the run_gemc section for nodescript.sh.
 
-    Args:
-        sconfiguration: SConfiguration instance.
-
-    Returns:
-        str: bash snippet.
+    Emits: module load, gcard env var, the full cmd array with every gemc
+    argument, an echo of the command, and run_timed run_gemc "${cmd[@]}".
+    This makes the exact command visible and reproducible in the nodescript.
     """
-    # Type-2 (lund-file) jobs often omit nevents; default to 5000.
     nevents       = sconfiguration.nevents or "5000"
     generator     = sconfiguration.generator or ""
     vertex_choice = sconfiguration.vertex_choice or "0"
-    gcard = "gemc/{}/{}.gcard".format(
-        sconfiguration.gemcv or "latest",
-        sconfiguration.configuration or "default",
-    )
+    configuration = sconfiguration.configuration or "default"
+    gemcv         = sconfiguration.gemcv or "latest"
 
-    # Determine -INPUT_GEN_FILE value and the human-readable input label for the comment
+    # Determine input file and its label for the comment
     if sconfiguration.type == '2':
         input_gen_file = "lund, lund.dat"
-        input_label = "lund.dat"
+        input_label    = "lund.dat"
     elif generator == 'gemc':
         input_gen_file = ""
-        input_label = "internal generator"
+        input_label    = "internal generator"
     else:
-        dat_file = generator + ".dat"
+        dat_file       = generator + ".dat"
         input_gen_file = "lund, {}".format(dat_file)
-        input_label = dat_file
+        input_label    = dat_file
 
     # Additional GEMC options for gemc-internal generator
-    genoptions = ""
+    genopts_args = []
     if generator == 'gemc':
         raw = (sconfiguration.genOptions or "").strip()
-        # Remove inter-option commas left by the old generator format, e.g.
-        # -BEAM_P="...", -SPREAD_P  →  -BEAM_P="..." -SPREAD_P
         raw = _INTER_OPT_COMMA_RE.sub(r'\1 \2', raw)
-        # Ensure double quotes are balanced (the DB value sometimes omits the
-        # closing quote on the last option).
         if raw.count('"') % 2 != 0:
             raw += '"'
-        # Normalise to single quotes so they can be safely embedded inside a
-        # bash double-quoted argument without breaking shell quoting.
-        genoptions = raw.replace('"', "'")
+        raw = raw.replace('"', "'")
+        if raw:
+            import shlex
+            for opt in shlex.split(raw):
+                # Re-quote opts that contain spaces or commas
+                if any(c in opt for c in ' ,'):
+                    genopts_args.append('"{}"'.format(opt))
+                else:
+                    genopts_args.append(opt)
 
-    zposition  = _vertex_value(sconfiguration.zposition, vertex_choice)
-    beam_spot  = _vertex_value(sconfiguration.beam,      vertex_choice)
-    raster     = _vertex_value(sconfiguration.raster,    vertex_choice)
+    zposition      = _vertex_value(sconfiguration.zposition, vertex_choice)
+    beam_spot      = _vertex_value(sconfiguration.beam,      vertex_choice)
+    raster         = _vertex_value(sconfiguration.raster,    vertex_choice)
     torus_scale    = sconfiguration.torus    or "1.00"
     solenoid_scale = sconfiguration.solenoid or "1.00"
 
-    gemcv = sconfiguration.gemcv or "latest"
+    # Build the cmd array elements
+    args = [
+        'gemc',
+        '-USE_GUI=0',
+        '-NGENP=100',
+        '-N={}'.format(nevents),
+        '"$gcard"',
+    ]
+
+    if input_gen_file:
+        args.append('"-INPUT_GEN_FILE={}"'.format(input_gen_file))
+
+    args.extend(genopts_args)
+
+    if zposition  != 'n/a':
+        args.append('"-RANDOMIZE_LUND_VZ={}"'.format(zposition))
+    if beam_spot  != 'n/a':
+        args.append('"-BEAM_SPOT={}"'.format(beam_spot))
+    if raster     != 'n/a':
+        args.append('"-RASTER_VERTEX={}"'.format(raster))
+
+    args.extend([
+        '"-SCALE_FIELD=binary_torus,    {}"'.format(torus_scale),
+        '"-SCALE_FIELD=binary_solenoid, {}"'.format(solenoid_scale),
+        '"-OUTPUT=hipo, gemc.hipo"',
+        '"-INTEGRATEDRAW=*"',
+    ])
+
+    cmd_body = ''.join('    {}\n'.format(a) for a in args)
 
     return (
         '\n# input: {input_label}, output: gemc.hipo\n'
-        'run_timed run_gemc'
-        ' "{gemcv}"'
-        ' "{gcard}"'
-        ' "{nevents}"'
-        ' "{input_gen_file}"'
-        ' "{genoptions}"'
-        ' "{zposition}"'
-        ' "{beam_spot}"'
-        ' "{raster}"'
-        ' "{torus_scale}"'
-        ' "{solenoid_scale}"\n'
-    ).format(
-        input_label=input_label,
-        gemcv=gemcv,
-        gcard=gcard,
-        nevents=nevents,
-        input_gen_file=input_gen_file,
-        genoptions=genoptions,
-        zposition=zposition,
-        beam_spot=beam_spot,
-        raster=raster,
-        torus_scale=torus_scale,
-        solenoid_scale=solenoid_scale,
+        'module load gemc/{gemcv}\n'
+        'gcard="${{CLAS12_CONFIG}}/gemc/{gemcv}/{configuration}.gcard"\n'
+    ).format(input_label=input_label, gemcv=gemcv, configuration=configuration) + (
+        'cmd=(\n' + cmd_body + ')\n'
+        'echo "Running GEMC: ${cmd[@]}"\n'
+        'run_timed run_gemc "${cmd[@]}"\n'
     )
