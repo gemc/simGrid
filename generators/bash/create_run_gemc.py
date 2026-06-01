@@ -93,7 +93,8 @@ def create_run_gemc(sconfiguration):
     cmd_body = ''.join('    {}\n'.format(a) for a in args)
 
     return (
-        '\n# input: {input_label}, output: gemc.hipo\n'
+        '\n# Running GEMC\n'
+        '# input: {input_label}, output: gemc.hipo\n'
         'module load gemc/{gemcv}\n'
         'gcard="${{CLAS12_CONFIG}}/gemc/{gemcv}/{configuration}.gcard"\n'
     ).format(input_label=input_label, gemcv=gemcv, configuration=configuration) + (

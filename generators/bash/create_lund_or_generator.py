@@ -32,7 +32,8 @@ def create_lund_or_generator(sconfiguration):
     cmd_line = 'cmd=(' + ' '.join(cmd_args) + ')'
 
     return (
-        '\nmodule load mcgen/{mcgenv}\n'
+        '\n# Running Generator\n'
+        'module load mcgen/{mcgenv}\n'
         'generate-seeds.py generate\n'
         'seed=$(generate-seeds.py read --row 1)\n'
     ).format(mcgenv=mcgenv) + (

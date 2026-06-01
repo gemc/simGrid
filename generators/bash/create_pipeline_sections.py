@@ -25,7 +25,8 @@ def create_merge_background(sconfiguration):
     if not sconfiguration.bkmerging or sconfiguration.bkmerging == 'no':
         return 'echo "Background merging not requested — skipping."\n'
     return (
-        '\n# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\n'
+        '\n# Background Merging\n'
+        '# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -47,7 +48,8 @@ def create_denoiser(sconfiguration, denoise_version):
     else:
         input_file = "gemc.hipo"
     return (
-        '\n# input: {input_file}, output: gemc_denoised.hipo\n'
+        '\n# Running Denoiser\n'
+        '# input: {input_file}, output: gemc_denoised.hipo\n'
         'module load denoise/{denoise_version}\n'
         'cmd=(denoise2.exe -i {input_file} -o gemc_denoised.hipo -t 1 -l 0.01)\n'
         'echo "Running Denoiser: ${{cmd[@]}}"\n'
@@ -61,7 +63,8 @@ def create_reconstruction(sconfiguration):
     coatjavav = sconfiguration.coatjavav or "latest"
     configuration = sconfiguration.configuration or "default"
     return (
-        '\n# input: gemc_denoised.hipo, output: recon.hipo\n'
+        '\n# Running Reconstruction\n'
+        '# input: gemc_denoised.hipo, output: recon.hipo\n'
         'module load coatjava/{coatjavav}\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{configuration}.yaml"\n'
         'cmd=(recon-util\n'
