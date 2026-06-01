@@ -104,7 +104,8 @@ def main(argv=None):
 
     args = build_parser().parse_args(argv)
 
-    # Step 1: capacity check — requires htcondor2, only available on the submit node.
+    print("\nStep 1: Capacity check")
+    # requires htcondor2, only available on the submit node.
     try:
         from condor_io.htcondor_utils import is_under_job_limit
         if not is_under_job_limit(DEFAULT_OWNER, max_jobs=args.max_submitted_jobs):
@@ -124,7 +125,7 @@ def main(argv=None):
             "Skipping job capacity check.",
         ])
 
-    # Step 2: fetch job from DB.
+    print("\nStep 2: Fetch job from the database")
     try:
         from db_io.database import Database, print_job
     except ImportError:
@@ -147,11 +148,13 @@ def main(argv=None):
     print(label)
     print_job(row)
 
-    # Step 3: build SConfiguration from scard; backfill username from the DB row.
+    print("\nStep 3: Parse submission card")
+    # build SConfiguration from scard; backfill username from the DB row.
     scard = SConfiguration.from_string(row['scard'])
     scard.username = row['user']
 
-    # Step 3a: mark the job as Processing so it is not picked up by a concurrent run.
+    print("\nStep 3a: Mark job as Processing")
+    # mark the job as Processing so it is not picked up by a concurrent run.
     if not args.test:
         with Database(database_name=db_name) as db:
             db.execute(
@@ -162,14 +165,16 @@ def main(argv=None):
     else:
         print("TEST MODE: skipping status update to '{}'.".format(PROCESSING))
 
-    # Step 3b: create staging directory ~/osgOutput/<username>/job_<id>/
+    print("\nStep 3b: Create staging directory")
+    # create staging directory ~/osgOutput/<username>/job_<id>/
     username          = scard.username or "unknown"
     user_submission_id = row['user_submission_id']
     job_dir           = _job_dir(username, user_submission_id)
     os.makedirs(os.path.join(job_dir, "log"), exist_ok=True)
     print("Staging directory: {}".format(job_dir))
 
-    # Step 4: for type-2 (lund) submissions, validate the lund location and write lund_files.
+    print("\nStep 4: Stage lund files" if scard.type == '2' else "\nStep 4: Stage lund files — skipped (type-1 submission)")
+    # for type-2 (lund) submissions, validate the lund location and write lund_files.
     if scard.type == '2':
         lund_location = scard.generator or ""
         if not lund_location.startswith('/volatile/clas12/'):
@@ -187,7 +192,7 @@ def main(argv=None):
             print("Error: no lund files found at {!r}.".format(lund_location))
             return 1
 
-    # Step 5: build condor submit file and write to staging directory.
+    print("\nStep 5: Generate HTCondor submit file")
     from generators.condor.generate_condor_card import generate_condor_card
     condor_card = generate_condor_card(scard, user_submission_id=user_submission_id,
                                        target_site=args.target_site, devel=args.devel)
@@ -200,7 +205,7 @@ def main(argv=None):
         f.write(condor_card)
     print("Wrote: {}".format(condor_path))
 
-    # Step 6: build bash node execution script and write to staging directory.
+    print("\nStep 6: Generate nodescript.sh and stage scripts")
     from generators.bash.generate_nodescript import generate_nodescript
     nodescript_path = generate_nodescript(
         scard,
@@ -226,7 +231,7 @@ def main(argv=None):
     )
     print("Staged scripts to {}.".format(job_dir))
 
-    # TODO: step 7 — condor_submit clas12.condor from job_dir
+    print("\nStep 7: Submit to HTCondor — not yet implemented")
 
     return 0
 
