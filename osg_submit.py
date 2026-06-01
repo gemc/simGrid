@@ -127,7 +127,7 @@ def main(argv=None):
 
     print("\nStep 2: Fetch job from the database")
     try:
-        from db_io.database import Database, print_job
+        from db_io.database import Database, print_job, current_timestamp
     except ImportError:
         print("pymysql not available — cannot query database.")
         return 1
@@ -257,10 +257,10 @@ def main(argv=None):
     print(result.stdout)
     with Database(database_name=db_name) as db:
         db.execute(
-            "UPDATE submissions SET run_status = %s WHERE user_submission_id = %s",
-            [SUBMITTED, user_submission_id],
+            "UPDATE submissions SET run_status = %s, server_time = %s WHERE user_submission_id = %s",
+            [SUBMITTED, current_timestamp(), user_submission_id],
         )
-    print("Status → '{}'.".format(SUBMITTED))
+    print("Status → '{}', server_time recorded.".format(SUBMITTED))
 
     return 0
 
