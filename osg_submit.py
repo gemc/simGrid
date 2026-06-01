@@ -232,12 +232,27 @@ def main(argv=None):
     )
     print("Staged scripts to {}.".format(job_dir))
 
+    # Step 6a: save generated scripts to the DB for later inspection.
+    if not args.test:
+        with open(nodescript_path) as f:
+            nodescript_text = f.read()
+        with Database(database_name=db_name) as db:
+            db.execute(
+                "UPDATE submissions SET runscript_text = %s, clas12_condor_text = %s"
+                " WHERE user_submission_id = %s",
+                [nodescript_text, condor_card, user_submission_id],
+            )
+        print("Saved runscript_text and clas12_condor_text to DB.")
+    else:
+        print("TEST MODE: skipping DB script storage.")
+
     print("\nStep 7: Submit to HTCondor")
     if args.test:
         print("TEST MODE: skipping condor_submit.")
         return 0
 
     import subprocess
+    import re
     result = subprocess.run(
         ["condor_submit", "clas12.condor"],
         cwd=job_dir,
@@ -255,12 +270,22 @@ def main(argv=None):
         return 1
 
     print(result.stdout)
+
+    cluster_id = None
+    m = re.search(r"submitted to cluster\s+(\d+)", result.stdout, re.IGNORECASE)
+    if m:
+        cluster_id = int(m.group(1))
+        print("HTCondor cluster ID: {}".format(cluster_id))
+    else:
+        print("Warning: could not parse cluster ID from condor_submit output.")
+
     with Database(database_name=db_name) as db:
         db.execute(
-            "UPDATE submissions SET run_status = %s, server_time = %s WHERE user_submission_id = %s",
-            [SUBMITTED, current_timestamp(), user_submission_id],
+            "UPDATE submissions SET run_status = %s, server_time = %s, pool_node = %s"
+            " WHERE user_submission_id = %s",
+            [SUBMITTED, current_timestamp(), cluster_id, user_submission_id],
         )
-    print("Status → '{}', server_time recorded.".format(SUBMITTED))
+    print("Status → '{}', server_time and pool_node recorded.".format(SUBMITTED))
 
     return 0
 
