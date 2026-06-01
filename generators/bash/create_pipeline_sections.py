@@ -11,7 +11,7 @@ def create_merge_background(sconfiguration):
     """Emit run_timed merge_background only when bkmerging is requested."""
     if not sconfiguration.bkmerging or sconfiguration.bkmerging == 'no':
         return 'echo "Background merging not requested — skipping."\n'
-    return '\nrun_timed merge_background\n'
+    return '\n# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\nrun_timed merge_background\n'
 
 
 def create_denoiser(sconfiguration, denoise_version):
@@ -23,10 +23,10 @@ def create_denoiser(sconfiguration, denoise_version):
         input_file = "gemc.merged.hipo"
     else:
         input_file = "gemc.hipo"
-    return '\nrun_timed run_denoiser "{denoise_version}" "{input_file}"\n'.format(
-        denoise_version=denoise_version,
-        input_file=input_file,
-    )
+    return (
+        '\n# input: {input_file}, output: gemc_denoised.hipo\n'
+        'run_timed run_denoiser "{denoise_version}" "{input_file}"\n'
+    ).format(denoise_version=denoise_version, input_file=input_file)
 
 
 def create_reconstruction(sconfiguration):
@@ -36,15 +36,27 @@ def create_reconstruction(sconfiguration):
         coatjavav,
         sconfiguration.configuration or "default",
     )
-    return '\nrun_timed run_reconstruction "{coatjavav}" "{yaml_rel}"\n'.format(
-        coatjavav=coatjavav,
-        yaml_rel=yaml_rel,
-    )
+    return (
+        '\n# input: gemc_denoised.hipo, output: recon.hipo\n'
+        'run_timed run_reconstruction "{coatjavav}" "{yaml_rel}"\n'
+    ).format(coatjavav=coatjavav, yaml_rel=yaml_rel)
 
 
 def create_test_hipo(sconfiguration):
     """Emit run_timed test_hipo_file."""
-    return '\nrun_timed test_hipo_file\n'
+    return '\n# input: recon.hipo\nrun_timed test_hipo_file\n'
+
+
+def _output_filename_pattern(sconfiguration, user_submission_id):
+    """Return the output filename pattern with bash-variable placeholders for runtime parts.
+
+    Type-1 (generator): <string_id>-<submission_id>-$sjob.hipo
+    Type-2 (lund):      <string_id>-$lund_base-<submission_id>-$sjob.hipo
+    """
+    string_id = (sconfiguration.string_id or "output").strip('-')
+    if sconfiguration.type == '2':
+        return "{}-$lund_base-{}-$sjob.hipo".format(string_id, user_submission_id)
+    return "{}-{}-$sjob.hipo".format(string_id, user_submission_id)
 
 
 def create_dst_section(sconfiguration, user_submission_id):
@@ -52,16 +64,19 @@ def create_dst_section(sconfiguration, user_submission_id):
     recon.hipo for the no-DST case.
     """
     string_id = (sconfiguration.string_id or "output").strip('-')
+    output_file = _output_filename_pattern(sconfiguration, user_submission_id)
     if sconfiguration.dstOUT == 'yes':
-        return '\nrun_timed create_dst "{string_id}" "{submission_id}" "$sjob"\n'.format(
-            string_id=string_id,
-            submission_id=user_submission_id,
-        )
+        return (
+            '\n# input: recon.hipo, output: {output_file}\n'
+            'run_timed create_dst "{string_id}" "{submission_id}" "$sjob"\n'
+        ).format(output_file=output_file, string_id=string_id, submission_id=user_submission_id)
     return (
-        '\nget_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
+        '\n# input: recon.hipo, output: {output_file}\n'
+        'get_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
         'echo "DST not requested (dstOUT={dstOUT}) — renaming recon.hipo to $OUTPUT_FILE"\n'
         'mv recon.hipo "$OUTPUT_FILE"\n'
     ).format(
+        output_file=output_file,
         string_id=string_id,
         submission_id=user_submission_id,
         dstOUT=sconfiguration.dstOUT or "no",
@@ -72,9 +87,20 @@ def create_write_to_jlab(sconfiguration, user_submission_id):
     """Emit run_timed write_to_jlab with username, string_id, submission_id, sjob."""
     username = sconfiguration.username or "unknown"
     string_id = (sconfiguration.string_id or "output").strip('-')
+    output_file = _output_filename_pattern(sconfiguration, user_submission_id)
+    destination = "osdf:///jlab-osdf/clas12/volatile/osg/{}/{}/{}".format(
+        username, user_submission_id, output_file
+    )
     return (
-        '\nrun_timed write_to_jlab "{username}" "{string_id}" "{submission_id}" "$sjob"\n'
-    ).format(username=username, string_id=string_id, submission_id=user_submission_id)
+        '\n# input: {output_file}, output: {destination}\n'
+        'run_timed write_to_jlab "{username}" "{string_id}" "{submission_id}" "$sjob"\n'
+    ).format(
+        output_file=output_file,
+        destination=destination,
+        username=username,
+        string_id=string_id,
+        submission_id=user_submission_id,
+    )
 
 
 def create_gemc_only_section(sconfiguration, user_submission_id):

@@ -32,14 +32,17 @@ def create_run_gemc(sconfiguration):
         sconfiguration.configuration or "default",
     )
 
-    # Determine -INPUT_GEN_FILE value
+    # Determine -INPUT_GEN_FILE value and the human-readable input label for the comment
     if sconfiguration.type == '2':
         input_gen_file = "lund, lund.dat"
+        input_label = "lund.dat"
     elif generator == 'gemc':
         input_gen_file = ""
+        input_label = "internal generator"
     else:
         dat_file = generator + ".dat"
         input_gen_file = "lund, {}".format(dat_file)
+        input_label = dat_file
 
     # Additional GEMC options for gemc-internal generator
     genoptions = ""
@@ -65,7 +68,8 @@ def create_run_gemc(sconfiguration):
     gemcv = sconfiguration.gemcv or "latest"
 
     return (
-        '\nrun_timed run_gemc'
+        '\n# input: {input_label}, output: gemc.hipo\n'
+        'run_timed run_gemc'
         ' "{gemcv}"'
         ' "{gcard}"'
         ' "{nevents}"'
@@ -77,6 +81,7 @@ def create_run_gemc(sconfiguration):
         ' "{torus_scale}"'
         ' "{solenoid_scale}"\n'
     ).format(
+        input_label=input_label,
         gemcv=gemcv,
         gcard=gcard,
         nevents=nevents,

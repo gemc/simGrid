@@ -19,7 +19,13 @@ def create_preamble(sconfiguration, user_submission_id):
             "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
             "#   2. lundFile         — OSDF URI of the lund input file\n"
         )
-        arg_parse = "sjob=$1\nlundFile=$2\n"
+        arg_parse = (
+            'sjob=$1\n'
+            'lundFile=$2\n'
+            'lund_base="${lundFile##*/}"\n'
+            'lund_base="${lund_base%.*}"\n'
+            '# lund_base is the lund filename without path or extension (e.g. lund1 from osdf://.../lund1.dat)\n'
+        )
     else:
         arg_invocation = "./nodescript.sh <sjob>"
         arg_doc        = "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
