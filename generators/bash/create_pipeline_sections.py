@@ -24,9 +24,11 @@ def create_merge_background(sconfiguration):
     """Emit the bg-merger cmd array and run_timed merge_background."""
     if not sconfiguration.bkmerging or sconfiguration.bkmerging == 'no':
         return 'echo "Background merging not requested — skipping."\n'
+    coatjavav = sconfiguration.coatjavav or "latest"
     return (
         '\n# Background Merging\n'
         'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
+        'module load coatjava/{coatjavav}\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -34,7 +36,7 @@ def create_merge_background(sconfiguration):
         "    -d '{detectors}')\n"
         'echo "Running Background Merger: ${{cmd[@]}}"\n'
         'run_timed merge_background "${{cmd[@]}}"\n'
-    ).format(detectors=_BG_MERGER_DETECTORS)
+    ).format(coatjavav=coatjavav, detectors=_BG_MERGER_DETECTORS)
 
 
 def create_denoiser(sconfiguration, denoise_version):

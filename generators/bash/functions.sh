@@ -57,6 +57,7 @@ run_timed() {
         echo "$_HR"
         echo "Completed ${fn} in $(( t_end - t_start ))s  ($(date))"
         echo "${fn} failed"
+        cleanup_on_error
         exit $rc
     fi
     _TIMING_STATUS+=("ok")
@@ -71,6 +72,14 @@ run_timed() {
         rm -f *.hipo *.evio *.sqlite
         exit $EC_LS_STAT
     }
+}
+
+# ── cleanup_on_error ─────────────────────────────────────────────────────────
+# Remove intermediate simulation files after any pipeline step failure.
+# Called automatically by run_timed when a step exits non-zero.
+cleanup_on_error() {
+    echo "Cleaning up intermediate files after error"
+    rm -f *.hipo bg_merge_bk_file.sh random-seeds.txt RNDMSTATUS
 }
 
 # ── print_timing_summary ──────────────────────────────────────────────────────
