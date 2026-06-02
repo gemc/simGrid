@@ -64,7 +64,8 @@ run_timed() {
     echo "$_HR"
     echo "Completed ${fn} in $(( t_end - t_start ))s  ($(date))"
     echo
-    ls -l || {
+    echo "Check Filesystem Integrity"
+    ls -l > /dev/null || {
         echo "ls failure"
         echo "removing data files and exiting"
         rm -f *.hipo *.evio *.sqlite
@@ -175,7 +176,6 @@ setup_container_environment() {
     module unload mcgen
 
     module load sqlite/"$gemc_version"
-    module avail
     export RCDB_CONNECTION=mysql://null
 
     echo "SQLITE Version: ${gemc_version}"
@@ -367,9 +367,6 @@ write_to_jlab() {
     local username="$1"
     get_output_filename "$2" "$3" "$4"
     local submission_id="$3"
-
-    echo "pelican ls for ${username}:"
-    pelican object ls "osdf:///jlab-osdf/clas12/volatile/osg/${username}"
 
     local -a cmd=(
         /usr/bin/pelican -d object put "${OUTPUT_FILE}"

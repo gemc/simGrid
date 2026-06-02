@@ -94,7 +94,7 @@ def create_run_gemc(sconfiguration):
 
     return (
         '\n# Running GEMC\n'
-        '# input: {input_label}, output: gemc.hipo\n'
+        'echo "input: {input_label}, output: gemc.hipo"\n'
         'module load gemc/{gemcv}\n'
         'gcard="${{CLAS12_CONFIG}}/gemc/{gemcv}/{configuration}.gcard"\n'
     ).format(input_label=input_label, gemcv=gemcv, configuration=configuration) + (

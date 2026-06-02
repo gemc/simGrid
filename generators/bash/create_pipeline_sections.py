@@ -26,7 +26,7 @@ def create_merge_background(sconfiguration):
         return 'echo "Background merging not requested — skipping."\n'
     return (
         '\n# Background Merging\n'
-        '# input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo\n'
+        'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -49,7 +49,7 @@ def create_denoiser(sconfiguration, denoise_version):
         input_file = "gemc.hipo"
     return (
         '\n# Running Denoiser\n'
-        '# input: {input_file}, output: gemc_denoised.hipo\n'
+        'echo "input: {input_file}, output: gemc_denoised.hipo"\n'
         'module load denoise/{denoise_version}\n'
         'cmd=(denoise2.exe -i {input_file} -o gemc_denoised.hipo -t 1 -l 0.01)\n'
         'echo "Running Denoiser: ${{cmd[@]}}"\n'
@@ -64,7 +64,7 @@ def create_reconstruction(sconfiguration):
     configuration = sconfiguration.configuration or "default"
     return (
         '\n# Running Reconstruction\n'
-        '# input: gemc_denoised.hipo, output: recon.hipo\n'
+        'echo "input: gemc_denoised.hipo, output: recon.hipo"\n'
         'module load coatjava/{coatjavav}\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{configuration}.yaml"\n'
         'cmd=(recon-util\n'
@@ -81,7 +81,7 @@ def create_reconstruction(sconfiguration):
 def create_test_hipo(sconfiguration):
     """Emit the hipo-utils integrity-test cmd array and run_timed test_hipo_file."""
     return (
-        '\n# input: recon.hipo\n'
+        '\necho "input: recon.hipo"\n'
         'cmd=(hipo-utils -test recon.hipo)\n'
         'echo "Running HIPO Integrity Test: ${cmd[@]}"\n'
         'run_timed test_hipo_file "${cmd[@]}"\n'
@@ -109,7 +109,7 @@ def create_dst_section(sconfiguration, user_submission_id):
 
     if sconfiguration.dstOUT == 'yes':
         return (
-            '\n# input: recon.hipo, output: {output_file}\n'
+            '\necho "input: recon.hipo, output: {output_file}"\n'
             "DST_BANKS='{dst_banks}'\n"
             'cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)\n'
             'echo "Running DST Filter: ${{cmd[@]}}"\n'
@@ -122,7 +122,7 @@ def create_dst_section(sconfiguration, user_submission_id):
         )
 
     return (
-        '\n# input: recon.hipo, output: {output_file}\n'
+        '\necho "input: recon.hipo, output: {output_file}"\n'
         'get_output_filename "{string_id}" "{submission_id}" "$sjob"\n'
         'echo "DST not requested (dstOUT={dstOUT}) — renaming recon.hipo to $OUTPUT_FILE"\n'
         'mv recon.hipo "$OUTPUT_FILE"\n'
@@ -143,7 +143,7 @@ def create_write_to_jlab(sconfiguration, user_submission_id):
         username, user_submission_id, output_file
     )
     return (
-        '\n# input: {output_file}, output: {destination}\n'
+        '\necho "input: {output_file}, output: {destination}"\n'
         'run_timed write_to_jlab "{username}" "{string_id}" "{submission_id}" "$sjob"\n'
     ).format(
         output_file=output_file,

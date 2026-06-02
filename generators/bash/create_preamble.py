@@ -46,8 +46,10 @@ set -euo pipefail
 {arg_parse}
 # Create the output directory, copy all staged files into it, and run there
 # so every output file lands where HTCondor's transfer_output_files expects it.
+# Use *.* to match only files with an extension, excluding HTCondor's own
+# _condor_stderr and _condor_stdout capture files created before the job starts.
 mkdir -p output
-{{ cp -- * output/ 2>/dev/null; }} || true
+{{ cp -- *.* output/ 2>/dev/null; }} || true
 cd output
 
 # Source shared bash functions (run_timed, container_environment, define_exit_codes).

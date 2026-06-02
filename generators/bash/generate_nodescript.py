@@ -81,8 +81,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 
         (
             '\n# $BG_FILE is a randomly selected background file, e.g. 00042.hipo\n'
-            '# input: osdf:///jlab-osdf/clas12/osgpool/backgroundfiles'
-            '/{configuration}/{fields}/{bkmerging}/10k/$BG_FILE, output: $BG_FILE\n'
+            'echo "input: osdf:///jlab-osdf/clas12/osgpool/backgroundfiles'
+            '/{configuration}/{fields}/{bkmerging}/10k/$BG_FILE, output: $BG_FILE"\n'
             'run_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'
         ).format(
             configuration=sconfiguration.configuration or "",
