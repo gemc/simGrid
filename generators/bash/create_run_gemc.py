@@ -83,6 +83,9 @@ def create_run_gemc(sconfiguration):
     if raster     != 'n/a':
         args.append('"-RASTER_VERTEX={}"'.format(raster))
 
+    if sconfiguration.runs:
+        args.append('-RUNNO={}'.format(sconfiguration.runs))
+
     args.extend([
         '"-SCALE_FIELD=binary_torus,    {}"'.format(torus_scale),
         '"-SCALE_FIELD=binary_solenoid, {}"'.format(solenoid_scale),

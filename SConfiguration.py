@@ -55,6 +55,7 @@ class SConfiguration():
 		self.string_id     = None
 		self.output_type   = None
 		self.submission    = None
+		self.runs          = None
 		self.gemcv         = None
 		self.coatjavav     = None
 		self.mcgenv        = None
@@ -170,6 +171,7 @@ class SConfiguration():
 			('string_id',     self.string_id),
 			('output_type',   self.output_type),
 			('submission',    self.submission),
+			('runs',          self.runs),
 		]
 		extra = [(k, v) for k, v in self._extra.items()]
 		all_fields = known + extra
