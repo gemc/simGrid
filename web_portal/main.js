@@ -37,6 +37,12 @@ function formatAgeDays(value) {
 	return num.toFixed(2);
 }
 
+function _padEnd(str, len) {
+	str = String(str);
+	while (str.length < len) str += " ";
+	return str;
+}
+
 function genSelected(val) {
 	var generator = document.getElementById("generator").value;
 
@@ -135,21 +141,130 @@ function fieldSelected() {
 		if (this.readyState == 4 && this.status == 200) {
 			var myObj = JSON.parse(this.responseText);
 
-			if (selected_experiment in myObj) {
+			var runs = (selected_experiment in myObj) ? myObj[selected_experiment].runs : null;
+			var hasRuns = runs && typeof runs === "object" && !Array.isArray(runs) && Object.keys(runs).length > 0;
 
-				var keys_field = Object.keys(myObj[selected_experiment]);
+			var fieldsRow = document.getElementById("fields-row");
+			var runsRow   = document.getElementById("runs-row");
 
-				for (key in keys_field) {
-					if (keys_field[key].includes("tor")) {
-						text += "<option value=\"" + keys_field[key] + "\">" + keys_field[key] + "</option>";
+			var userRunsRow = document.getElementById("user-runs-row");
+
+			if (hasRuns) {
+				if (fieldsRow)    fieldsRow.style.display    = "none";
+				if (runsRow)      runsRow.style.display      = "";
+				if (userRunsRow)  userRunsRow.style.display  = "";
+
+				var runKeys = Object.keys(runs);
+
+				// Pass 1: compute column widths for monospace alignment
+				var wRn = 0, wTitle = 0, wTarget = 0, wCurrent = 0, wEnergy = 0, wTor = 0, wSol = 0, wLw = 0;
+				for (var i = 0; i < runKeys.length; i++) {
+					var ri = runs[runKeys[i]];
+					wRn      = Math.max(wRn,      String(runKeys[i]).length);
+					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
+					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
+					wCurrent = Math.max(wCurrent, String(ri.beam_current || "").length);
+					wEnergy  = Math.max(wEnergy,  String(ri.beam_energy  || "").length);
+					wTor     = Math.max(wTor,     String(ri.torus        || "").length);
+					wSol     = Math.max(wSol,     String(ri.solenoid     || "").length);
+					wLw      = Math.max(wLw,      Number(ri.lumi_weight  ||  0).toFixed(2).length);
+				}
+
+				// Pass 2: build padded option labels
+				var runsText = "<option value=\"\" selected hidden>— select a run —</option>";
+				for (var i = 0; i < runKeys.length; i++) {
+					var rn = runKeys[i];
+					var r  = runs[rn];
+					var lw = Number(r.lumi_weight || 0).toFixed(2);
+					var label = "Run "   + _padEnd(rn,                   wRn)
+						+ "  " + _padEnd(r.title        || "", wTitle)
+						+ "  " + _padEnd(r.target       || "", wTarget)
+						+ "  " + _padEnd(r.beam_current || "", wCurrent)
+						+ "  " + _padEnd(r.beam_energy  || "", wEnergy)
+						+ "  tor" + _padEnd(r.torus     || "", wTor)
+						+ "  sol" + _padEnd(r.solenoid  || "", wSol)
+						+ "  lw=" + lw;
+					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
+				}
+				var runDropdown = document.getElementById("run_number");
+				runDropdown.innerHTML  = runsText;
+				runDropdown.disabled   = false;
+
+				var userRuns = document.getElementById("user_runs");
+				if (userRuns) {
+					userRuns.value    = "";
+					userRuns.disabled = false;
+				}
+
+				// Set default fields from first run so bkmerging works even before selection
+				var firstRun = runs[runKeys[0]];
+				var fieldKey = "tor" + firstRun.torus + "_sol" + firstRun.solenoid;
+				document.getElementById("fields").innerHTML =
+					"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
+				bkmergingSelected();
+			} else {
+				if (fieldsRow)    fieldsRow.style.display    = "";
+				if (runsRow)      runsRow.style.display      = "none";
+				if (userRunsRow)  userRunsRow.style.display  = "none";
+
+				if (selected_experiment in myObj) {
+					var keys_field = Object.keys(myObj[selected_experiment]);
+					for (var key in keys_field) {
+						if (keys_field[key].includes("tor")) {
+							text += "<option value=\"" + keys_field[key] + "\">" + keys_field[key] + "</option>";
+						}
 					}
 				}
+				document.getElementById("fields").innerHTML = text;
 			}
-			document.getElementById("fields").innerHTML = text;
 		}
 	};
 	xmlhttp.open("GET", "data/setup.json", true);
 	xmlhttp.send();
+}
+
+
+function runSelected() {
+	var selected_experiment = document.getElementById("configuration").value;
+	var run_number = document.getElementById("run_number").value;
+	if (!run_number) return;
+
+	// Dropdown active: disable and clear the text field
+	var userRuns = document.getElementById("user_runs");
+	if (userRuns) {
+		userRuns.value    = "";
+		userRuns.disabled = true;
+	}
+
+	var xmlhttp = new XMLHttpRequest();
+	xmlhttp.onreadystatechange = function () {
+		if (this.readyState == 4 && this.status == 200) {
+			var myObj = JSON.parse(this.responseText);
+			var runs  = (selected_experiment in myObj) ? myObj[selected_experiment].runs : null;
+			if (runs && run_number in runs) {
+				var r        = runs[run_number];
+				var fieldKey = "tor" + r.torus + "_sol" + r.solenoid;
+				document.getElementById("fields").innerHTML =
+					"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
+				bkmergingSelected();
+			}
+		}
+	};
+	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.send();
+}
+
+
+function userRunsInput(el) {
+	var runDropdown = document.getElementById("run_number");
+	if (el.value.trim() !== "") {
+		// Text field active: reset dropdown to placeholder and disable it
+		runDropdown.selectedIndex = 0;
+		runDropdown.disabled      = true;
+	} else {
+		// Text cleared: re-enable dropdown
+		runDropdown.disabled = false;
+	}
 }
 
 

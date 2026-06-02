@@ -27,10 +27,26 @@
 					</select>
 				</td>
 			</tr>
-			<tr>
+			<tr id="fields-row">
 				<td>Magnetic Fields</td>
 				<td>
 					<select name="fields" id="fields" required onchange="bkmergingSelected()"></select>
+				</td>
+			</tr>
+			<tr id="runs-row" style="display:none">
+				<td>Run</td>
+				<td>
+					<select name="run_number" id="run_number" onchange="runSelected()"
+						style="font-family: monospace; font-size: 0.9em;"></select>
+				</td>
+			</tr>
+			<tr id="user-runs-row" style="display:none">
+				<td></td>
+				<td>
+					<em style="font-size:0.9em; color:#666;">or enter run numbers manually (comma-separated):</em><br>
+					<input type="text" name="user_runs" id="user_runs"
+						   placeholder="e.g. 18300, 18301, 18302" size="40"
+						   oninput="userRunsInput(this)">
 				</td>
 			</tr>
 			<tr>
