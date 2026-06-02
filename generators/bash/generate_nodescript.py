@@ -80,9 +80,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         "run_timed setup_pelican\n",
 
         (
-            '\n# $BG_FILE is a randomly selected background file, e.g. 00042.hipo\n'
-            'echo "input: osdf:///jlab-osdf/clas12/osgpool/backgroundfiles'
-            '/{configuration}/{fields}/{bkmerging}/10k/$BG_FILE, output: $BG_FILE"\n'
+            '\necho "input: osdf:///jlab-osdf/clas12/osgpool/backgroundfiles'
+            '/{configuration}/{fields}/{bkmerging}/10k/ (random hipo file)"\n'
             'run_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'
         ).format(
             configuration=sconfiguration.configuration or "",
