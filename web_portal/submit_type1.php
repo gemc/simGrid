@@ -29,6 +29,8 @@
 		$vertex_choice = $_POST['vuser_selection'];
 		$string_id     = $_POST['user_string'];
 		$output_type   = $_POST['output_type'];
+		$run_number    = isset($_POST['run_number']) ? trim($_POST['run_number']) : '';
+		$user_runs     = isset($_POST['user_runs'])  ? trim($_POST['user_runs'])  : '';
 		$uri		   = $_SERVER['REQUEST_URI'];
 		$timestamp     = date('Y-m-d_H-i-s');
 		$scard_file    = '/var/www/gemc-runtime/scard_type1_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $username) . '_' . $timestamp . '.txt';
@@ -65,6 +67,10 @@
 			fwrite($fp, 'client_ip: '.$client_ip.PHP_EOL);
 			fwrite($fp, 'dstOUT: yes'.PHP_EOL);
 			fwrite($fp, 'fields: '.$fields.PHP_EOL);
+			$runs_scard = !empty($run_number) ? $run_number : $user_runs;
+			if (!empty($runs_scard)) {
+				fwrite($fp, 'runs: '.$runs_scard.PHP_EOL);
+			}
 			fwrite($fp, 'bkmerging: '.$bkmerging.PHP_EOL);
 			fwrite($fp, 'zposition: '.$zposition.PHP_EOL);
 			fwrite($fp, 'raster: '.$raster.PHP_EOL);
@@ -130,8 +136,14 @@
 		</tr>
 		<tr>
 			<td>Magnetic Fields</td>
-			<td><?php echo($fields); ?></td>
+			<td><?php echo htmlspecialchars($fields, ENT_QUOTES, 'UTF-8'); ?></td>
 		</tr>
+		<?php if (!empty($run_number) || !empty($user_runs)): ?>
+		<tr>
+			<td>Run(s)</td>
+			<td><?php echo htmlspecialchars(!empty($run_number) ? $run_number : $user_runs, ENT_QUOTES, 'UTF-8'); ?></td>
+		</tr>
+		<?php endif; ?>
 		<tr>
 			<td>Generator</td>
 			<td><?php echo($generator); ?></td>

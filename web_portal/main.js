@@ -150,9 +150,16 @@ function fieldSelected() {
 			var userRunsRow = document.getElementById("user-runs-row");
 
 			if (hasRuns) {
-				if (fieldsRow)    fieldsRow.style.display    = "none";
 				if (runsRow)      runsRow.style.display      = "";
 				if (userRunsRow)  userRunsRow.style.display  = "";
+				if (fieldsRow)    fieldsRow.style.display    = "";
+
+				var fieldsEl = document.getElementById("fields");
+				if (fieldsEl) {
+					fieldsEl.style.pointerEvents   = "none";
+					fieldsEl.style.backgroundColor = "#f0f0f0";
+					fieldsEl.style.color           = "#555";
+				}
 
 				var runKeys = Object.keys(runs);
 
@@ -206,6 +213,13 @@ function fieldSelected() {
 				if (fieldsRow)    fieldsRow.style.display    = "";
 				if (runsRow)      runsRow.style.display      = "none";
 				if (userRunsRow)  userRunsRow.style.display  = "none";
+
+				var fieldsEl = document.getElementById("fields");
+				if (fieldsEl) {
+					fieldsEl.style.pointerEvents   = "";
+					fieldsEl.style.backgroundColor = "";
+					fieldsEl.style.color           = "";
+				}
 
 				if (selected_experiment in myObj) {
 					var keys_field = Object.keys(myObj[selected_experiment]);

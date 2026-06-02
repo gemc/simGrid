@@ -36,12 +36,6 @@
 					</select>
 				</td>
 			</tr>
-			<tr id="fields-row">
-				<td>Magnetic Fields</td>
-				<td>
-					<select name="fields" id="fields" required onchange="bkmergingSelected()"></select>
-				</td>
-			</tr>
 			<tr id="runs-row" style="display:none">
 				<td>Run</td>
 				<td>
@@ -56,6 +50,12 @@
 					<input type="text" name="user_runs" id="user_runs"
 						   placeholder="e.g. 18300, 18301, 18302" size="40"
 						   oninput="userRunsInput(this)">
+				</td>
+			</tr>
+			<tr id="fields-row">
+				<td>Magnetic Fields</td>
+				<td>
+					<select name="fields" id="fields" required onchange="bkmergingSelected()"></select>
 				</td>
 			</tr>
 			<tr>
