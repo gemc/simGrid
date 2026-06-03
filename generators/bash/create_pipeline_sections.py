@@ -11,6 +11,15 @@ invocation is visible and reproducible directly in nodescript.sh.
 
 _BG_MERGER_DETECTORS = 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO'
 
+
+def _coatjava_at_least(version_str, threshold="14.1.0"):
+    try:
+        v = tuple(int(x) for x in str(version_str).split('.'))
+        t = tuple(int(x) for x in threshold.split('.'))
+        return v >= t
+    except (ValueError, AttributeError):
+        return False
+
 _DST_BANKS = (
     'RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,'
     'REC::*,RECFT::*,'
@@ -63,12 +72,15 @@ def create_denoiser(sconfiguration, denoise_version):
 def create_reconstruction(sconfiguration):
     """Emit the recon-util cmd array and run_timed run_reconstruction."""
     coatjavav = sconfiguration.coatjavav or "latest"
-    configuration = sconfiguration.configuration or "default"
+    if _coatjava_at_least(coatjavav):
+        yaml_stem = "mc-ai"
+    else:
+        yaml_stem = sconfiguration.configuration or "default"
     return (
         '\n# Running Reconstruction\n'
         'echo "input: gemc_denoised.hipo, output: recon.hipo"\n'
         'module load coatjava/{coatjavav}\n'
-        'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{configuration}.yaml"\n'
+        'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{yaml_stem}.yaml"\n'
         'cmd=(recon-util\n'
         '    -y "$yaml"\n'
         '    -i gemc_denoised.hipo\n'
@@ -77,7 +89,7 @@ def create_reconstruction(sconfiguration):
         'echo "Running Reconstruction: ${{cmd[@]}}"\n'
         'run_timed run_reconstruction "${{cmd[@]}}"\n'
         'rm -f gemc_denoised.hipo\n'
-    ).format(coatjavav=coatjavav, configuration=configuration)
+    ).format(coatjavav=coatjavav, yaml_stem=yaml_stem)
 
 
 def create_test_hipo(sconfiguration):

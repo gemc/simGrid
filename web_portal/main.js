@@ -178,7 +178,7 @@ function fieldSelected() {
 				}
 
 				// Pass 2: build padded option labels
-				var runsText = "<option value=\"\" selected hidden>— select a run —</option>";
+				var runsText = "<option value=\"\" selected>— select a run —</option>";
 				for (var i = 0; i < runKeys.length; i++) {
 					var rn = runKeys[i];
 					var r  = runs[rn];
@@ -203,12 +203,8 @@ function fieldSelected() {
 					userRuns.disabled = false;
 				}
 
-				// Set default fields from first run so bkmerging works even before selection
-				var firstRun = runs[runKeys[0]];
-				var fieldKey = "tor" + firstRun.torus + "_sol" + firstRun.solenoid;
 				document.getElementById("fields").innerHTML =
-					"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
-				bkmergingSelected();
+					"<option value=\"\" selected hidden></option>";
 			} else {
 				if (fieldsRow)    fieldsRow.style.display    = "";
 				if (runsRow)      runsRow.style.display      = "none";
@@ -241,10 +237,17 @@ function fieldSelected() {
 function runSelected() {
 	var selected_experiment = document.getElementById("configuration").value;
 	var run_number = document.getElementById("run_number").value;
-	if (!run_number) return;
+
+	var userRuns = document.getElementById("user_runs");
+	if (!run_number) {
+		// Placeholder re-selected: re-enable text field and clear fields
+		if (userRuns) userRuns.disabled = false;
+		document.getElementById("fields").innerHTML =
+			"<option value=\"\" selected hidden></option>";
+		return;
+	}
 
 	// Dropdown active: disable and clear the text field
-	var userRuns = document.getElementById("user_runs");
 	if (userRuns) {
 		userRuns.value    = "";
 		userRuns.disabled = true;

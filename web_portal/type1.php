@@ -40,7 +40,7 @@
 				<td>Run</td>
 				<td>
 					<select name="run_number" id="run_number" onchange="runSelected()"
-						style="font-family: monospace; font-size: 0.9em;"></select>
+						style="font-family: monospace; font-size: 1.1em;"></select>
 				</td>
 			</tr>
 			<tr id="user-runs-row" style="display:none">
