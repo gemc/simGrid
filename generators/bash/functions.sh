@@ -337,18 +337,25 @@ test_hipo_file() {
 
 # ── get_output_filename ───────────────────────────────────────────────────────
 # Set OUTPUT_FILE from string_id, submission_id, and sjob.
-# For type-2 jobs the lund file basename is inserted between string_id and the IDs.
-# lundFile is a script-level variable set in the preamble (empty for type-1).
+# Script-level variables lundFile and runno (both set in preamble) are included
+# when non-empty: lund_base between string_id and IDs; runno between lund_base and IDs.
 # Args: <string_id> <submission_id> <sjob>
 get_output_filename() {
     local string_id="$1"
     local submission_id="$2"
     local sjob="$3"
+    local runno_part="${runno:-}"
 
     if [[ -n "${lundFile:-}" ]]; then
         local lund_base="${lundFile##*/}"
         lund_base="${lund_base%.*}"
-        OUTPUT_FILE="${string_id}-${lund_base}-${submission_id}-${sjob}.hipo"
+        if [[ -n "$runno_part" ]]; then
+            OUTPUT_FILE="${string_id}-${lund_base}-${runno_part}-${submission_id}-${sjob}.hipo"
+        else
+            OUTPUT_FILE="${string_id}-${lund_base}-${submission_id}-${sjob}.hipo"
+        fi
+    elif [[ -n "$runno_part" ]]; then
+        OUTPUT_FILE="${string_id}-${runno_part}-${submission_id}-${sjob}.hipo"
     else
         OUTPUT_FILE="${string_id}-${submission_id}-${sjob}.hipo"
     fi

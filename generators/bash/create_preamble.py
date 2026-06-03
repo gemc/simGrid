@@ -13,6 +13,9 @@ def create_preamble(sconfiguration, user_submission_id):
     Returns:
         str: opening block of nodescript.sh.
     """
+    runs_parts = [r.strip() for r in (sconfiguration.runs or "").split(',') if r.strip()]
+    runno_str  = "-".join(runs_parts)
+
     if sconfiguration.type == '2':
         arg_invocation = "./nodescript.sh <sjob> <lundFile>"
         arg_doc        = (
@@ -30,6 +33,8 @@ def create_preamble(sconfiguration, user_submission_id):
         arg_invocation = "./nodescript.sh <sjob>"
         arg_doc        = "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
         arg_parse      = "sjob=$1\n"
+
+    arg_parse += 'runno="{}"\n'.format(runno_str)
 
     return """\
 #!/bin/bash

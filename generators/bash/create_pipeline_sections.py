@@ -12,7 +12,7 @@ invocation is visible and reproducible directly in nodescript.sh.
 _BG_MERGER_DETECTORS = 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO'
 
 
-def _coatjava_at_least(version_str, threshold="14.1.0"):
+def _coatjava_at_least(version_str, threshold="16.0.0"):
     try:
         v = tuple(int(x) for x in str(version_str).split('.'))
         t = tuple(int(x) for x in threshold.split('.'))
@@ -102,15 +102,29 @@ def create_test_hipo(sconfiguration):
     )
 
 
+def _sanitize_runs(runs_str):
+    """Convert a 'runs' scard value to a filename-safe segment. '18300, 18301' -> '18300-18301'"""
+    if not runs_str:
+        return ""
+    return "-".join(r.strip() for r in runs_str.split(',') if r.strip())
+
+
 def _output_filename_pattern(sconfiguration, user_submission_id):
     """Return the output filename pattern with bash-variable placeholders for runtime parts.
 
-    Type-1 (generator): <string_id>-<submission_id>-$sjob.hipo
-    Type-2 (lund):      <string_id>-$lund_base-<submission_id>-$sjob.hipo
+    Type-1 (generator):           <string_id>-<submission_id>-$sjob.hipo
+    Type-1 with runs:             <string_id>-<runno>-<submission_id>-$sjob.hipo
+    Type-2 (lund):                <string_id>-$lund_base-<submission_id>-$sjob.hipo
+    Type-2 with runs:             <string_id>-$lund_base-<runno>-<submission_id>-$sjob.hipo
     """
     string_id = (sconfiguration.string_id or "output").strip('-')
+    runno = _sanitize_runs(sconfiguration.runs)
     if sconfiguration.type == '2':
+        if runno:
+            return "{}-$lund_base-{}-{}-$sjob.hipo".format(string_id, runno, user_submission_id)
         return "{}-$lund_base-{}-$sjob.hipo".format(string_id, user_submission_id)
+    if runno:
+        return "{}-{}-{}-$sjob.hipo".format(string_id, runno, user_submission_id)
     return "{}-{}-$sjob.hipo".format(string_id, user_submission_id)
 
 
