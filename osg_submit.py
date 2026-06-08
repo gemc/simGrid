@@ -23,6 +23,7 @@ from SConfiguration import SConfiguration
 from statuses import NOTSUBMITTED, PROCESSING, SUBMITTED, SCRIPTS_GENERATED
 
 DEFAULT_MAX_SUBMITTED_JOBS = 80000
+DEVEL_MAX_SUBMITTED_JOBS = 90000
 DEFAULT_OWNER = "gemc"
 
 _REPO_ROOT   = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +104,9 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     args = build_parser().parse_args(argv)
+
+    if args.devel and args.max_submitted_jobs == DEFAULT_MAX_SUBMITTED_JOBS:
+        args.max_submitted_jobs = DEVEL_MAX_SUBMITTED_JOBS
 
     print("\nStep 1: Capacity check")
     # requires htcondor2, only available on the submit node.
