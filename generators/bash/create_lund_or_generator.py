@@ -33,7 +33,8 @@ def create_lund_or_generator(sconfiguration):
 
     return (
         '\n# Running Generator\n'
-        'module load mcgen/{mcgenv}\n'
+        'module load mcgen/{mcgenv}'
+        ' || {{ echo "ERROR: failed to load mcgen/{mcgenv}"; exit $EC_ENVIRONMENT; }}\n'
         'generate-seeds.py generate\n'
         'seed=$(generate-seeds.py read --row 1)\n'
     ).format(mcgenv=mcgenv) + (
