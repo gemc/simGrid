@@ -287,6 +287,8 @@ function userRunsInput(el) {
 
 function softwareVersionSelected() {
 	const selected_experiment = document.getElementById("configuration").value;
+	const isDevelPortal = window.location.pathname.includes('dev/web_portal') ||
+	                      window.location.pathname.includes('test/web_interface');
 
 	let text = '<option selected hidden value=""></option>';
 	const xmlhttp = new XMLHttpRequest();
@@ -302,6 +304,11 @@ function softwareVersionSelected() {
 						text += `<option value="${versions[key]}">${versions[key]}</option>`;
 					}
 				}
+			}
+
+			if (isDevelPortal) {
+				const devVersion = "gemc/dev coatjava/14.1.0";
+				text += `<option value="${devVersion}">${devVersion}</option>`;
 			}
 
 			document.getElementById("softwarev").innerHTML = text;
