@@ -171,7 +171,7 @@ setup_container_environment() {
 
     # Initialise the environment module system.
     # shellcheck source=/dev/null
-    source /etc/profile.d/modules.sh || { echo "ERROR: failed to source /etc/profile.d/modules.sh"; exit $EC_ENVIRONMENT; }
+    source /etc/profile.d/modules.sh || { echo "ERROR: failed to source /etc/profile.d/modules.sh"; return $EC_ENVIRONMENT; }
 
     # Add CLAS12 software and Geant4 module paths.
     module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
@@ -223,7 +223,7 @@ setup_job_files() {
 # Exits with EC_GENERATOR on failure.
 run_generator() {
     echo "Generator path: $(which "$1")"
-    "$@" || { echo "GENERATOR ERROR: $1 failed."; exit $EC_GENERATOR; }
+    "$@" || { echo "GENERATOR ERROR: $1 failed."; return $EC_GENERATOR; }
     rm -f *.root
 }
 
@@ -241,14 +241,14 @@ fetch_background_file() {
     local ls_output
     ls_output=$(pelican object ls "$xdir") || {
         echo "pelican object ls failed for $xdir"
-        exit $EC_BG_MISSING
+        return $EC_BG_MISSING
     }
 
     local NFILES
     NFILES=$(echo "$ls_output" | wc -l)
     if [[ $NFILES -eq 0 ]]; then
         echo "No background files found at $xdir"
-        exit $EC_BG_FETCH
+        return $EC_BG_FETCH
     fi
 
     local R=$(( RANDOM % NFILES + 1 ))
@@ -256,8 +256,13 @@ fetch_background_file() {
     echo "Selected background file: $bgfile"
 
     echo "Executing: pelican object get $bgfile ."
-    pelican object get "$bgfile" . || exit $EC_BG_FETCH
+    pelican object get "$bgfile" . || return $EC_BG_FETCH
     BG_FILE=$(basename "$bgfile")
+    if [[ ! -s "$BG_FILE" ]]; then
+        echo "ERROR: downloaded background file is empty: $BG_FILE"
+        rm -f "$BG_FILE"
+        return $EC_BG_FETCH
+    fi
     echo "Background file downloaded: ${BG_FILE}"
 }
 
@@ -293,7 +298,7 @@ check_file_exists() {
 # zposition/beam_spot/raster: pass "n/a" to omit the corresponding GEMC option.
 run_gemc() {
     echo "GEMC path: $(which gemc)"
-    "$@" | sed '/G4Exception-START/,/G4Exception-END/d' || { echo "GEMC failed."; exit $EC_GEMC; }
+    "$@" | sed '/G4Exception-START/,/G4Exception-END/d' || { echo "GEMC failed."; return $EC_GEMC; }
     rm -f *.dat
 }
 
@@ -301,7 +306,7 @@ run_gemc() {
 # Merge background hipo file (fetched by fetch_background_file) with gemc output.
 # Reads global: BG_FILE (set by fetch_background_file).
 merge_background() {
-    "$@" || { echo "bg-merger failed."; exit $EC_BG_MERGE; }
+    "$@" || { echo "bg-merger failed."; return $EC_BG_MERGE; }
     rm -f gemc.hipo "${BG_FILE}"
 }
 
@@ -309,28 +314,27 @@ merge_background() {
 # Load denoise module and run the ML denoiser on the gemc hipo output.
 # Args: <denoise_version> <input_file>  (gemc.hipo when no bg merging; gemc.merged.hipo otherwise)
 run_denoiser() {
-    "$@" || { echo "denoiser failed."; exit $EC_DENOISE; }
+    "$@" || { echo "denoiser failed."; return $EC_DENOISE; }
 }
 
 # ── run_reconstruction ────────────────────────────────────────────────────────
 # Load coatjava module and run recon-util reconstruction.
 # Args: <coatjava_version> <coatjava_yaml>
 run_reconstruction() {
-    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
-    "$@" || { echo "recon-util failed."; exit $EC_RECON; }
-    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; exit $EC_DISK; }
+    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; return $EC_DISK; }
+    "$@" || { echo "recon-util failed."; return $EC_RECON; }
+    df /cvmfs/oasis.opensciencegrid.org && df . && df /tmp || { echo "df failure"; return $EC_DISK; }
 }
 
 # ── test_hipo_file ────────────────────────────────────────────────────────────
 # Test integrity and minimum size of recon.hipo.
 test_hipo_file() {
-    "$@" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    "$@" || { echo "hipo-utils test failed."; return $EC_HIPO_INTEGRITY; }
     local fsize
     fsize=$(stat -L -c%s recon.hipo)
     if [[ $fsize -lt 100 ]]; then
         echo "recon.hipo too small: ${fsize} bytes"
-        rm -f *.hipo *.evio *.sqlite
-        exit $EC_HIPO_SIZE
+        return $EC_HIPO_SIZE
     fi
     echo "recon.hipo integrity OK, size ${fsize} bytes"
 }
@@ -368,10 +372,10 @@ get_output_filename() {
 create_dst() {
     local string_id="$1" submission_id="$2" sjob="$3"; shift 3
     get_output_filename "$string_id" "$submission_id" "$sjob"
-    "$@" || { echo "hipo-utils filter failed."; exit $EC_HIPO_UTILS; }
+    "$@" || { echo "hipo-utils filter failed."; return $EC_HIPO_UTILS; }
     echo "Moving dst.hipo to ${OUTPUT_FILE}"
-    mv dst.hipo "$OUTPUT_FILE" || { echo "mv failed."; exit $EC_HIPO_UTILS; }
-    hipo-utils -test "$OUTPUT_FILE" || { echo "hipo-utils test failed."; exit $EC_HIPO_INTEGRITY; }
+    mv dst.hipo "$OUTPUT_FILE" || { echo "mv failed."; return $EC_HIPO_UTILS; }
+    hipo-utils -test "$OUTPUT_FILE" || { echo "hipo-utils test failed."; return $EC_HIPO_INTEGRITY; }
     rm -f recon.hipo
     echo "DST file created: ${OUTPUT_FILE}"
 }
@@ -390,7 +394,7 @@ write_to_jlab() {
     )
     echo "Running: ${cmd[*]}"
     echo
-    "${cmd[@]}" || { echo "pelican upload failed."; exit $EC_INFRASTRUCTURE; }
+    "${cmd[@]}" || { echo "pelican upload failed."; return $EC_INFRASTRUCTURE; }
 
     echo "Additional cleanup"
     rm -f core* *.gcard
