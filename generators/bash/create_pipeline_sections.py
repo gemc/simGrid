@@ -81,10 +81,11 @@ def create_reconstruction(sconfiguration):
     return (
         '\n# Running Reconstruction\n'
         'echo "input: gemc_denoised.hipo, output: recon.hipo"\n'
-        '# hipo loaded by denoise conflicts with coatjava — unload it first\n'
+        '# hipo loaded by denoise conflicts with coatjava; unloading hipo cascades to\n'
+        '# unload coatjava (it was hipo\'s dependent), so reload coatjava cleanly after\n'
         'module unload hipo || true\n'
         '# module unload coatjava || true\n'
-        '# module load coatjava/{coatjavav}'
+        'module load coatjava/{coatjavav}'
         ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{yaml_stem}.yaml"\n'
         'cmd=(recon-util\n'
