@@ -37,8 +37,6 @@ def create_merge_background(sconfiguration):
     return (
         '\n# Background Merging\n'
         'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
-        'module load coatjava/{coatjavav}'
-        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -46,7 +44,7 @@ def create_merge_background(sconfiguration):
         "    -d '{detectors}')\n"
         'echo "Running Background Merger: ${{cmd[@]}}"\n'
         'run_timed merge_background "${{cmd[@]}}"\n'
-    ).format(coatjavav=coatjavav, detectors=_BG_MERGER_DETECTORS)
+    ).format(detectors=_BG_MERGER_DETECTORS)
 
 
 def create_denoiser(sconfiguration, denoise_version):
@@ -72,7 +70,11 @@ def create_denoiser(sconfiguration, denoise_version):
 
 
 def create_reconstruction(sconfiguration):
-    """Emit the recon-util cmd array and run_timed run_reconstruction."""
+    """Emit the recon-util cmd array and run_timed run_reconstruction.
+
+    coatjava is loaded once at startup by setup_job_files (before denoise), so it owns
+    hipo/4.3.0.  No module operations are needed here.
+    """
     coatjavav = sconfiguration.coatjavav or "latest"
     if _coatjava_at_least(coatjavav):
         yaml_stem = "mc-ai"
@@ -81,13 +83,6 @@ def create_reconstruction(sconfiguration):
     return (
         '\n# Running Reconstruction\n'
         'echo "input: gemc_denoised.hipo, output: recon.hipo"\n'
-        '# denoise auto-loads hipo; unload denoise first so hipo has no dependents,\n'
-        '# then unload hipo and coatjava cleanly before reloading coatjava.\n'
-        'module unload denoise\n'
-        'module unload hipo\n'
-        'module unload coatjava\n'
-        'module load coatjava/{coatjavav}'
-        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{yaml_stem}.yaml"\n'
         'cmd=(recon-util\n'
         '    -y "$yaml"\n'

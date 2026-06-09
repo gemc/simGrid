@@ -216,6 +216,11 @@ setup_job_files() {
 
     check_file_exists "$coatjava_yaml"
     check_file_exists "$gemc_gcard"
+
+    # Load coatjava before any other module that requires hipo (e.g. denoise) so that
+    # coatjava owns hipo/4.3.0.  Unloading denoise later then leaves hipo intact.
+    module load coatjava/"$coatjava_version" \
+        || { echo "ERROR: failed to load coatjava/${coatjava_version}"; return $EC_ENVIRONMENT; }
 }
 
 # ── run_generator ────────────────────────────────────────────────────────────
