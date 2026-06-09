@@ -65,11 +65,26 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     sections = [
         create_preamble(sconfiguration, user_submission_id),
 
-        'run_timed setup_container_environment "{username}" "{gemcv}" "{submission_type}"\n'.format(
+        'run_timed setup_container_environment "{username}" "{submission_type}"\n'.format(
             username=sconfiguration.username or "unknown",
-            gemcv=sconfiguration.gemcv or "latest",
             submission_type=submission_type,
         ),
+
+        (
+            '\n# Module environment setup\n'
+            'module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles\n'
+            'module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules\n'
+            'module unload gemc\n'
+            'module unload coatjava\n'
+            'module unload hipo\n'
+            'module unload jdk\n'
+            'module unload root\n'
+            'module unload mcgen\n'
+            'module load sqlite/{gemcv}'
+            ' || {{ echo "ERROR: failed to load sqlite/{gemcv}"; exit $EC_ENVIRONMENT; }}\n'
+            'export RCDB_CONNECTION=mysql://null\n'
+            'echo "SQLITE Version: {gemcv}"\n'
+        ).format(gemcv=sconfiguration.gemcv or "latest"),
 
         'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
             coatjavav=sconfiguration.coatjavav or "latest",

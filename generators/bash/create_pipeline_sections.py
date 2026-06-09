@@ -37,6 +37,8 @@ def create_merge_background(sconfiguration):
     return (
         '\n# Background Merging\n'
         'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
+        'module load coatjava/{coatjavav}'
+        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -44,15 +46,19 @@ def create_merge_background(sconfiguration):
         "    -d '{detectors}')\n"
         'echo "Running Background Merger: ${{cmd[@]}}"\n'
         'run_timed merge_background "${{cmd[@]}}"\n'
-    ).format(detectors=_BG_MERGER_DETECTORS)
+    ).format(coatjavav=coatjavav, detectors=_BG_MERGER_DETECTORS)
 
 
 def create_denoiser(sconfiguration, denoise_version):
     """Emit the denoise2.exe cmd array and run_timed run_denoiser.
 
     Input is gemc.merged.hipo when background was merged, else gemc.hipo.
+    coatjava is loaded before denoise so that coatjava owns hipo/4.3.0; for the
+    bkmerging case it is already loaded (no-op), for the no-bkmerging case it is
+    the first load (gemc/sim_system is in the environment so jdk loads cleanly).
     The input file is removed after the denoiser runs.
     """
+    coatjavav = sconfiguration.coatjavav or "latest"
     if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no':
         input_file = "gemc.merged.hipo"
     else:
@@ -60,20 +66,22 @@ def create_denoiser(sconfiguration, denoise_version):
     return (
         '\n# Running Denoiser\n'
         'echo "input: {input_file}, output: gemc_denoised.hipo"\n'
+        'module load coatjava/{coatjavav}'
+        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
         'module load denoise/{denoise_version}'
         ' || {{ echo "ERROR: failed to load denoise/{denoise_version}"; exit $EC_ENVIRONMENT; }}\n'
         'cmd=(denoise2.exe -i {input_file} -o gemc_denoised.hipo -t 1 -l 0.01)\n'
         'echo "Running Denoiser: ${{cmd[@]}}"\n'
         'run_timed run_denoiser "${{cmd[@]}}"\n'
         'rm -f {input_file}\n'
-    ).format(denoise_version=denoise_version, input_file=input_file)
+    ).format(coatjavav=coatjavav, denoise_version=denoise_version, input_file=input_file)
 
 
 def create_reconstruction(sconfiguration):
     """Emit the recon-util cmd array and run_timed run_reconstruction.
 
-    coatjava is loaded once at startup by setup_job_files (before denoise), so it owns
-    hipo/4.3.0.  No module operations are needed here.
+    coatjava is loaded by create_denoiser (which always precedes reconstruction),
+    so no additional module operations are needed here.
     """
     coatjavav = sconfiguration.coatjavav or "latest"
     if _coatjava_at_least(coatjavav):

@@ -123,17 +123,14 @@ print_timing_summary() {
 }
 
 # ── setup_container_environment ──────────────────────────────────────────────
-# Print job header, clear LMOD environment, initialise the module system,
-# add CLAS12/Geant4 module paths, unload conflicting modules, and load
-# the sqlite module (tied to gemc version).
+# Print job header, clear LMOD environment, and initialise the module system.
 # Exports CLAS12_CONFIG — the clas12-config base path used by all subsequent
-# functions. Versioned loads for gemc, coatjava, and denoise are done in
-# their respective run_* functions.
-# Args: <submitted_by> <gemc_version> <submission_type>  (prod | dev)
+# functions. Module path setup, pilot-module unloads, and versioned loads
+# (sqlite, gemc, coatjava, denoise) are emitted directly in nodescript.sh.
+# Args: <submitted_by> <submission_type>  (prod | dev)
 setup_container_environment() {
     local submitted_by="$1"
-    local gemc_version="$2"
-    local submission_type="$3"
+    local submission_type="$2"
 
     export CLAS12_CONFIG="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${submission_type}"
     echo "CLAS12_CONFIG: ${CLAS12_CONFIG}"
@@ -172,23 +169,6 @@ setup_container_environment() {
     # Initialise the environment module system.
     # shellcheck source=/dev/null
     source /etc/profile.d/modules.sh || { echo "ERROR: failed to source /etc/profile.d/modules.sh"; return $EC_ENVIRONMENT; }
-
-    # Add CLAS12 software and Geant4 module paths.
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules
-
-    # Unload any modules that may have been pre-loaded by the pilot environment.
-    module unload gemc
-    module unload coatjava
-    module unload hipo
-    module unload jdk
-    module unload root
-    module unload mcgen
-
-    module load sqlite/"$gemc_version"
-    export RCDB_CONNECTION=mysql://null
-
-    echo "SQLITE Version: ${gemc_version}"
 }
 
 # ── define_exit_codes ────────────────────────────────────────────────────────
@@ -216,11 +196,6 @@ setup_job_files() {
 
     check_file_exists "$coatjava_yaml"
     check_file_exists "$gemc_gcard"
-
-    # Load coatjava before any other module that requires hipo (e.g. denoise) so that
-    # coatjava owns hipo/4.3.0.  Unloading denoise later then leaves hipo intact.
-    module load coatjava/"$coatjava_version" \
-        || { echo "ERROR: failed to load coatjava/${coatjava_version}"; return $EC_ENVIRONMENT; }
 }
 
 # ── run_generator ────────────────────────────────────────────────────────────
