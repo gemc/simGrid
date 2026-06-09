@@ -180,6 +180,7 @@ setup_container_environment() {
     # Unload any modules that may have been pre-loaded by the pilot environment.
     module unload gemc
     module unload coatjava
+    module unload hipo
     module unload jdk
     module unload root
     module unload mcgen
