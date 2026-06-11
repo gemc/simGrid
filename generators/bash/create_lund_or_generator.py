@@ -21,7 +21,6 @@ def create_lund_or_generator(sconfiguration):
 
     generator  = sconfiguration.generator or ""
     nevents    = sconfiguration.nevents or "0"
-    mcgenv     = sconfiguration.mcgenv or "latest"
     genoptions = (sconfiguration.genOptions or "").replace('"', "'").strip()
 
     cmd_args = [generator, '--trig', nevents, '--docker']
@@ -33,10 +32,9 @@ def create_lund_or_generator(sconfiguration):
 
     return (
         '\n# Running Generator\n'
-        'run_timed load_module "mcgen/{mcgenv}"\n'
         'generate-seeds.py generate\n'
         'seed=$(generate-seeds.py read --row 1)\n'
-    ).format(mcgenv=mcgenv) + (
+    ) + (
         cmd_line + '\n'
         'echo "Running Generator: ${cmd[@]}"\n'
         'run_timed run_generator "${cmd[@]}"\n'

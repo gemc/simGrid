@@ -61,6 +61,36 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     """
     submission_type = "dev" if sconfiguration.submission == "devel" else "prod"
     gemc_only = str(sconfiguration.output_type or '').strip() == '1'
+    needs_mcgen = sconfiguration.type != '2' and sconfiguration.generator != 'gemc'
+    needs_coatjava = not gemc_only or (
+        sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
+    )
+    module_loads = [
+        'run_timed load_module "gemc/{gemcv}"\n'.format(
+            gemcv=sconfiguration.gemcv or "latest",
+        ),
+        'run_timed load_module "sqlite/{gemcv}"\n'.format(
+            gemcv=sconfiguration.gemcv or "latest",
+        ),
+    ]
+    if needs_coatjava:
+        module_loads.append(
+            'run_timed load_module "coatjava/{coatjavav}"\n'.format(
+                coatjavav=sconfiguration.coatjavav or "latest",
+            )
+        )
+    if not gemc_only:
+        module_loads.append(
+            'run_timed load_module "denoise/{denoise_version}"\n'.format(
+                denoise_version=DENOISE_VERSION,
+            )
+        )
+    if needs_mcgen:
+        module_loads.append(
+            'run_timed load_module "mcgen/{mcgenv}"\n'.format(
+                mcgenv=sconfiguration.mcgenv or "latest",
+            )
+        )
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
@@ -80,10 +110,13 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             'unload_module_if_loaded jdk\n'
             'unload_module_if_loaded root\n'
             'unload_module_if_loaded mcgen\n'
-            'run_timed load_module "sqlite/{gemcv}"\n'
+            '{module_loads}'
             'export RCDB_CONNECTION=mysql://null\n'
             'echo "SQLITE Version: {gemcv}"\n'
-        ).format(gemcv=sconfiguration.gemcv or "latest"),
+        ).format(
+            gemcv=sconfiguration.gemcv or "latest",
+            module_loads=''.join(module_loads),
+        ),
 
         'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
             coatjavav=sconfiguration.coatjavav or "latest",
