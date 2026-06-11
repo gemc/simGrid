@@ -127,8 +127,8 @@ print_timing_summary() {
 }
 
 # -- clean_and_check_environment --
-# Print job header, clear inherited LMOD state, unload pilot modules, and check
-# that required modules can be resolved. Module path setup is done in nodescript.sh.
+# Print job header, clear inherited LMOD state, initialize module paths, unload
+# pilot modules, and check that required modules can be resolved.
 # Args: <submitted_by> <module>...
 clean_and_check_environment() {
     local submitted_by="$1"
@@ -164,6 +164,15 @@ clean_and_check_environment() {
           MODULEPATH \
           MODULEPATH_ROOT \
           MODULESHOME
+
+    # Initialise the environment module system after clearing inherited state.
+    # shellcheck source=/dev/null
+    source /etc/profile.d/modules.sh || {
+        echo "ERROR: failed to source /etc/profile.d/modules.sh"
+        return $EC_ENVIRONMENT
+    }
+    module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
+    module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules
 
     unload_module_if_loaded gemc
     unload_module_if_loaded coatjava
