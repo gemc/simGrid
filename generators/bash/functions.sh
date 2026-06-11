@@ -185,6 +185,7 @@ define_exit_codes() {
 load_module() {
     local module_name="$1"
     local nounset_enabled=0
+    echo "Loading module: ${module_name}"
     [[ $- == *u* ]] && nounset_enabled=1 && set +u
     module load "$module_name"
     local rc=$?
@@ -193,6 +194,13 @@ load_module() {
         echo "ERROR: failed to load ${module_name}"
         return $EC_ENVIRONMENT
     fi
+}
+
+load_modules() {
+    local module_name
+    for module_name in "$@"; do
+        load_module "$module_name" || return $?
+    done
 }
 
 unload_module_if_loaded() {

@@ -65,32 +65,30 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     needs_coatjava = not gemc_only or (
         sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
     )
-    module_loads = [
-        'run_timed load_module "gemc/{gemcv}"\n'.format(
-            gemcv=sconfiguration.gemcv or "latest",
-        ),
-        'run_timed load_module "sqlite/{gemcv}"\n'.format(
-            gemcv=sconfiguration.gemcv or "latest",
-        ),
+    modules_to_load = [
+        'gemc/{gemcv}'.format(gemcv=sconfiguration.gemcv or "latest"),
+        'sqlite/{gemcv}'.format(gemcv=sconfiguration.gemcv or "latest"),
     ]
     if needs_coatjava:
-        module_loads.append(
-            'run_timed load_module "coatjava/{coatjavav}"\n'.format(
+        modules_to_load.append(
+            'coatjava/{coatjavav}'.format(
                 coatjavav=sconfiguration.coatjavav or "latest",
             )
         )
     if not gemc_only:
-        module_loads.append(
-            'run_timed load_module "denoise/{denoise_version}"\n'.format(
+        modules_to_load.append(
+            'denoise/{denoise_version}'.format(
                 denoise_version=DENOISE_VERSION,
             )
         )
     if needs_mcgen:
-        module_loads.append(
-            'run_timed load_module "mcgen/{mcgenv}"\n'.format(
-                mcgenv=sconfiguration.mcgenv or "latest",
-            )
+        modules_to_load.append(
+            'mcgen/{mcgenv}'.format(mcgenv=sconfiguration.mcgenv or "latest")
         )
+    module_load_args = ''.join(
+        ' \\\n    "{}"'.format(module_name) for module_name in modules_to_load
+    )
+    module_loads = 'run_timed load_modules{}\n'.format(module_load_args)
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
@@ -115,7 +113,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             'echo "SQLITE Version: {gemcv}"\n'
         ).format(
             gemcv=sconfiguration.gemcv or "latest",
-            module_loads=''.join(module_loads),
+            module_loads=module_loads,
         ),
 
         'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
