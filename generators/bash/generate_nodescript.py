@@ -102,6 +102,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             'export CLAS12_CONFIG="/cvmfs/oasis.opensciencegrid.org/jlab/hallb'
             '/clas12/sw/noarch/clas12-config/{submission_type}"\n'
             'echo "CLAS12_CONFIG: $CLAS12_CONFIG"\n'
+            'export OSRELEASE="almalinux9-gcc11"\n'
+            'echo "OSRELEASE: $OSRELEASE"\n'
             'source /etc/profile.d/modules.sh'
             ' || {{ echo "ERROR: failed to source /etc/profile.d/modules.sh";'
             ' exit $EC_ENVIRONMENT; }}\n'

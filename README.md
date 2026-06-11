@@ -100,6 +100,9 @@ preamble → clean_environment → module environment setup → setup_job_files
   → print_timing_summary
 ```
 
+`nodescript.sh` sets `OSRELEASE=almalinux9-gcc11` before loading modules so CVMFS
+modulefiles use the platform directory that contains GEMC, JDK, HIPO, and denoise.
+
 GEMC-only pipeline (`output_type=1`): steps up to (and including) `merge_background` run
 as normal; denoising, reconstruction, and DST are skipped; the gemc output file is renamed
 to `$OUTPUT_FILE` and uploaded directly via `write_to_jlab`.
