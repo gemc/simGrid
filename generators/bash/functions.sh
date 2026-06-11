@@ -198,6 +198,26 @@ load_modules() {
     done
 }
 
+check_module_available() {
+    local module_name="$1"
+    echo "Checking module availability: ${module_name}"
+    (
+        set +u
+        module purge >/dev/null 2>&1 || true
+        module load "$module_name"
+    ) || {
+        echo "ERROR: module is not available: ${module_name}"
+        return $EC_ENVIRONMENT
+    }
+}
+
+check_modules_available() {
+    local module_name
+    for module_name in "$@"; do
+        check_module_available "$module_name" || return $?
+    done
+}
+
 unload_module_if_loaded() {
     local module_name="$1"
     local nounset_enabled=0

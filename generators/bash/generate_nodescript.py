@@ -85,10 +85,10 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         modules_to_load.append(
             'mcgen/{mcgenv}'.format(mcgenv=sconfiguration.mcgenv or "latest")
         )
-    module_load_args = ''.join(
+    module_check_args = ''.join(
         ' \\\n    "{}"'.format(module_name) for module_name in modules_to_load
     )
-    module_loads = 'run_timed load_modules{}\n'.format(module_load_args)
+    module_checks = 'run_timed check_modules_available{}\n'.format(module_check_args)
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
@@ -113,12 +113,12 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             'unload_module_if_loaded jdk\n'
             'unload_module_if_loaded root\n'
             'unload_module_if_loaded mcgen\n'
-            '{module_loads}'
+            '{module_checks}'
             'export RCDB_CONNECTION=mysql://null\n'
             'echo "SQLITE Version: {gemcv}"\n'
         ).format(
             gemcv=sconfiguration.gemcv or "latest",
-            module_loads=module_loads,
+            module_checks=module_checks,
             submission_type=submission_type,
         ),
 
