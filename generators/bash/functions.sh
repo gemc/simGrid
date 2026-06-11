@@ -205,6 +205,9 @@ check_module_available() {
     (
         set +u
         module purge >/dev/null 2>&1 || true
+        if [[ "$module_name" == coatjava/* ]]; then
+            module load jdk/21.0.2 || exit $?
+        fi
         module load "$module_name"
     ) || {
         echo "ERROR: module is not available: ${module_name}"
