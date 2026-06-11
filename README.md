@@ -63,7 +63,7 @@ In test mode (`--test`) a three-file mockup is used when `pelican` is not availa
 | Authentication | OAuth token for Pelican / OSDF transfers |
 | Hardware | CPUs, memory, scratch disk per slot |
 | Executable | `nodescript.sh`, log/output/error paths, `+ProjectName` |
-| File transfer | Input staging (bg-merge helper) and output retrieval |
+| File transfer | Input staging and output retrieval |
 | Queue | `Arguments` line per subjob and `Queue N` (or `queue lundFile from lund_files`) |
 
 **6. Generate `nodescript.sh` and stage all scripts**
@@ -75,7 +75,6 @@ writes it directly to the staging directory.  The following files are then stage
     clas12.condor                     ← HTCondor submit file
     nodescript.sh                     ← simulation script (executable on the worker node)
     generators/bash/functions.sh      ← shared bash helpers (path required by transfer_input_files)
-    bg_merge_bk_file.sh               ← background-merge helper (staged for all jobs)
     lund_files                        ← one OSDF URI per line (type-2 jobs only)
     log/                              ← HTCondor per-job log files
 ```
@@ -87,7 +86,8 @@ an explicit `cmd=(...)` array, a descriptive `echo "Running …: ${cmd[@]}"`, an
 Full pipeline (default):
 
 ```
-preamble → setup_container_environment → setup_job_files → setup_pelican
+preamble → clean_environment → module environment setup → setup_job_files
+  → Pelican environment setup
   → [fetch_background_file]            # only when bkmerging is set
   → lund_or_generator                  # pelican fetch (type-2) or run_generator cmd array
   → run_gemc                           # gemc.hipo
@@ -118,4 +118,3 @@ to `$OUTPUT_FILE` and uploaded directly via `write_to_jlab`.
 | `--target-site SITE` | Pin all jobs to one `GLIDEIN_Site` (e.g. `CNAF`) |
 
 ## Condor_io
-

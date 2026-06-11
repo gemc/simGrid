@@ -55,8 +55,6 @@ def generate_condor_card(scard, user_submission_id, extra_input_files=None,
 		str: complete HTCondor submit file content.
 	"""
 	all_input_files = list(extra_input_files) if extra_input_files else []
-	if scard.bkmerging:
-		all_input_files.append("bg_merge_bk_file.sh")
 
 	sections = [
 		create_header(scard, devel=devel),

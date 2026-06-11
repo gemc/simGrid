@@ -17,13 +17,12 @@ def create_file_transfer(scard, extra_input_files=None):
 	here — nodescript.sh fetches each lund file on-node via `pelican object
 	get` using the BEARER_TOKEN_FILE injected by the CredMon.  This avoids
 	saturating the submit node with large lund directories and is why only
-	only nodescript.sh appears in transfer_input_files.
+	nodescript.sh and functions.sh appear in transfer_input_files by default.
 
 	transfer_input_files
 	    Comma-separated list of files copied TO the worker node.
 	    BASE_INPUT_FILES (nodescript.sh, functions.sh) are always included.
-	    extra_input_files allows callers to append job-specific files
-	    (e.g. a custom gcard, bg-merge helper scripts).
+	    extra_input_files allows callers to append job-specific files.
 
 	should_transfer_files = YES
 	    Unconditionally enable file transfer. The alternative (IF_NEEDED)

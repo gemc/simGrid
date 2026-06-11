@@ -6,9 +6,9 @@ worker node — by calling each section generator in order.
 
 Full pipeline (output_type != 1):
   1.  preamble                  — shebang, args, source functions.sh, define_exit_codes
-  2.  setup_container_environment
+  2.  clean_environment
   3.  setup_job_files
-  4.  setup_pelican
+  4.  Pelican environment
   5.  fetch_background_file  (only when bkmerging is set)
   6.  lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
   7.  run_gemc
@@ -93,13 +93,18 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     sections = [
         create_preamble(sconfiguration, user_submission_id),
 
-        'run_timed setup_container_environment "{username}" "{submission_type}"\n'.format(
+        'run_timed clean_environment "{username}"\n'.format(
             username=sconfiguration.username or "unknown",
-            submission_type=submission_type,
         ),
 
         (
             '\n# Module environment setup\n'
+            'export CLAS12_CONFIG="/cvmfs/oasis.opensciencegrid.org/jlab/hallb'
+            '/clas12/sw/noarch/clas12-config/{submission_type}"\n'
+            'echo "CLAS12_CONFIG: $CLAS12_CONFIG"\n'
+            'source /etc/profile.d/modules.sh'
+            ' || {{ echo "ERROR: failed to source /etc/profile.d/modules.sh";'
+            ' exit $EC_ENVIRONMENT; }}\n'
             'module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles\n'
             'module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules\n'
             'unload_module_if_loaded gemc\n'
@@ -114,6 +119,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         ).format(
             gemcv=sconfiguration.gemcv or "latest",
             module_loads=module_loads,
+            submission_type=submission_type,
         ),
 
         'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
@@ -122,7 +128,14 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             configuration=sconfiguration.configuration or "default",
         ),
 
-        "run_timed setup_pelican\n",
+        (
+            '\n# Pelican environment setup\n'
+            'echo "Setting Pelican env variables"\n'
+            'echo "_CONDOR_CREDS: $_CONDOR_CREDS"\n'
+            'export BEARER_TOKEN_FILE="$_CONDOR_CREDS/jlab_clas12.use"\n'
+            'echo "BEARER_TOKEN_FILE: $BEARER_TOKEN_FILE"\n'
+            'echo "pelican: $(which pelican)"\n'
+        ),
 
         (
             '\necho "input: osdf:///jlab-osdf/clas12/osgpool/backgroundfiles'

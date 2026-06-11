@@ -8,7 +8,7 @@ OSG submission pipeline:
   3. Parse scard; mark job as Processing in DB
   4. Create staging directory ~/osgOutput/<username>/job_<id>/
   5. For type-2: validate lund location and write lund_files via pelican object ls
-  6. Generate and stage clas12.condor, nodescript.sh, functions.sh, bg_merge_bk_file.sh
+  6. Generate and stage clas12.condor, nodescript.sh, and functions.sh
   7. Submit to OSG
 """
 
@@ -228,12 +228,6 @@ def main(argv=None):
         os.path.join(job_dir, "functions.sh"),
     )
 
-    # Stage bg_merge_bk_file.sh — always copied; condor card includes it in
-    # transfer_input_files only when bkmerging is requested.
-    shutil.copy2(
-        os.path.join(_REPO_ROOT, "bg_merge_bk_file.sh"),
-        os.path.join(job_dir, "bg_merge_bk_file.sh"),
-    )
     print("Staged scripts to {}.".format(job_dir))
 
     # Step 6a: save generated scripts to the DB for later inspection.

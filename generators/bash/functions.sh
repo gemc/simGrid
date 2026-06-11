@@ -46,8 +46,11 @@ run_timed() {
     echo "$_HR"
     echo "Starting ${fn} on $(date)"
     echo
+    local errexit_enabled=0
+    [[ $- == *e* ]] && errexit_enabled=1 && set +e
     "${fn}" "$@"
     local rc=$?
+    [[ $errexit_enabled -eq 1 ]] && set -e
     local t_end
     t_end=$(date +%s)
     _TIMING_ENDS+=("$t_end")
@@ -80,7 +83,7 @@ run_timed() {
 cleanup_on_error() {
     echo "Cleaning up intermediate files after error"
     rm -f *.hipo *.evio *.sqlite *.dat
-    rm -f bg_merge_bk_file.sh random-seeds.txt RNDMSTATUS
+    rm -f random-seeds.txt RNDMSTATUS
 }
 
 # ── print_timing_summary ──────────────────────────────────────────────────────
@@ -123,18 +126,13 @@ print_timing_summary() {
     echo "}"
 }
 
-# ── setup_container_environment ──────────────────────────────────────────────
-# Print job header, clear LMOD environment, and initialise the module system.
-# Exports CLAS12_CONFIG — the clas12-config base path used by all subsequent
-# functions. Module path setup, pilot-module unloads, and versioned loads
-# (sqlite, gemc, coatjava, denoise) are emitted directly in nodescript.sh.
-# Args: <submitted_by> <submission_type>  (prod | dev)
-setup_container_environment() {
+# -- clean_environment --
+# Print job header and clear inherited LMOD environment.
+# Module system setup, CLAS12_CONFIG, pilot-module unloads, and versioned loads
+# are emitted directly in nodescript.sh.
+# Args: <submitted_by>
+clean_environment() {
     local submitted_by="$1"
-    local submission_type="$2"
-
-    export CLAS12_CONFIG="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/clas12-config/${submission_type}"
-    echo "CLAS12_CONFIG: ${CLAS12_CONFIG}"
 
     printf 'Job running on node: '; /bin/hostname
     printf 'Job submitted by: %s\n' "$submitted_by"
@@ -167,9 +165,6 @@ setup_container_environment() {
           MODULEPATH_ROOT \
           MODULESHOME
 
-    # Initialise the environment module system.
-    # shellcheck source=/dev/null
-    source /etc/profile.d/modules.sh || { echo "ERROR: failed to source /etc/profile.d/modules.sh"; return $EC_ENVIRONMENT; }
 }
 
 # ── define_exit_codes ────────────────────────────────────────────────────────
@@ -213,7 +208,7 @@ unload_module_if_loaded() {
 
 # ── setup_job_files ───────────────────────────────────────────────────────────
 # Verify that the gcard and yaml files required by this job exist under
-# $CLAS12_CONFIG (exported by setup_container_environment).
+# $CLAS12_CONFIG (exported by nodescript.sh).
 # Args: <coatjava_version> <gemc_version> <configuration>
 # Exits with EC_FILE_DOES_NOT_EXIST if either file is absent.
 setup_job_files() {
@@ -278,17 +273,6 @@ fetch_background_file() {
         return $EC_BG_FETCH
     fi
     echo "Background file downloaded: ${BG_FILE}"
-}
-
-# ── setup_pelican ─────────────────────────────────────────────────────────────
-# Configure Pelican/OSDF authentication using the HTCondor credential directory.
-# _CONDOR_CREDS is set by HTCondor before the job starts.
-setup_pelican() {
-    echo "Setting Pelican environment variables"
-    echo "_CONDOR_CREDS: $_CONDOR_CREDS"
-    export BEARER_TOKEN_FILE="$_CONDOR_CREDS/jlab_clas12.use"
-    echo " BEARER_TOKEN_FILE: $BEARER_TOKEN_FILE"
-    echo " pelican: $(which pelican)"
 }
 
 # ── check_file_exists ─────────────────────────────────────────────────────────
@@ -413,6 +397,6 @@ write_to_jlab() {
     echo "Additional cleanup"
     rm -f core* *.gcard
     rm -f recon.hipo gemc.hipo gemc.merged.hipo gemc_denoised.hipo
-    rm -f bg_merge_bk_file.sh nodescript.sh condor_exec.exe
+    rm -f nodescript.sh condor_exec.exe
     rm -f RNDMSTATUS random-seeds.txt Null gemc.evio *.hipo
 }
