@@ -37,6 +37,7 @@ def create_merge_background(sconfiguration):
         '\n# Background Merging\n'
         'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
         'unload_module_if_loaded gemc\n'
+        'run_timed load_module "jdk/21.0.2"\n'
         'run_timed load_module "coatjava/{coatjavav}"\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
@@ -74,9 +75,11 @@ def create_denoiser(sconfiguration, denoise_version):
         'rm -f {input_file}\n'
     ).format(
         coatjava_load='' if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
-        else 'unload_module_if_loaded gemc\nrun_timed load_module "coatjava/{}"\n'.format(
-            sconfiguration.coatjavav or "latest"
-        ),
+        else (
+            'unload_module_if_loaded gemc\n'
+            'run_timed load_module "jdk/21.0.2"\n'
+            'run_timed load_module "coatjava/{}"\n'
+        ).format(sconfiguration.coatjavav or "latest"),
         denoise_version=denoise_version,
         input_file=input_file,
     )

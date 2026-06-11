@@ -70,6 +70,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
         'sqlite/{gemcv}'.format(gemcv=sconfiguration.gemcv or "latest"),
     ]
     if needs_coatjava:
+        modules_to_load.append('jdk/21.0.2')
         modules_to_load.append(
             'coatjava/{coatjavav}'.format(
                 coatjavav=sconfiguration.coatjavav or "latest",

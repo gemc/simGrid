@@ -187,6 +187,7 @@ load_module() {
     [[ $nounset_enabled -eq 1 ]] && set -u
     if [[ $rc -ne 0 ]]; then
         echo "ERROR: failed to load ${module_name}"
+        diagnose_module_failure "$module_name"
         return $EC_ENVIRONMENT
     fi
 }
@@ -207,6 +208,7 @@ check_module_available() {
         module load "$module_name"
     ) || {
         echo "ERROR: module is not available: ${module_name}"
+        diagnose_module_failure "$module_name"
         return $EC_ENVIRONMENT
     }
 }
@@ -216,6 +218,22 @@ check_modules_available() {
     for module_name in "$@"; do
         check_module_available "$module_name" || return $?
     done
+}
+
+diagnose_module_failure() {
+    local module_name="$1"
+    local clas12_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw"
+    case "$module_name" in
+        jdk/*|coatjava/*)
+            echo "Diagnostic OSRELEASE: ${OSRELEASE:-unset}"
+            echo "Diagnostic jdk path: ${clas12_home}/${OSRELEASE:-unset}/jdk/21.0.2/bin"
+            if [[ -d "${clas12_home}/${OSRELEASE:-unset}/jdk/21.0.2/bin" ]]; then
+                echo "Diagnostic jdk path exists."
+            else
+                echo "Diagnostic jdk path is missing."
+            fi
+            ;;
+    esac
 }
 
 unload_module_if_loaded() {
