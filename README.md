@@ -86,7 +86,7 @@ an explicit `cmd=(...)` array, a descriptive `echo "Running …: ${cmd[@]}"`, an
 Full pipeline (default):
 
 ```
-preamble → clean_environment → module environment setup → setup_job_files
+preamble → module environment setup → clean_and_check_environment → setup_job_files
   → Pelican environment setup
   → [fetch_background_file]            # only when bkmerging is set
   → lund_or_generator                  # pelican fetch (type-2) or run_generator cmd array

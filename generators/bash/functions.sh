@@ -126,13 +126,13 @@ print_timing_summary() {
     echo "}"
 }
 
-# -- clean_environment --
-# Print job header and clear inherited LMOD environment.
-# Module system setup, CLAS12_CONFIG, pilot-module unloads, and versioned loads
-# are emitted directly in nodescript.sh.
-# Args: <submitted_by>
-clean_environment() {
+# -- clean_and_check_environment --
+# Print job header, clear inherited LMOD state, unload pilot modules, and check
+# that required modules can be resolved. Module path setup is done in nodescript.sh.
+# Args: <submitted_by> <module>...
+clean_and_check_environment() {
     local submitted_by="$1"
+    shift
 
     printf 'Job running on node: '; /bin/hostname
     printf 'Job submitted by: %s\n' "$submitted_by"
@@ -165,6 +165,14 @@ clean_environment() {
           MODULEPATH_ROOT \
           MODULESHOME
 
+    unload_module_if_loaded gemc
+    unload_module_if_loaded coatjava
+    unload_module_if_loaded hipo
+    unload_module_if_loaded jdk
+    unload_module_if_loaded root
+    unload_module_if_loaded mcgen
+
+    check_modules_available "$@"
 }
 
 # ── define_exit_codes ────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ worker node — by calling each section generator in order.
 
 Full pipeline (output_type != 1):
   1.  preamble                  — shebang, args, source functions.sh, define_exit_codes
-  2.  clean_environment
+  2.  clean_and_check_environment
   3.  setup_job_files
   4.  Pelican environment
   5.  fetch_background_file  (only when bkmerging is set)
@@ -89,14 +89,15 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     module_check_args = ''.join(
         ' \\\n    "{}"'.format(module_name) for module_name in modules_to_load
     )
-    module_checks = 'run_timed check_modules_available{}\n'.format(module_check_args)
+    clean_and_check = (
+        'run_timed clean_and_check_environment "{username}"{modules}\n'
+    ).format(
+        modules=module_check_args,
+        username=sconfiguration.username or "unknown",
+    )
 
     sections = [
         create_preamble(sconfiguration, user_submission_id),
-
-        'run_timed clean_environment "{username}"\n'.format(
-            username=sconfiguration.username or "unknown",
-        ),
 
         (
             '\n# Module environment setup\n'
@@ -110,18 +111,12 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             ' exit $EC_ENVIRONMENT; }}\n'
             'module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles\n'
             'module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules\n'
-            'unload_module_if_loaded gemc\n'
-            'unload_module_if_loaded coatjava\n'
-            'unload_module_if_loaded hipo\n'
-            'unload_module_if_loaded jdk\n'
-            'unload_module_if_loaded root\n'
-            'unload_module_if_loaded mcgen\n'
-            '{module_checks}'
+            '{clean_and_check}'
             'export RCDB_CONNECTION=mysql://null\n'
             'echo "SQLITE Version: {gemcv}"\n'
         ).format(
+            clean_and_check=clean_and_check,
             gemcv=sconfiguration.gemcv or "latest",
-            module_checks=module_checks,
             submission_type=submission_type,
         ),
 
