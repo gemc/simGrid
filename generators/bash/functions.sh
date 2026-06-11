@@ -79,7 +79,8 @@ run_timed() {
 # Called automatically by run_timed when a step exits non-zero.
 cleanup_on_error() {
     echo "Cleaning up intermediate files after error"
-    rm -f *.hipo bg_merge_bk_file.sh random-seeds.txt RNDMSTATUS
+    rm -f *.hipo *.evio *.sqlite *.dat
+    rm -f bg_merge_bk_file.sh random-seeds.txt RNDMSTATUS
 }
 
 # ── print_timing_summary ──────────────────────────────────────────────────────
@@ -176,6 +177,30 @@ setup_container_environment() {
 # and are available as soon as functions.sh is sourced.
 define_exit_codes() {
     echo "Exit codes loaded."
+}
+
+# -- module helpers --
+# Load or unload environment modules through run_timed so module failures get
+# the same timing and cleanup behavior as simulation pipeline failures.
+load_module() {
+    local module_name="$1"
+    local nounset_enabled=0
+    [[ $- == *u* ]] && nounset_enabled=1 && set +u
+    module load "$module_name"
+    local rc=$?
+    [[ $nounset_enabled -eq 1 ]] && set -u
+    if [[ $rc -ne 0 ]]; then
+        echo "ERROR: failed to load ${module_name}"
+        return $EC_ENVIRONMENT
+    fi
+}
+
+unload_module_if_loaded() {
+    local module_name="$1"
+    local nounset_enabled=0
+    [[ $- == *u* ]] && nounset_enabled=1 && set +u
+    module unload "$module_name" >/dev/null 2>&1 || true
+    [[ $nounset_enabled -eq 1 ]] && set -u
 }
 
 # ── setup_job_files ───────────────────────────────────────────────────────────

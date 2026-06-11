@@ -98,8 +98,7 @@ def create_run_gemc(sconfiguration):
     return (
         '\n# Running GEMC\n'
         'echo "input: {input_label}, output: gemc.hipo"\n'
-        'module load gemc/{gemcv}'
-        ' || {{ echo "ERROR: failed to load gemc/{gemcv}"; exit $EC_ENVIRONMENT; }}\n'
+        'run_timed load_module "gemc/{gemcv}"\n'
         'gcard="${{CLAS12_CONFIG}}/gemc/{gemcv}/{configuration}.gcard"\n'
     ).format(input_label=input_label, gemcv=gemcv, configuration=configuration) + (
         'cmd=(\n' + cmd_body + ')\n'

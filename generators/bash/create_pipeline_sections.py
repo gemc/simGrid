@@ -37,8 +37,7 @@ def create_merge_background(sconfiguration):
     return (
         '\n# Background Merging\n'
         'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
-        'module load coatjava/{coatjavav}'
-        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
+        'run_timed load_module "coatjava/{coatjavav}"\n'
         'cmd=(bg-merger\n'
         '    -b "$BG_FILE"\n'
         '    -i gemc.hipo\n'
@@ -66,10 +65,8 @@ def create_denoiser(sconfiguration, denoise_version):
     return (
         '\n# Running Denoiser\n'
         'echo "input: {input_file}, output: gemc_denoised.hipo"\n'
-        'module load coatjava/{coatjavav}'
-        ' || {{ echo "ERROR: failed to load coatjava/{coatjavav}"; exit $EC_ENVIRONMENT; }}\n'
-        'module load denoise/{denoise_version}'
-        ' || {{ echo "ERROR: failed to load denoise/{denoise_version}"; exit $EC_ENVIRONMENT; }}\n'
+        'run_timed load_module "coatjava/{coatjavav}"\n'
+        'run_timed load_module "denoise/{denoise_version}"\n'
         'cmd=(denoise2.exe -i {input_file} -o gemc_denoised.hipo -t 1 -l 0.01)\n'
         'echo "Running Denoiser: ${{cmd[@]}}"\n'
         'run_timed run_denoiser "${{cmd[@]}}"\n'
