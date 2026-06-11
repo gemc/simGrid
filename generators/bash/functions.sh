@@ -175,8 +175,8 @@ define_exit_codes() {
 }
 
 # -- module helpers --
-# Load or unload environment modules through run_timed so module failures get
-# the same timing and cleanup behavior as simulation pipeline failures.
+# Load or unload environment modules through run_timed. Some modulefiles return
+# nonzero after setting useful PATH entries, so module failures are warnings.
 load_module() {
     local module_name="$1"
     local nounset_enabled=0
@@ -186,10 +186,10 @@ load_module() {
     local rc=$?
     [[ $nounset_enabled -eq 1 ]] && set -u
     if [[ $rc -ne 0 ]]; then
-        echo "ERROR: failed to load ${module_name}"
+        echo "WARNING: module load returned ${rc}: ${module_name}"
         diagnose_module_failure "$module_name"
-        return $EC_ENVIRONMENT
     fi
+    return 0
 }
 
 load_modules() {
@@ -210,10 +210,10 @@ check_module_available() {
         fi
         module load "$module_name"
     ) || {
-        echo "ERROR: module is not available: ${module_name}"
+        echo "WARNING: module availability check returned nonzero: ${module_name}"
         diagnose_module_failure "$module_name"
-        return $EC_ENVIRONMENT
     }
+    return 0
 }
 
 check_modules_available() {
@@ -237,6 +237,21 @@ diagnose_module_failure() {
             fi
             ;;
     esac
+}
+
+require_executable() {
+    local executable="$1"
+    if [[ "$executable" == */* ]]; then
+        if [[ -x "$executable" ]]; then
+            echo "Found executable: $executable"
+            return 0
+        fi
+    elif command -v "$executable" >/dev/null 2>&1; then
+        echo "Found executable: $(command -v "$executable")"
+        return 0
+    fi
+    echo "ERROR: required executable not found: $executable"
+    return $EC_ENVIRONMENT
 }
 
 unload_module_if_loaded() {

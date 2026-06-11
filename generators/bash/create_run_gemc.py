@@ -100,6 +100,7 @@ def create_run_gemc(sconfiguration):
         'echo "input: {input_label}, output: gemc.hipo"\n'
         'run_timed load_module "gemc/{gemcv}"\n'
         'run_timed load_module "sqlite/{gemcv}"\n'
+        'run_timed require_executable "gemc"\n'
         'gcard="${{CLAS12_CONFIG}}/gemc/{gemcv}/{configuration}.gcard"\n'
     ).format(input_label=input_label, gemcv=gemcv, configuration=configuration) + (
         'cmd=(\n' + cmd_body + ')\n'
