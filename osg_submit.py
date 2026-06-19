@@ -116,7 +116,10 @@ def main(argv=None):
             print("Job limit reached: '{}' has >= {} running+idle jobs. Skipping.".format(
                 DEFAULT_OWNER, args.max_submitted_jobs
             ))
-            return 1
+            # Reaching the job limit is a normal back-pressure condition, not an
+            # error: there is simply no capacity to submit right now. Return 0 so
+            # the caller (cron/wrapper) does not treat the skip as a failure.
+            return 0
         print("Capacity check passed: under {} jobs for owner '{}'.".format(
             args.max_submitted_jobs, DEFAULT_OWNER
         ))
