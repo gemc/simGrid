@@ -307,7 +307,7 @@ function softwareVersionSelected() {
 			}
 
 			if (isDevelPortal) {
-				const devVersion = "gemc/dev coatjava/14.1.0";
+				const devVersion = "gemc/dev coatjava/14.1.1";
 				text += `<option value="${devVersion}">${devVersion}</option>`;
 			}
 
