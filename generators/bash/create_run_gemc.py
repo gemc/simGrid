@@ -85,6 +85,9 @@ def create_run_gemc(sconfiguration):
 
     if sconfiguration.runs:
         args.append('-RUNNO={}'.format(sconfiguration.runs))
+    elif sconfiguration.run_list:
+        # runno is selected at runtime by the run-by-run weighted draw (preamble).
+        args.append('-RUNNO=$runno')
 
     args.extend([
         '"-SCALE_FIELD=binary_torus,    {}"'.format(torus_scale),

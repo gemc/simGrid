@@ -34,6 +34,9 @@ def create_preamble(sconfiguration, user_submission_id):
         arg_doc        = "#   1. sjob             — subjob index (HTCondor $(Process), 0-based)\n"
         arg_parse      = "sjob=$1\n"
 
+    # For a run_list submission runno is empty here; it is chosen at runtime by
+    # the run-by-run weighted draw section. Otherwise it is the fixed value (if
+    # any) from the 'runs' scard field.
     arg_parse += 'runno="{}"\n'.format(runno_str)
 
     return """\

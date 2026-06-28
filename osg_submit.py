@@ -43,6 +43,33 @@ def _print_test_warning(lines):
     print(border)
 
 
+def _stage_run_list_files(scard, job_dir):
+    """Stage run-by-run inputs into job_dir for a run_list submission.
+
+    Writes run_list.txt (one run per line) and copies runs.json and
+    select_run.py so the worker node can perform the weighted draw. Returns the
+    list of staged filenames to add to transfer_input_files, or [] when the
+    submission has no run_list.
+    """
+    run_list = getattr(scard, 'run_list', None)
+    if not run_list:
+        return []
+
+    runs = [r.strip() for r in run_list.split(',') if r.strip()]
+
+    with open(os.path.join(job_dir, "run_list.txt"), 'w') as f:
+        f.write("\n".join(runs) + "\n")
+    shutil.copy2(
+        os.path.join(_REPO_ROOT, "web_portal", "data", "runs.json"),
+        os.path.join(job_dir, "runs.json"),
+    )
+    shutil.copy2(
+        os.path.join(_REPO_ROOT, "generators", "bash", "select_run.py"),
+        os.path.join(job_dir, "select_run.py"),
+    )
+    return ["runs.json", "run_list.txt", "select_run.py"]
+
+
 def build_parser():
     # type: () -> argparse.ArgumentParser
     parser = argparse.ArgumentParser(
@@ -199,9 +226,16 @@ def main(argv=None):
             print("Error: no lund files found at {!r}.".format(lund_location))
             return 1
 
+    # For run_list submissions, stage runs.json, run_list.txt, and select_run.py
+    # so the worker node can pick a run weighted by luminosity at runtime.
+    extra_input_files = _stage_run_list_files(scard, job_dir)
+    if extra_input_files:
+        print("Staged run-by-run inputs: {}".format(", ".join(extra_input_files)))
+
     print("\nStep 5: Generate HTCondor submit file")
     from generators.condor.generate_condor_card import generate_condor_card
     condor_card = generate_condor_card(scard, user_submission_id=user_submission_id,
+                                       extra_input_files=extra_input_files,
                                        target_site=args.target_site, devel=args.devel)
     if args.print_condor_card:
         print()

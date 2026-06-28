@@ -67,9 +67,10 @@
 			fwrite($fp, 'client_ip: '.$client_ip.PHP_EOL);
 			fwrite($fp, 'dstOUT: yes'.PHP_EOL);
 			fwrite($fp, 'fields: '.$fields.PHP_EOL);
-			$runs_scard = !empty($run_number) ? $run_number : $user_runs;
-			if (!empty($runs_scard)) {
-				fwrite($fp, 'runs: '.$runs_scard.PHP_EOL);
+			if (!empty($user_runs)) {
+				fwrite($fp, 'run_list: '.$user_runs.PHP_EOL);
+			} elseif (!empty($run_number)) {
+				fwrite($fp, 'runs: '.$run_number.PHP_EOL);
 			}
 			fwrite($fp, 'bkmerging: '.$bkmerging.PHP_EOL);
 			fwrite($fp, 'zposition: '.$zposition.PHP_EOL);
@@ -140,8 +141,8 @@
 		</tr>
 		<?php if (!empty($run_number) || !empty($user_runs)): ?>
 		<tr>
-			<td>Run(s)</td>
-			<td><?php echo htmlspecialchars(!empty($run_number) ? $run_number : $user_runs, ENT_QUOTES, 'UTF-8'); ?></td>
+			<td><?php echo !empty($user_runs) ? 'run_list' : 'runs'; ?></td>
+			<td><?php echo htmlspecialchars(!empty($user_runs) ? $user_runs : $run_number, ENT_QUOTES, 'UTF-8'); ?></td>
 		</tr>
 		<?php endif; ?>
 		<tr>

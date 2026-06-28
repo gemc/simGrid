@@ -163,11 +163,24 @@ function fieldSelected() {
 
 				var runKeys = Object.keys(runs);
 
+				// Separate per-run metadata entries (object values) from
+				// run-list entries (label + array of run numbers).
+				var metaKeys = [];
+				var listKeys = [];
+				for (var i = 0; i < runKeys.length; i++) {
+					var entry = runs[runKeys[i]];
+					if (Array.isArray(entry)) {
+						listKeys.push(runKeys[i]);
+					} else if (entry && typeof entry === "object") {
+						metaKeys.push(runKeys[i]);
+					}
+				}
+
 				// Pass 1: compute column widths for monospace alignment
 				var wRn = 0, wTitle = 0, wTarget = 0, wCurrent = 0, wEnergy = 0, wTor = 0, wSol = 0, wLw = 0;
-				for (var i = 0; i < runKeys.length; i++) {
-					var ri = runs[runKeys[i]];
-					wRn      = Math.max(wRn,      String(runKeys[i]).length);
+				for (var i = 0; i < metaKeys.length; i++) {
+					var ri = runs[metaKeys[i]];
+					wRn      = Math.max(wRn,      String(metaKeys[i]).length);
 					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
 					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
 					wCurrent = Math.max(wCurrent, String(ri.beam_current || "").length);
@@ -176,11 +189,16 @@ function fieldSelected() {
 					wSol     = Math.max(wSol,     String(ri.solenoid     || "").length);
 					wLw      = Math.max(wLw,      Number(ri.lumi_weight  ||  0).toFixed(2).length);
 				}
+				for (var i = 0; i < listKeys.length; i++) {
+					wRn = Math.max(wRn, String(listKeys[i]).length);
+				}
 
-				// Pass 2: build padded option labels
+				// Pass 2: build padded option labels. Per-run entries are
+				// prefixed "Run" with the full metadata columns; run-list
+				// entries are prefixed "List" with no tor/sol/lw columns.
 				var runsText = "<option value=\"\" selected>— select a run —</option>";
-				for (var i = 0; i < runKeys.length; i++) {
-					var rn = runKeys[i];
+				for (var i = 0; i < metaKeys.length; i++) {
+					var rn = metaKeys[i];
 					var r  = runs[rn];
 					var lw = Number(r.lumi_weight || 0).toFixed(2);
 					var label = "Run "   + _padEnd(rn,                   wRn)
@@ -192,6 +210,11 @@ function fieldSelected() {
 						+ "  sol" + _padEnd(r.solenoid  || "", wSol)
 						+ "  lw=" + lw;
 					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
+				}
+				for (var i = 0; i < listKeys.length; i++) {
+					var lk = listKeys[i];
+					runsText += "<option value=\"" + lk + "\">"
+						+ "List: " + _padEnd(lk, wRn) + "</option>";
 				}
 				var runDropdown = document.getElementById("run_number");
 				runDropdown.innerHTML  = runsText;
@@ -259,10 +282,22 @@ function runSelected() {
 			var myObj = JSON.parse(this.responseText);
 			var runs  = (selected_experiment in myObj) ? myObj[selected_experiment].runs : null;
 			if (runs && run_number in runs) {
-				var r        = runs[run_number];
-				var fieldKey = "tor" + r.torus + "_sol" + r.solenoid;
-				document.getElementById("fields").innerHTML =
-					"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
+				var entry = runs[run_number];
+				if (Array.isArray(entry)) {
+					// A run-list entry: keep the "List:" option visible in the
+					// dropdown, fill the manual field with its run numbers, and
+					// lock fields to "Run by Run". The label in run_number is
+					// ignored on submit (user_runs takes precedence → run_list).
+					if (userRuns) {
+						userRuns.value    = entry.join(", ");
+						userRuns.disabled = false;
+					}
+					setFieldsRunByRun();
+				} else {
+					var fieldKey = "tor" + entry.torus + "_sol" + entry.solenoid;
+					document.getElementById("fields").innerHTML =
+						"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
+				}
 				bkmergingSelected();
 			}
 		}
@@ -272,16 +307,32 @@ function runSelected() {
 }
 
 
+// Lock the Magnetic Fields dropdown to a single "Run by Run" entry, used when
+// run numbers are entered/prefilled manually (field varies per run).
+function setFieldsRunByRun() {
+	var fieldsEl = document.getElementById("fields");
+	if (fieldsEl) {
+		fieldsEl.innerHTML =
+			"<option value=\"Run by Run\" selected>Run by Run</option>";
+	}
+}
+
+
 function userRunsInput(el) {
 	var runDropdown = document.getElementById("run_number");
 	if (el.value.trim() !== "") {
-		// Text field active: reset dropdown to placeholder and disable it
+		// Text field active: reset dropdown to placeholder and disable it,
+		// and lock the Magnetic Fields to "Run by Run".
 		runDropdown.selectedIndex = 0;
 		runDropdown.disabled      = true;
+		setFieldsRunByRun();
 	} else {
-		// Text cleared: re-enable dropdown
+		// Text cleared: re-enable dropdown and restore the empty placeholder
 		runDropdown.disabled = false;
+		document.getElementById("fields").innerHTML =
+			"<option value=\"\" selected hidden></option>";
 	}
+	bkmergingSelected();
 }
 
 

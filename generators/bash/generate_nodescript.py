@@ -30,6 +30,7 @@ import os
 
 from generators.bash.create_preamble           import create_preamble
 from generators.bash.create_lund_or_generator  import create_lund_or_generator
+from generators.bash.create_run_selection      import create_run_selection
 from generators.bash.create_run_gemc           import create_run_gemc
 from generators.bash.create_pipeline_sections  import (
     create_merge_background,
@@ -142,6 +143,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             else 'echo "Background merging not requested — skipping fetch."\n',
 
         create_lund_or_generator(sconfiguration),
+
+        create_run_selection(sconfiguration),
 
         create_run_gemc(sconfiguration),
 

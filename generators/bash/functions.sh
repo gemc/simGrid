@@ -271,6 +271,28 @@ require_executable() {
     return $EC_ENVIRONMENT
 }
 
+# ── select_weighted_run ───────────────────────────────────────────────────────
+# Pick one run number from a run list, weighted by per-run luminosity weights.
+# Delegates the validation, weight normalization, and weighted draw to
+# select_run.py. Prints ONLY the chosen run number to stdout so the caller can
+# capture it:  runno=$(select_weighted_run runs.json run_list.txt)
+# Diagnostics go to stderr; returns non-zero (failing the job) when a requested
+# run is missing from runs.json or the inputs are invalid.
+# Args: <runs_json> <run_list_file>
+select_weighted_run() {
+    local runs_json="$1"
+    local run_list_file="$2"
+    if [[ ! -f "$runs_json" ]]; then
+        echo "select_weighted_run: ${runs_json} not found" >&2
+        return $EC_FILE_DOES_NOT_EXIST
+    fi
+    if [[ ! -f "$run_list_file" ]]; then
+        echo "select_weighted_run: ${run_list_file} not found" >&2
+        return $EC_FILE_DOES_NOT_EXIST
+    fi
+    python3 select_run.py "$runs_json" "$run_list_file"
+}
+
 unload_module_if_loaded() {
     local module_name="$1"
     local nounset_enabled=0
@@ -471,5 +493,6 @@ write_to_jlab() {
     rm -f core* *.gcard
     rm -f recon.hipo gemc.hipo gemc.merged.hipo gemc_denoised.hipo
     rm -f nodescript.sh condor_exec.exe
+    rm -f runs.json run_list.txt select_run.py
     rm -f RNDMSTATUS random-seeds.txt Null gemc.evio *.hipo
 }

@@ -143,6 +143,9 @@ def _output_filename_pattern(sconfiguration, user_submission_id):
     """
     string_id = (sconfiguration.string_id or "output").strip('-')
     runno = _sanitize_runs(sconfiguration.runs)
+    if not runno and sconfiguration.run_list:
+        # Run chosen at runtime by the weighted draw; reflect the bash variable.
+        runno = "$runno"
     if sconfiguration.type == '2':
         if runno:
             return "{}-$lund_base-{}-{}-$sjob.hipo".format(string_id, runno, user_submission_id)
