@@ -228,6 +228,6 @@ dvcsgen --beam 10.604 --x 0.05 0.85 --trig 100 --q2 0.9 14 --t 0 0.79 --gpd 101 
 
 </main>
 
-<script src="main.js"></script>
+<script src="main.js?v=<?php echo filemtime(__DIR__ . '/main.js'); ?>"></script>
 </body>
 </html>

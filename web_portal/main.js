@@ -1,3 +1,8 @@
+// Per-page-load cache-buster for the config JSON fetched below. A fresh value
+// each load forces the browser/proxy to re-fetch data/*.json (so edits to
+// setup.json show up), while all fetches within one load share one cached copy.
+var ASSET_VERSION = Date.now();
+
 //Multiplication (https://stackoverflow.com/questions/21223164/multiplying-two-inputs-with-javascript-displaying-in-text-box)
 function calculate() {
 	var myBox1 = document.getElementById('box1').value;
@@ -126,7 +131,7 @@ function configurationSelected() {
 			document.getElementById("configuration").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -252,7 +257,7 @@ function fieldSelected() {
 			}
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -302,7 +307,7 @@ function runSelected() {
 			}
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -366,7 +371,7 @@ function softwareVersionSelected() {
 		}
 	};
 
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -451,7 +456,7 @@ function vertexSelected() {
 			}
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 
 
@@ -477,7 +482,7 @@ function update_mcgen_versions() {
 			document.getElementById("mcgenv").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/software_versions.json", true);
+	xmlhttp.open("GET", "data/software_versions.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -499,7 +504,7 @@ function bkmergingSelected() {
 			document.getElementById("bkmerging").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 

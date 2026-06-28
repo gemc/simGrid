@@ -176,6 +176,6 @@
 	</form>
 </section>
 
-<script src="main.js"></script>
+<script src="main.js?v=<?php echo filemtime(__DIR__ . '/main.js'); ?>"></script>
 </body>
 </html>
