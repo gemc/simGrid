@@ -12,13 +12,42 @@ invocation is visible and reproducible directly in nodescript.sh.
 _BG_MERGER_DETECTORS = 'DC,FTOF,ECAL,HTCC,LTCC,BST,BMT,CND,CTOF,FTCAL,FTHODO'
 
 
-def _coatjava_at_least(version_str, threshold="16.0.0"):
+def _coatjava_at_least(version_str, threshold="14.0.0"):
     try:
         v = tuple(int(x) for x in str(version_str).split('.'))
         t = tuple(int(x) for x in threshold.split('.'))
+        width = max(len(v), len(t))
+        v = v + (0,) * (width - len(v))
+        t = t + (0,) * (width - len(t))
         return v >= t
     except (ValueError, AttributeError):
         return False
+
+
+def should_run_denoiser(sconfiguration):
+    """Return True when this coatjava version still requires the denoiser step."""
+    return not _coatjava_at_least(sconfiguration.coatjavav or "latest")
+
+
+def reconstruction_input_file(sconfiguration):
+    """Return the hipo file consumed by reconstruction for this pipeline."""
+    if should_run_denoiser(sconfiguration):
+        return "gemc_denoised.hipo"
+    if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no':
+        return "gemc.merged.hipo"
+    return "gemc.hipo"
+
+
+def reconstruction_yaml_stem(sconfiguration):
+    """Return the yaml stem used by recon-util and verified by setup_job_files.
+
+    For coatjava 14.0.0 or newer the MC+AI yaml ('mc-ai') is used; older
+    versions use the experiment configuration yaml.
+    """
+    coatjavav = sconfiguration.coatjavav or "latest"
+    if _coatjava_at_least(coatjavav):
+        return "mc-ai"
+    return sconfiguration.configuration or "default"
 
 _DST_BANKS = (
     'RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,'
@@ -90,29 +119,31 @@ def create_denoiser(sconfiguration, denoise_version):
 def create_reconstruction(sconfiguration):
     """Emit the recon-util cmd array and run_timed run_reconstruction.
 
-    coatjava is loaded by create_denoiser or create_merge_background, which
-    always precede reconstruction.
+    Reconstruction consumes the denoised file for older coatjava versions. For
+    coatjava 14.0.0 and newer, the denoiser is skipped and recon-util consumes
+    the direct GEMC output, after optional background merging.
     """
     coatjavav = sconfiguration.coatjavav or "latest"
-    if _coatjava_at_least(coatjavav):
-        yaml_stem = "mc-ai"
-    else:
-        yaml_stem = sconfiguration.configuration or "default"
+    yaml_stem = reconstruction_yaml_stem(sconfiguration)
+    input_file = reconstruction_input_file(sconfiguration)
     return (
         '\n# Running Reconstruction\n'
-        'echo "input: gemc_denoised.hipo, output: recon.hipo"\n'
+        'echo "input: {input_file}, output: recon.hipo"\n'
+        'unload_module_if_loaded gemc\n'
+        'run_timed load_module "jdk/21.0.2"\n'
+        'run_timed load_module "coatjava/{coatjavav}"\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{yaml_stem}.yaml"\n'
         'recon_util="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/coatjava/bin/recon-util"\n'
         'run_timed require_executable "$recon_util"\n'
         'cmd=("$recon_util"\n'
         '    -y "$yaml"\n'
-        '    -i gemc_denoised.hipo\n'
+        '    -i {input_file}\n'
         '    -o recon.hipo\n'
         '    -- -Xmx1920m)\n'
         'echo "Running Reconstruction: ${{cmd[@]}}"\n'
         'run_timed run_reconstruction "${{cmd[@]}}"\n'
-        'rm -f gemc_denoised.hipo\n'
-    ).format(coatjavav=coatjavav, yaml_stem=yaml_stem)
+        'rm -f {input_file}\n'
+    ).format(coatjavav=coatjavav, input_file=input_file, yaml_stem=yaml_stem)
 
 
 def create_test_hipo(sconfiguration):

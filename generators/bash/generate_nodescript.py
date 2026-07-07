@@ -13,7 +13,7 @@ Full pipeline (output_type != 1):
   6.  lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
   7.  run_gemc
   8.  merge_background          (only when bkmerging is set)
-  9.  run_denoiser
+  9.  run_denoiser              — only for coatjava versions before 14.0.0
   10. run_reconstruction
   11. test_hipo_file
   12. create_dst                 (creates DST or sets OUTPUT_FILE=recon.hipo)
@@ -40,6 +40,8 @@ from generators.bash.create_pipeline_sections  import (
     create_dst_section,
     create_write_to_jlab,
     create_gemc_only_section,
+    reconstruction_yaml_stem,
+    should_run_denoiser,
 )
 
 NODESCRIPT      = "nodescript.sh"
@@ -62,6 +64,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
     """
     submission_type = "dev" if sconfiguration.submission == "devel" else "prod"
     gemc_only = str(sconfiguration.output_type or '').strip() == '1'
+    use_denoiser = not gemc_only and should_run_denoiser(sconfiguration)
     needs_mcgen = sconfiguration.type != '2' and sconfiguration.generator != 'gemc'
     needs_coatjava = not gemc_only or (
         sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
@@ -77,7 +80,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
                 coatjavav=sconfiguration.coatjavav or "latest",
             )
         )
-    if not gemc_only:
+    if use_denoiser:
         modules_to_load.append(
             'denoise/{denoise_version}'.format(
                 denoise_version=DENOISE_VERSION,
@@ -116,10 +119,11 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             submission_type=submission_type,
         ),
 
-        'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}"\n'.format(
+        'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}" "{yaml_stem}"\n'.format(
             coatjavav=sconfiguration.coatjavav or "latest",
             gemcv=sconfiguration.gemcv or "latest",
             configuration=sconfiguration.configuration or "default",
+            yaml_stem=reconstruction_yaml_stem(sconfiguration),
         ),
 
         (
@@ -157,8 +161,9 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
             create_write_to_jlab(sconfiguration, user_submission_id),
         ]
     else:
+        if use_denoiser:
+            sections.append(create_denoiser(sconfiguration, DENOISE_VERSION))
         sections += [
-            create_denoiser(sconfiguration, DENOISE_VERSION),
             create_reconstruction(sconfiguration),
             create_test_hipo(sconfiguration),
             create_dst_section(sconfiguration, user_submission_id),

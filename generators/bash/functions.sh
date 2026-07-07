@@ -304,14 +304,17 @@ unload_module_if_loaded() {
 # ── setup_job_files ───────────────────────────────────────────────────────────
 # Verify that the gcard and yaml files required by this job exist under
 # $CLAS12_CONFIG (exported by nodescript.sh).
-# Args: <coatjava_version> <gemc_version> <configuration>
+# Args: <coatjava_version> <gemc_version> <configuration> [yaml_stem]
+# yaml_stem defaults to <configuration>; for coatjava >= 14 the caller passes
+# "mc-ai" so the verified yaml matches the one used by reconstruction.
 # Exits with EC_FILE_DOES_NOT_EXIST if either file is absent.
 setup_job_files() {
     local coatjava_version="$1"
     local gemc_version="$2"
     local configuration="$3"
+    local yaml_stem="${4:-$configuration}"
 
-    local coatjava_yaml="${CLAS12_CONFIG}/coatjava/${coatjava_version}/${configuration}.yaml"
+    local coatjava_yaml="${CLAS12_CONFIG}/coatjava/${coatjava_version}/${yaml_stem}.yaml"
     local gemc_gcard="${CLAS12_CONFIG}/gemc/${gemc_version}/${configuration}.gcard"
 
     echo "coatjava_yaml : $coatjava_yaml"

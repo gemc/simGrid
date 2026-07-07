@@ -92,7 +92,7 @@ preamble → environment variables → clean_and_check_environment → setup_job
   → lund_or_generator                  # pelican fetch (type-2) or run_generator cmd array
   → run_gemc                           # gemc.hipo
   → [merge_background]                 # gemc.merged.hipo — only when bkmerging is set
-  → run_denoiser                       # gemc_denoised.hipo
+  → [run_denoiser]                     # gemc_denoised.hipo — only for coatjava < 14
   → run_reconstruction                 # recon.hipo
   → test_hipo_file                     # integrity check
   → create_dst                         # $OUTPUT_FILE
@@ -102,6 +102,8 @@ preamble → environment variables → clean_and_check_environment → setup_job
 
 `nodescript.sh` sets `OSRELEASE=almalinux9-gcc11` before loading modules so CVMFS
 modulefiles use the platform directory that contains GEMC, JDK, HIPO, and denoise.
+For coatjava 14 and newer, the denoiser step is skipped and reconstruction reads
+`gemc.merged.hipo` when background merging was requested, otherwise `gemc.hipo`.
 
 GEMC-only pipeline (`output_type=1`): steps up to (and including) `merge_background` run
 as normal; denoising, reconstruction, and DST are skipped; the gemc output file is renamed
