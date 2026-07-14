@@ -96,6 +96,12 @@ function genSelected(val) {
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://github.com/JeffersonLab/clas12-mcgen/tree/main/gibuu';
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML = '<br/> → gibuu options';
 
+	} else if (generator == "nucsidisgen") {
+		document.getElementById("generatorLink").getElementsByTagName('a')[0].href =
+			'https://github.com/JeffersonLab/clas12-mcgen/tree/main/nucsidisgen';
+		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML =
+			'<br/> → nucsidisgen options';
+
 	} else if (generator == "clas-stringspinner") {
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://jeffersonlab.github.io/clas-stringspinner/';
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML = '<br/> → clas-stringspinner generator options';

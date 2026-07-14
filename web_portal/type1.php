@@ -79,22 +79,23 @@
 				<td>
 					<select name="generator" id="generator" required onchange="genSelected(this)">
 						<option selected hidden value=""></option>
+						<option value="clas-stringspinner"> clas-stringspinner</option>
 						<option value="clas12-elSpectro"> clas12-elSpectro</option>
 						<option value="clasdis"> clasdis</option>
 						<option value="claspyth"> claspyth</option>
 						<option value="deep-pipi-gen"> deep-pipi-gen</option>
 						<option value="dvcsgen"> dvcsgen</option>
+						<option value="gemc"> gemc</option>
+						<option value="genepi"> genepi</option>
 						<option value="genKYandOnePion"> genKYandOnePion</option>
+						<option value="gibuu"> gibuu</option>
 						<option value="inclusive-dis-rad"> inclusive-dis-rad</option>
 						<option value="JPsiGen"> JPsiGen</option>
 						<option value="MCEGENpiN_radcorr"> MCEGENpiN_radcorr</option>
+						<option value="nucsidisgen"> nucsidisgen</option>
+						<option value="onepigen"> onepigen</option>
 						<option value="TCSGen"> TCSGen</option>
 						<option value="twopeg"> twopeg</option>
-						<option value="genepi"> genepi</option>
-						<option value="onepigen"> onepigen</option>
-						<option value="gibuu"> gibuu</option>
-						<option value="clas-stringspinner"> clas-stringspinner</option>
-						<option value="gemc"> gemc</option>
 					</select>
 				</td>
 			</tr>
