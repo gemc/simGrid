@@ -24,6 +24,8 @@
 	$vertex_choice = $_POST['vuser_selection'];
 	$string_id     = $_POST['user_string'];
 	$output_type   = $_POST['output_type'];
+	$run_number    = isset($_POST['run_number']) ? trim($_POST['run_number']) : '';
+	$user_runs     = isset($_POST['user_runs'])  ? trim($_POST['user_runs'])  : '';
 	$uri		   = $_SERVER['REQUEST_URI'];
 	$timestamp     = date('Y-m-d_H-i-s');
 	$scard_file    = '/var/www/gemc-runtime/scard_type2_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $username) . '_' . $timestamp . '.txt';
@@ -53,6 +55,11 @@
 		fwrite($fp, 'client_ip: '.$client_ip.PHP_EOL);
 		fwrite($fp, 'dstOUT: yes'.PHP_EOL);
 		fwrite($fp, 'fields: '.$fields.PHP_EOL);
+		if (!empty($user_runs)) {
+			fwrite($fp, 'run_list: '.$user_runs.PHP_EOL);
+		} elseif (!empty($run_number)) {
+			fwrite($fp, 'runs: '.$run_number.PHP_EOL);
+		}
 		fwrite($fp, 'bkmerging: '.$bkmerging.PHP_EOL);
 		fwrite($fp, 'zposition: '.$zposition.PHP_EOL);
 		fwrite($fp, 'raster: '.$raster.PHP_EOL);
@@ -114,8 +121,14 @@
 		</tr>
 		<tr>
 			<td>Magnetic Fields</td>
-			<td><?php echo($fields); ?></td>
+			<td><?php echo htmlspecialchars($fields, ENT_QUOTES, 'UTF-8'); ?></td>
 		</tr>
+		<?php if (!empty($run_number) || !empty($user_runs)): ?>
+		<tr>
+			<td><?php echo !empty($user_runs) ? 'run_list' : 'runs'; ?></td>
+			<td><?php echo htmlspecialchars(!empty($user_runs) ? $user_runs : $run_number, ENT_QUOTES, 'UTF-8'); ?></td>
+		</tr>
+		<?php endif; ?>
 		<tr>
 			<td>Lund File Location</td>
 			<td><?php echo($lundFiles); ?></td>
@@ -155,5 +168,5 @@
 
 </div>
 </body>
-<script src="main.js"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
+<script src="main.js?v=<?php echo filemtime(__DIR__ . '/main.js'); ?>"></script>        <!-- Don't move this line to the top! It causes an error at Safari -->
 </html>

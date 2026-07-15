@@ -13,6 +13,7 @@ This module centralizes:
 import argparse
 import configparser
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,11 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import pymysql
 from pymysql.cursors import DictCursor
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+from statuses import NOTSUBMITTED, SUBMITTED, SCRIPTS_GENERATED
 
 DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"select user, client_time, user_submission_id, pool_node, run_status, priority "
@@ -89,6 +95,84 @@ def print_payload_as_tsv(payload):
 		return
 
 	print(format_scalar_for_tsv(payload))
+
+
+def _format_scard_lines(scard_text):
+	# type: (str) -> List[str]
+	"""Parse scard key: value lines and align all values to a common column."""
+	pairs = []
+	for raw in scard_text.splitlines():
+		line = raw.strip()
+		if not line:
+			continue
+		if ":" in line:
+			key, _, value = line.partition(":")
+			pairs.append((key.strip(), value.strip()))
+		else:
+			pairs.append((line, ""))
+
+	if not pairs:
+		return []
+
+	width = max(len(k) for k, _ in pairs)
+	return ["{} : {}".format(k.ljust(width), v) for k, v in pairs]
+
+
+def print_job(row):
+	# type: (Dict[str, Any]) -> None
+	"""Print a formatted one-submission summary.
+
+	Accepts both DB-native field names (client_time, run_status) and the
+	aliases used by list_owner_submission (mysql_client_time, mysql_status,
+	osg id). Condor batch stats (run/idle/hold/done/jobs, osg id) are shown
+	only when present in the row.
+	"""
+	indent = "  "
+
+	client_time = row.get("client_time") or row.get("mysql_client_time") or row.get("submitted on")
+	server_time = row.get("server_time")
+	run_status  = row.get("run_status")  or row.get("mysql_status")
+	osg_id      = row.get("osg id")      or row.get("pool_node")
+
+	jobs = row.get("jobs")
+	run  = row.get("run")
+	idle = row.get("idle")
+	hold = row.get("hold")
+	done = row.get("done")
+
+	scard_lines = _format_scard_lines(row.get("scard") or "")
+
+	# Build (label, value) pairs; only include optional fields when present.
+	fields = [
+		("Submission ID", row.get("user_submission_id")),
+		("User",          row.get("user")),
+		("Submitted on",  client_time),
+	]
+	if server_time is not None:
+		fields.append(("Processed on", server_time))
+	fields.append(("Status",   run_status))
+	fields.append(("Priority", row.get("priority")))
+	if osg_id is not None:
+		fields.append(("OSG ID", osg_id))
+	if jobs is not None:
+		fields.append(("Jobs", "{}  (done={} run={} idle={} hold={})".format(
+			jobs, done, run, idle, hold
+		)))
+	if scard_lines:
+		fields.append(("Scard", scard_lines[0]))
+		for line in scard_lines[1:]:
+			fields.append(("", line))
+
+	width = max(len(label) for label, _ in fields if label)
+	sep = "-" * (len(indent) + width + 3 + 24)
+
+	print(sep)
+	for label, value in fields:
+		if label:
+			print("{}{} : {}".format(indent, label.ljust(width), value))
+		else:
+			print("{}{}   {}".format(indent, " " * width, value))
+	print(sep)
 
 
 class Database(object):
@@ -274,7 +358,7 @@ class Database(object):
 			client_time,  # type: str
 			pool_node,  # type: str
 			scard,  # type: str
-			run_status="Not Submitted",  # type: str
+			run_status=NOTSUBMITTED,  # type: str
 			client_ip=None,  # type: Optional[str]
 			priority=0,  # type: int
 			debug_enabled=False  # type: bool
@@ -569,6 +653,39 @@ class Database(object):
 			return None
 		return row["payload"]
 
+	def return_unsubmitted_job(self, user_submission_id=None):
+		# type: (Optional[int]) -> Optional[Dict[str, Any]]
+		"""Return one submission row ready for processing.
+
+		If user_submission_id is given, fetch that specific row.
+		Otherwise fetch the highest-priority row whose run_status is not
+		already SUBMITTED or SCRIPTS_GENERATED.
+
+		Returns the row as a dict, or None if nothing is found.
+		"""
+		if user_submission_id is not None:
+			return self.query_one(
+				"""
+				SELECT user, user_submission_id, client_time, server_time, run_status, priority, scard
+				FROM submissions
+				WHERE user_submission_id = %s
+				""",
+				[user_submission_id],
+			)
+
+		return self.query_one(
+			"""
+			SELECT user, user_submission_id, client_time, server_time, run_status, priority, scard
+			FROM submissions
+			WHERE run_status != %s
+			  AND run_status != %s
+			  AND priority > '0'
+			ORDER BY CAST(priority AS UNSIGNED) ASC
+			LIMIT 1
+			""",
+			[SUBMITTED, SCRIPTS_GENERATED],
+		)
+
 	def __enter__(self):
 		# type: () -> "Database"
 		self.connect()
@@ -633,9 +750,9 @@ def build_parser():
 	)
 	parser.add_argument(
 		"--output-format",
-		choices=["json", "tsv"],
+		choices=["json", "tsv", "job"],
 		default="json",
-		help="Output format: json or tsv."
+		help="Output format: json, tsv, or job (formatted submission summary)."
 	)
 	return parser
 
@@ -661,8 +778,13 @@ def main():
 
 			if args.output_format == "json":
 				print(json.dumps(payload, indent=args.indent, default=str))
-			else:
+			elif args.output_format == "tsv":
 				print_payload_as_tsv(payload)
+			else:
+				rows = payload if isinstance(payload, list) else [payload]
+				for row in rows:
+					if row is not None:
+						print_job(row)
 
 		return 0
 	except Exception as exc:

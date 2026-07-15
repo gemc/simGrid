@@ -1,3 +1,8 @@
+// Per-page-load cache-buster for the config JSON fetched below. A fresh value
+// each load forces the browser/proxy to re-fetch data/*.json (so edits to
+// setup.json show up), while all fetches within one load share one cached copy.
+var ASSET_VERSION = Date.now();
+
 //Multiplication (https://stackoverflow.com/questions/21223164/multiplying-two-inputs-with-javascript-displaying-in-text-box)
 function calculate() {
 	var myBox1 = document.getElementById('box1').value;
@@ -35,6 +40,12 @@ function formatAgeDays(value) {
 	var num = Number(value);
 	if (!isFinite(num)) return "";
 	return num.toFixed(2);
+}
+
+function _padEnd(str, len) {
+	str = String(str);
+	while (str.length < len) str += " ";
+	return str;
 }
 
 function genSelected(val) {
@@ -126,7 +137,7 @@ function configurationSelected() {
 			document.getElementById("configuration").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -141,26 +152,205 @@ function fieldSelected() {
 		if (this.readyState == 4 && this.status == 200) {
 			var myObj = JSON.parse(this.responseText);
 
-			if (selected_experiment in myObj) {
+			var runs = (selected_experiment in myObj) ? myObj[selected_experiment].runs : null;
+			var hasRuns = runs && typeof runs === "object" && !Array.isArray(runs) && Object.keys(runs).length > 0;
 
-				var keys_field = Object.keys(myObj[selected_experiment]);
+			var fieldsRow = document.getElementById("fields-row");
+			var runsRow   = document.getElementById("runs-row");
 
-				for (key in keys_field) {
-					if (keys_field[key].includes("tor")) {
-						text += "<option value=\"" + keys_field[key] + "\">" + keys_field[key] + "</option>";
+			var userRunsRow = document.getElementById("user-runs-row");
+
+			if (hasRuns) {
+				if (runsRow)      runsRow.style.display      = "";
+				if (userRunsRow)  userRunsRow.style.display  = "";
+				if (fieldsRow)    fieldsRow.style.display    = "";
+
+				var fieldsEl = document.getElementById("fields");
+				if (fieldsEl) {
+					fieldsEl.style.pointerEvents   = "none";
+					fieldsEl.style.backgroundColor = "#f0f0f0";
+					fieldsEl.style.color           = "#555";
+				}
+
+				var runKeys = Object.keys(runs);
+
+				// Separate per-run metadata entries (object values) from
+				// run-list entries (label + array of run numbers).
+				var metaKeys = [];
+				var listKeys = [];
+				for (var i = 0; i < runKeys.length; i++) {
+					var entry = runs[runKeys[i]];
+					if (Array.isArray(entry)) {
+						listKeys.push(runKeys[i]);
+					} else if (entry && typeof entry === "object") {
+						metaKeys.push(runKeys[i]);
 					}
 				}
+
+				// Pass 1: compute column widths for monospace alignment
+				var wRn = 0, wTitle = 0, wTarget = 0, wCurrent = 0, wEnergy = 0, wTor = 0, wSol = 0, wLw = 0;
+				for (var i = 0; i < metaKeys.length; i++) {
+					var ri = runs[metaKeys[i]];
+					wRn      = Math.max(wRn,      String(metaKeys[i]).length);
+					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
+					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
+					wCurrent = Math.max(wCurrent, String(ri.beam_current || "").length);
+					wEnergy  = Math.max(wEnergy,  String(ri.beam_energy  || "").length);
+					wTor     = Math.max(wTor,     String(ri.torus        || "").length);
+					wSol     = Math.max(wSol,     String(ri.solenoid     || "").length);
+					wLw      = Math.max(wLw,      Number(ri.lumi_weight  ||  0).toFixed(2).length);
+				}
+				for (var i = 0; i < listKeys.length; i++) {
+					wRn = Math.max(wRn, String(listKeys[i]).length);
+				}
+
+				// Pass 2: build padded option labels. Per-run entries are
+				// prefixed "Run" with the full metadata columns; run-list
+				// entries are prefixed "List" with no tor/sol/lw columns.
+				var runsText = "<option value=\"\" selected>— select a run —</option>";
+				for (var i = 0; i < metaKeys.length; i++) {
+					var rn = metaKeys[i];
+					var r  = runs[rn];
+					var lw = Number(r.lumi_weight || 0).toFixed(2);
+					var label = "Run "   + _padEnd(rn,                   wRn)
+						+ "  " + _padEnd(r.title        || "", wTitle)
+						+ "  " + _padEnd(r.target       || "", wTarget)
+						+ "  " + _padEnd(r.beam_current || "", wCurrent)
+						+ "  " + _padEnd(r.beam_energy  || "", wEnergy)
+						+ "  tor" + _padEnd(r.torus     || "", wTor)
+						+ "  sol" + _padEnd(r.solenoid  || "", wSol)
+						+ "  lw=" + lw;
+					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
+				}
+				for (var i = 0; i < listKeys.length; i++) {
+					var lk = listKeys[i];
+					runsText += "<option value=\"" + lk + "\">"
+						+ "List: " + _padEnd(lk, wRn) + "</option>";
+				}
+				var runDropdown = document.getElementById("run_number");
+				runDropdown.innerHTML  = runsText;
+				runDropdown.disabled   = false;
+
+				var userRuns = document.getElementById("user_runs");
+				if (userRuns) {
+					userRuns.value    = "";
+					userRuns.disabled = false;
+				}
+
+				document.getElementById("fields").innerHTML =
+					"<option value=\"\" selected hidden></option>";
+			} else {
+				if (fieldsRow)    fieldsRow.style.display    = "";
+				if (runsRow)      runsRow.style.display      = "none";
+				if (userRunsRow)  userRunsRow.style.display  = "none";
+
+				var fieldsEl = document.getElementById("fields");
+				if (fieldsEl) {
+					fieldsEl.style.pointerEvents   = "";
+					fieldsEl.style.backgroundColor = "";
+					fieldsEl.style.color           = "";
+				}
+
+				if (selected_experiment in myObj) {
+					var keys_field = Object.keys(myObj[selected_experiment]);
+					for (var key in keys_field) {
+						if (keys_field[key].includes("tor")) {
+							text += "<option value=\"" + keys_field[key] + "\">" + keys_field[key] + "</option>";
+						}
+					}
+				}
+				document.getElementById("fields").innerHTML = text;
 			}
-			document.getElementById("fields").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
+}
+
+
+function runSelected() {
+	var selected_experiment = document.getElementById("configuration").value;
+	var run_number = document.getElementById("run_number").value;
+
+	var userRuns = document.getElementById("user_runs");
+	if (!run_number) {
+		// Placeholder re-selected: re-enable text field and clear fields
+		if (userRuns) userRuns.disabled = false;
+		document.getElementById("fields").innerHTML =
+			"<option value=\"\" selected hidden></option>";
+		return;
+	}
+
+	// Dropdown active: disable and clear the text field
+	if (userRuns) {
+		userRuns.value    = "";
+		userRuns.disabled = true;
+	}
+
+	var xmlhttp = new XMLHttpRequest();
+	xmlhttp.onreadystatechange = function () {
+		if (this.readyState == 4 && this.status == 200) {
+			var myObj = JSON.parse(this.responseText);
+			var runs  = (selected_experiment in myObj) ? myObj[selected_experiment].runs : null;
+			if (runs && run_number in runs) {
+				var entry = runs[run_number];
+				if (Array.isArray(entry)) {
+					// A run-list entry: keep the "List:" option visible in the
+					// dropdown, fill the manual field with its run numbers, and
+					// lock fields to "Run by Run". The label in run_number is
+					// ignored on submit (user_runs takes precedence → run_list).
+					if (userRuns) {
+						userRuns.value    = entry.join(", ");
+						userRuns.disabled = false;
+					}
+					setFieldsRunByRun();
+				} else {
+					var fieldKey = "tor" + entry.torus + "_sol" + entry.solenoid;
+					document.getElementById("fields").innerHTML =
+						"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
+				}
+				bkmergingSelected();
+			}
+		}
+	};
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
+	xmlhttp.send();
+}
+
+
+// Lock the Magnetic Fields dropdown to a single "Run by Run" entry, used when
+// run numbers are entered/prefilled manually (field varies per run).
+function setFieldsRunByRun() {
+	var fieldsEl = document.getElementById("fields");
+	if (fieldsEl) {
+		fieldsEl.innerHTML =
+			"<option value=\"Run by Run\" selected>Run by Run</option>";
+	}
+}
+
+
+function userRunsInput(el) {
+	var runDropdown = document.getElementById("run_number");
+	if (el.value.trim() !== "") {
+		// Text field active: reset dropdown to placeholder and disable it,
+		// and lock the Magnetic Fields to "Run by Run".
+		runDropdown.selectedIndex = 0;
+		runDropdown.disabled      = true;
+		setFieldsRunByRun();
+	} else {
+		// Text cleared: re-enable dropdown and restore the empty placeholder
+		runDropdown.disabled = false;
+		document.getElementById("fields").innerHTML =
+			"<option value=\"\" selected hidden></option>";
+	}
+	bkmergingSelected();
 }
 
 
 function softwareVersionSelected() {
 	const selected_experiment = document.getElementById("configuration").value;
+	const isDevelPortal = window.location.pathname.includes('dev/web_portal') ||
+	                      window.location.pathname.includes('test/web_interface');
 
 	let text = '<option selected hidden value=""></option>';
 	const xmlhttp = new XMLHttpRequest();
@@ -178,11 +368,16 @@ function softwareVersionSelected() {
 				}
 			}
 
+			if (isDevelPortal) {
+				const devVersion = "gemc/dev coatjava/14.1.2";
+				text += `<option value="${devVersion}">${devVersion}</option>`;
+			}
+
 			document.getElementById("softwarev").innerHTML = text;
 		}
 	};
 
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -267,7 +462,7 @@ function vertexSelected() {
 			}
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 
 
@@ -293,7 +488,7 @@ function update_mcgen_versions() {
 			document.getElementById("mcgenv").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/software_versions.json", true);
+	xmlhttp.open("GET", "data/software_versions.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 
@@ -315,7 +510,7 @@ function bkmergingSelected() {
 			document.getElementById("bkmerging").innerHTML = text;
 		}
 	};
-	xmlhttp.open("GET", "data/setup.json", true);
+	xmlhttp.open("GET", "data/setup.json?v=" + ASSET_VERSION, true);
 	xmlhttp.send();
 }
 

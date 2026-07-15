@@ -1,84 +1,184 @@
 # SConfiguration class definition
-#
+
 import os.path
-import sys
+
+from statuses import NOTSUBMITTED, PROCESSING, SUBMITTED, SCRIPTS_GENERATED
 
 
 class SConfiguration():
+	"""Steering card configuration for a simulation submission."""
 
-	# constructor from Steering Card (scard) text file
 	def __init__(self, scardFile):
+		"""Initialize from a scard text file."""
+		self._init_fields()
+		self.file = scardFile
 
-		self.file           = None   # steering card file
-		self.content        = None   # full content of steering card
-		self.project        = None   # OSG project
-		self.type           = None   # submission type: 1 or 2
-		self.connection     = None   # connection: mysql or sqlite
-		self.version        = None   # portal version (production or devel)
-		self.username       = None   # username
-		self.configuration  = None   # configuration: rga, rgb, etc
-		self.generator      = None   # generator name for type 1, or address for type2
-		self.genOptions     = None
-		self.nevents        = None
-		self.njobs          = None
-		self.client_ip      = None
-		self.fields         = None
-		self.torus          = None
-		self.solenoid       = None
-		self.bkmerging      = None
+		if not os.path.isfile(scardFile):
+			raise FileNotFoundError('Scard file not found: {}'.format(scardFile))
 
-		# open txt file, read and fill:
-		if os.path.isfile(scardFile):
-			# get scard content
-			self.file = scardFile
-			with open(scardFile) as openedFile:
-				# stripping white spaces
-				self.scardContent="".join(line.replace(" ", "") for line in openedFile)
-				self.parseSCard(self.scardContent)
-		else:
-			sys.exit('Fatal error: {0} not found'.format(self.file))
+		with open(scardFile) as f:
+			self.parseSCard(f.read())
 
+	@classmethod
+	def from_string(cls, scard_text):
+		"""Initialize from a scard text string (e.g. fetched from the database)."""
+		obj = cls.__new__(cls)
+		obj._init_fields()
+		obj.parseSCard(scard_text)
+		return obj
 
-	# scardContent is
+	def _init_fields(self):
+		"""Set all scard attributes to None."""
+		self.file          = None
+		self.project       = None
+		self.type          = None
+		self.connection    = None
+		self.version       = None
+		self.username      = None
+		self.configuration = None
+		self.generator     = None
+		self.genOptions    = None
+		self.nevents       = None
+		self.njobs         = None
+		self.jobs          = None
+		self.client_ip     = None
+		self.fields        = None
+		self.torus         = None
+		self.solenoid      = None
+		self.bkmerging     = None
+		self.softwarev     = None
+		self.dstOUT        = None
+		self.zposition     = None
+		self.raster        = None
+		self.beam          = None
+		self.vertex_choice = None
+		self.string_id     = None
+		self.output_type   = None
+		self.submission    = None
+		self.runs          = None
+		self.run_list      = None
+		self.gemcv         = None
+		self.coatjavav     = None
+		self.mcgenv        = None
+		self.genExecutable = None
+		self.user_string   = None
+		self._extra        = {}
+
 	def parseSCard(self, scardContent):
-		print('Parsing {0} content'.format(self.file));
+		"""Parse scard key: value lines into attributes.
 
-		# splitting content into lines, criteria is carriage return
-		scard_lines = scardContent.split("\n")
-		for line in scard_lines:
+		Unknown keys are stored in _extra rather than raising an error,
+		so the class stays forward-compatible with new scard fields.
+		After parsing, _resolve_type() is called to ensure self.type is
+		always set even when the scard omits the type field.
+		"""
+		label = self.file if self.file else 'string'
+
+		for raw_line in scardContent.splitlines():
+			line = raw_line.strip()
 			if not line:
-				print('File {0} parsed successfully'.format(self.file))
-				break
-			pos_delimeter_colon = line.find(":")
-			key   =  line[:pos_delimeter_colon].strip()
-			value =  line[pos_delimeter_colon+1:].strip()
+				continue
 
-			# only set attributes that exist
-			if hasattr(self, key) and not 'file' in key:
+			pos = line.find(':')
+			if pos < 0:
+				continue
+
+			key   = line[:pos].strip()
+			value = line[pos + 1:].strip()
+
+			if not key or key == 'file':
+				continue
+
+			if hasattr(self, key) and not key.startswith('_'):
 				setattr(self, key, value)
 			else:
-				sys.exit('Fatal error: key {0} not found in scard content'.format(key))
+				self._extra[key] = value
+
+		self._resolve_type()
+		self._resolve_software_versions()
+		print('SConfiguration: parsed {} successfully (type {})'.format(label, self.type))
+
+	def _resolve_software_versions(self):
+		"""Populate gemcv, coatjavav, mcgenv from softwarev; torus/solenoid from fields."""
+		if self.softwarev:
+			for token in self.softwarev.split():
+				if '/' not in token:
+					continue
+				name, _, version = token.partition('/')
+				if name == 'gemc':
+					self.gemcv = version
+				elif name == 'coatjava':
+					self.coatjavav = version
+				elif name == 'mcgen':
+					self.mcgenv = version
+
+		if self.fields and (self.torus is None or self.solenoid is None):
+			parts = self.fields.split('_')
+			if len(parts) == 2:
+				tor_part, sol_part = parts
+				if tor_part.startswith('tor'):
+					self.torus = tor_part[3:]
+				if sol_part.startswith('sol'):
+					self.solenoid = sol_part[3:]
+
+	def _resolve_type(self):
+		"""Set self.type to '1' or '2' when the scard does not include it.
+
+		Type 1 — generator-based: the generator field holds a known executable
+		         name (e.g. 'clasdis', 'dvcs', 'pythia').  The node runs the
+		         generator to produce events, then feeds them to gemc.
+
+		Type 2 — lund-file-based: the generator field holds a filesystem path
+		         or URL pointing to a directory of pre-generated lund files
+		         (starts with '/' or contains '://').  Each subjob reads one
+		         lund file; the number of jobs equals the number of files.
+
+		If type is already set explicitly in the scard it is left unchanged.
+		"""
+		if self.type is not None:
+			return
+		if self.generator and (
+			self.generator.startswith('/') or '://' in self.generator
+		):
+			self.type = '2'
+		else:
+			self.type = '1'
 
 	def show(self):
-		print('SConfiguration:');
-		print('- file:          {0}'.format(self.file));
-		print('- project:       {0}'.format(self.project));
-		print('- type:          {0}'.format(self.type));
-		print('- connection:    {0}'.format(self.connection));
-		print('- version:       {0}'.format(self.version));
-		print('- username:      {0}'.format(self.username));
-		print('- configuration: {0}'.format(self.configuration));
-		print('- generator:     {0}'.format(self.generator));
-		print('- genOptions:    {0}'.format(self.genOptions));
-		print('- nevents:       {0}'.format(self.nevents));
-		print('- njobs:         {0}'.format(self.njobs));
-		print('- client_ip:     {0}'.format(self.client_ip));
-		print('- torus:         {0}'.format(self.torus));
-		print('- solenoid:      {0}'.format(self.solenoid));
-		print('- bkmerging:     {0}'.format(self.bkmerging));
+		"""Print all fields in aligned format."""
+		known = [
+			('file',          self.file),
+			('project',       self.project),
+			('type',          self.type),
+			('connection',    self.connection),
+			('version',       self.version),
+			('username',      self.username),
+			('configuration', self.configuration),
+			('generator',     self.generator),
+			('genOptions',    self.genOptions),
+			('nevents',       self.nevents),
+			('njobs',         self.njobs),
+			('client_ip',     self.client_ip),
+			('fields',        self.fields),
+			('torus',         self.torus),
+			('solenoid',      self.solenoid),
+			('bkmerging',     self.bkmerging),
+			('softwarev',     self.softwarev),
+			('dstOUT',        self.dstOUT),
+			('zposition',     self.zposition),
+			('raster',        self.raster),
+			('beam',          self.beam),
+			('vertex_choice', self.vertex_choice),
+			('string_id',     self.string_id),
+			('output_type',   self.output_type),
+			('submission',    self.submission),
+			('runs',          self.runs),
+			('run_list',      self.run_list),
+		]
+		extra = [(k, v) for k, v in self._extra.items()]
+		all_fields = known + extra
 
-
-# running this as stand-alone:
-# python SConfiguration.py
-#conf = SConfiguration('test/t1test1.txt')
-#conf.show()
+		width = max(len(k) for k, _ in all_fields)
+		print('SConfiguration:')
+		for key, value in all_fields:
+			print('  {} : {}'.format(key.ljust(width), value))

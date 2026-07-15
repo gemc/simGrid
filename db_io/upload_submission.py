@@ -12,15 +12,20 @@ Purpose:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional
 
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 from database import Database, current_timestamp, debug
+from statuses import NOTSUBMITTED
 
 
 DEFAULT_POOL = "NULL"
-DEFAULT_RUN_STATUS = "Not Submitted"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,7 +127,7 @@ def upload_submission(args: argparse.Namespace) -> int:
             client_time=client_time,
             pool_node=args.pool,
             scard=gcard_text,
-            run_status=DEFAULT_RUN_STATUS,
+            run_status=NOTSUBMITTED,
             client_ip=client_ip,
             debug_enabled=args.debug,
         )

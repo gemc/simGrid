@@ -32,7 +32,8 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
-from db_io.database import Database, DEFAULT_CREDENTIALS_FILE
+from db_io.database import Database, DEFAULT_CREDENTIALS_FILE, print_job
+from statuses import NOTSUBMITTED
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
@@ -212,7 +213,7 @@ def collect_for_database(owner, credentials, database_name):
 			WHERE run_status = %s
 			ORDER BY user_submission_id
 			""",
-			["Not Submitted"],
+			[NOTSUBMITTED],
 		)
 
 		for row in not_submitted_rows:
@@ -231,7 +232,7 @@ def collect_for_database(owner, credentials, database_name):
 				"run":                None,
 				"idle":               None,
 				"hold":               None,
-				"osg id":             str(pool_node) if pool_node is not None else "Not Submitted",
+				"osg id":             str(pool_node) if pool_node is not None else NOTSUBMITTED,
 				"pool_node":          pool_node,
 				"mysql_status":       row.get("run_status"),
 				"mysql_client_time":  row.get("client_time"),
@@ -326,7 +327,9 @@ def main():
 					)
 
 		if args.print_screen:
-			print(json.dumps(final_payload, indent=2, default=str))
+			results = final_payload.get(selected_database, {}).get("results", [])
+			for entry in results:
+				print_job(entry)
 
 		if args.json_file:
 			output_path = Path(args.json_file).expanduser()
