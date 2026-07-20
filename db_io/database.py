@@ -25,7 +25,7 @@ from pymysql.cursors import DictCursor
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-from statuses import NOTSUBMITTED, SUBMITTED, SCRIPTS_GENERATED
+from statuses import NOTSUBMITTED
 
 DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 	"select user, client_time, user_submission_id, pool_node, run_status, priority "
@@ -658,8 +658,8 @@ class Database(object):
 		"""Return one submission row ready for processing.
 
 		If user_submission_id is given, fetch that specific row.
-		Otherwise fetch the highest-priority row whose run_status is not
-		already SUBMITTED or SCRIPTS_GENERATED.
+		Otherwise fetch the highest-priority row whose run_status is
+		NOTSUBMITTED.
 
 		Returns the row as a dict, or None if nothing is found.
 		"""
@@ -677,13 +677,12 @@ class Database(object):
 			"""
 			SELECT user, user_submission_id, client_time, server_time, run_status, priority, scard
 			FROM submissions
-			WHERE run_status != %s
-			  AND run_status != %s
+			WHERE run_status = %s
 			  AND priority > '0'
 			ORDER BY CAST(priority AS UNSIGNED) ASC
 			LIMIT 1
 			""",
-			[SUBMITTED, SCRIPTS_GENERATED],
+			[NOTSUBMITTED],
 		)
 
 	def __enter__(self):
