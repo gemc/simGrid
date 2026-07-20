@@ -186,6 +186,9 @@ def main(argv=None):
     # build SConfiguration from scard; backfill username from the DB row.
     scard = SConfiguration.from_string(row['scard'])
     scard.username = row['user']
+    user_submission_id = row['user_submission_id']
+    marked_processing = False
+    condor_submit_succeeded = False
 
     print("\nStep 3a: Mark job as Processing")
     # mark the job as Processing so it is not picked up by a concurrent run.
@@ -193,136 +196,153 @@ def main(argv=None):
         with Database(database_name=db_name) as db:
             db.execute(
                 "UPDATE submissions SET run_status = %s WHERE user_submission_id = %s",
-                [PROCESSING, row['user_submission_id']],
+                [PROCESSING, user_submission_id],
             )
+        marked_processing = True
         print("Status → '{}'.".format(PROCESSING))
     else:
         print("TEST MODE: skipping status update to '{}'.".format(PROCESSING))
 
-    print("\nStep 3b: Create staging directory")
-    # create staging directory ~/osgOutput/<username>/job_<id>/
-    username          = scard.username or "unknown"
-    user_submission_id = row['user_submission_id']
-    job_dir           = _job_dir(username, user_submission_id)
-    os.makedirs(os.path.join(job_dir, "log"), exist_ok=True)
-    print("Staging directory: {}".format(job_dir))
+    try:
+        print("\nStep 3b: Create staging directory")
+        # create staging directory ~/osgOutput/<username>/job_<id>/
+        username = scard.username or "unknown"
+        job_dir = _job_dir(username, user_submission_id)
+        os.makedirs(os.path.join(job_dir, "log"), exist_ok=True)
+        print("Staging directory: {}".format(job_dir))
 
-    print("\nStep 4: Stage lund files" if scard.type == '2' else "\nStep 4: Stage lund files — skipped (type-1 submission)")
-    # for type-2 (lund) submissions, validate the lund location and write lund_files.
-    if scard.type == '2':
-        lund_location = scard.generator or ""
-        if not lund_location.startswith('/volatile/clas12/'):
-            print("Error: lund location must start with /volatile/clas12/ — got: {!r}".format(
-                lund_location
+        if scard.type == '2':
+            print("\nStep 4: Stage lund files")
+        else:
+            print("\nStep 4: Stage lund files — skipped (type-1 submission)")
+
+        # for type-2 (lund) submissions, validate the lund location and write lund_files.
+        if scard.type == '2':
+            lund_location = scard.generator or ""
+            if not lund_location.startswith('/volatile/clas12/'):
+                print("Error: lund location must start with /volatile/clas12/ — got: {!r}".format(
+                    lund_location
+                ))
+                return 1
+            from generators.lund_helper import write_lund_files, LUND_FILES
+            lund_count = write_lund_files(
+                lund_location,
+                output_file=os.path.join(job_dir, LUND_FILES),
+                test=args.test,
+            )
+            if lund_count == 0:
+                print("Error: no lund files found at {!r}.".format(lund_location))
+                return 1
+
+        # For run_list submissions, stage runs.json, run_list.txt, and select_run.py
+        # so the worker node can pick a run weighted by luminosity at runtime.
+        extra_input_files = _stage_run_list_files(scard, job_dir)
+        if extra_input_files:
+            print("Staged run-by-run inputs: {}".format(", ".join(extra_input_files)))
+
+        print("\nStep 5: Generate HTCondor submit file")
+        from generators.condor.generate_condor_card import generate_condor_card
+        condor_card = generate_condor_card(scard, user_submission_id=user_submission_id,
+                                           extra_input_files=extra_input_files,
+                                           target_site=args.target_site, devel=args.devel)
+        if args.print_condor_card:
+            print()
+            print(condor_card)
+
+        condor_path = os.path.join(job_dir, "clas12.condor")
+        with open(condor_path, 'w') as f:
+            f.write(condor_card)
+        print("Wrote: {}".format(condor_path))
+
+        print("\nStep 6: Generate nodescript.sh and stage scripts")
+        from generators.bash.generate_nodescript import generate_nodescript
+        nodescript_path = generate_nodescript(
+            scard,
+            user_submission_id=user_submission_id,
+            test=args.test,
+            output_file=os.path.join(job_dir, "nodescript.sh"),
+        )
+        if args.print_nodescript:
+            with open(nodescript_path) as f:
+                print()
+                print(f.read())
+
+        # Stage functions.sh alongside nodescript.sh (referenced as functions.sh in transfer_input_files).
+        shutil.copy2(
+            os.path.join(_REPO_ROOT, "generators", "bash", "functions.sh"),
+            os.path.join(job_dir, "functions.sh"),
+        )
+
+        print("Staged scripts to {}.".format(job_dir))
+
+        # Step 6a: save generated scripts to the DB for later inspection.
+        if not args.test:
+            with open(nodescript_path) as f:
+                nodescript_text = f.read()
+            with Database(database_name=db_name) as db:
+                db.execute(
+                    "UPDATE submissions SET runscript_text = %s, clas12_condor_text = %s"
+                    " WHERE user_submission_id = %s",
+                    [nodescript_text, condor_card, user_submission_id],
+                )
+            print("Saved runscript_text and clas12_condor_text to DB.")
+        else:
+            print("TEST MODE: skipping DB script storage.")
+
+        print("\nStep 7: Submit to HTCondor")
+        if args.test:
+            print("TEST MODE: skipping condor_submit.")
+            return 0
+
+        import subprocess
+        import re
+        result = subprocess.run(
+            ["condor_submit", "clas12.condor"],
+            cwd=job_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
+        if result.returncode != 0:
+            error_path = os.path.join(job_dir, "htcondor_submission_error.txt")
+            with open(error_path, 'w') as f:
+                f.write(result.stdout)
+            print("condor_submit failed (exit {}). Error written to {}.".format(
+                result.returncode, error_path
             ))
             return 1
-        from generators.lund_helper import write_lund_files, LUND_FILES
-        lund_count = write_lund_files(
-            lund_location,
-            output_file=os.path.join(job_dir, LUND_FILES),
-            test=args.test,
-        )
-        if lund_count == 0:
-            print("Error: no lund files found at {!r}.".format(lund_location))
-            return 1
 
-    # For run_list submissions, stage runs.json, run_list.txt, and select_run.py
-    # so the worker node can pick a run weighted by luminosity at runtime.
-    extra_input_files = _stage_run_list_files(scard, job_dir)
-    if extra_input_files:
-        print("Staged run-by-run inputs: {}".format(", ".join(extra_input_files)))
+        condor_submit_succeeded = True
+        print(result.stdout)
 
-    print("\nStep 5: Generate HTCondor submit file")
-    from generators.condor.generate_condor_card import generate_condor_card
-    condor_card = generate_condor_card(scard, user_submission_id=user_submission_id,
-                                       extra_input_files=extra_input_files,
-                                       target_site=args.target_site, devel=args.devel)
-    if args.print_condor_card:
-        print()
-        print(condor_card)
+        cluster_id = None
+        m = re.search(r"submitted to cluster\s+(\d+)", result.stdout, re.IGNORECASE)
+        if m:
+            cluster_id = int(m.group(1))
+            print("HTCondor cluster ID: {}".format(cluster_id))
+        else:
+            print("Warning: could not parse cluster ID from condor_submit output.")
 
-    condor_path = os.path.join(job_dir, "clas12.condor")
-    with open(condor_path, 'w') as f:
-        f.write(condor_card)
-    print("Wrote: {}".format(condor_path))
-
-    print("\nStep 6: Generate nodescript.sh and stage scripts")
-    from generators.bash.generate_nodescript import generate_nodescript
-    nodescript_path = generate_nodescript(
-        scard,
-        user_submission_id=user_submission_id,
-        test=args.test,
-        output_file=os.path.join(job_dir, "nodescript.sh"),
-    )
-    if args.print_nodescript:
-        with open(nodescript_path) as f:
-            print()
-            print(f.read())
-
-    # Stage functions.sh alongside nodescript.sh (referenced as functions.sh in transfer_input_files).
-    shutil.copy2(
-        os.path.join(_REPO_ROOT, "generators", "bash", "functions.sh"),
-        os.path.join(job_dir, "functions.sh"),
-    )
-
-    print("Staged scripts to {}.".format(job_dir))
-
-    # Step 6a: save generated scripts to the DB for later inspection.
-    if not args.test:
-        with open(nodescript_path) as f:
-            nodescript_text = f.read()
         with Database(database_name=db_name) as db:
             db.execute(
-                "UPDATE submissions SET runscript_text = %s, clas12_condor_text = %s"
+                "UPDATE submissions SET run_status = %s, server_time = %s, pool_node = %s"
                 " WHERE user_submission_id = %s",
-                [nodescript_text, condor_card, user_submission_id],
+                [SUBMITTED, current_timestamp(), cluster_id, user_submission_id],
             )
-        print("Saved runscript_text and clas12_condor_text to DB.")
-    else:
-        print("TEST MODE: skipping DB script storage.")
+        print("Status → '{}', server_time and pool_node recorded.".format(SUBMITTED))
 
-    print("\nStep 7: Submit to HTCondor")
-    if args.test:
-        print("TEST MODE: skipping condor_submit.")
         return 0
-
-    import subprocess
-    import re
-    result = subprocess.run(
-        ["condor_submit", "clas12.condor"],
-        cwd=job_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,
-    )
-    if result.returncode != 0:
-        error_path = os.path.join(job_dir, "htcondor_submission_error.txt")
-        with open(error_path, 'w') as f:
-            f.write(result.stdout)
-        print("condor_submit failed (exit {}). Error written to {}.".format(
-            result.returncode, error_path
-        ))
-        return 1
-
-    print(result.stdout)
-
-    cluster_id = None
-    m = re.search(r"submitted to cluster\s+(\d+)", result.stdout, re.IGNORECASE)
-    if m:
-        cluster_id = int(m.group(1))
-        print("HTCondor cluster ID: {}".format(cluster_id))
-    else:
-        print("Warning: could not parse cluster ID from condor_submit output.")
-
-    with Database(database_name=db_name) as db:
-        db.execute(
-            "UPDATE submissions SET run_status = %s, server_time = %s, pool_node = %s"
-            " WHERE user_submission_id = %s",
-            [SUBMITTED, current_timestamp(), cluster_id, user_submission_id],
-        )
-    print("Status → '{}', server_time and pool_node recorded.".format(SUBMITTED))
-
-    return 0
+    finally:
+        if marked_processing and not condor_submit_succeeded:
+            with Database(database_name=db_name) as db:
+                db.execute(
+                    "UPDATE submissions SET run_status = %s "
+                    "WHERE user_submission_id = %s AND run_status = %s",
+                    [NOTSUBMITTED, user_submission_id, PROCESSING],
+                )
+            print("Status → '{}' because submission did not reach HTCondor.".format(
+                NOTSUBMITTED
+            ))
 
 
 if __name__ == "__main__":
