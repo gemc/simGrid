@@ -37,6 +37,7 @@ from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
+TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
 
 
 def build_parser():
@@ -133,6 +134,21 @@ def build_condor_entry(cluster_id, batch):
 	}
 
 
+def apply_terminal_pre_submit_status(entry, status):
+	# type: (Dict[str, Any], str) -> None
+	"""Show terminal pre-submit failures as DB status, not Condor state."""
+	if status not in TERMINAL_PRE_SUBMIT_STATUSES:
+		return
+
+	entry["jobs"] = None
+	entry["done"] = None
+	entry["run"] = None
+	entry["idle"] = None
+	entry["hold"] = None
+	entry["osg id"] = status
+	entry["pool_node"] = None
+
+
 def empty_db_payload(database_name, owner, timestamp):
 	# type: (str, str, str) -> Dict[str, Any]
 	return {
@@ -195,6 +211,7 @@ def collect_for_database(owner, credentials, database_name):
 			entry["mysql_status"] = mysql_row.get("run_status")
 			entry["mysql_client_time"] = mysql_row.get("client_time")
 			entry["priority"] = mysql_row.get("priority", entry["priority"])
+			apply_terminal_pre_submit_status(entry, entry["mysql_status"])
 
 			if mysql_row.get("user") is not None:
 				entry["user"] = mysql_row["user"]
@@ -224,6 +241,9 @@ def collect_for_database(owner, credentials, database_name):
 
 			if submission_id is not None and submission_id in seen_submission_ids:
 				continue
+
+			if run_status in TERMINAL_PRE_SUBMIT_STATUSES:
+				pool_node = None
 
 			entry = {
 				"user":               row.get("user"),
