@@ -15,12 +15,19 @@ OSG submission pipeline:
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from SConfiguration import SConfiguration
-from statuses import NOTSUBMITTED, PROCESSING, SUBMITTED, SCRIPTS_GENERATED
+from statuses import (
+    FAILED_TO_READ_DIRECTORY,
+    NOTSUBMITTED,
+    PROCESSING,
+    SUBMITTED,
+    SCRIPTS_GENERATED,
+)
 
 DEFAULT_MAX_SUBMITTED_JOBS = 80000
 DEVEL_MAX_SUBMITTED_JOBS = 90000
@@ -68,6 +75,20 @@ def _stage_run_list_files(scard, job_dir):
         os.path.join(job_dir, "select_run.py"),
     )
     return ["runs.json", "run_list.txt", "select_run.py"]
+
+
+def _mark_failed_to_read_directory(db_name, user_submission_id, lund_location, reason):
+    """Mark a submission as a terminal Lund-directory read failure."""
+    from db_io.database import Database
+
+    with Database(database_name=db_name) as db:
+        db.execute(
+            "UPDATE submissions SET run_status = %s, priority = %s "
+            "WHERE user_submission_id = %s",
+            [FAILED_TO_READ_DIRECTORY, "0", user_submission_id],
+        )
+    print("Status → '{}'; priority set to 0.".format(FAILED_TO_READ_DIRECTORY))
+    print("Skipping submission for Lund directory {!r}: {}".format(lund_location, reason))
 
 
 def build_parser():
@@ -189,6 +210,7 @@ def main(argv=None):
     user_submission_id = row['user_submission_id']
     marked_processing = False
     condor_submit_succeeded = False
+    terminal_status_set = False
 
     print("\nStep 3a: Mark job as Processing")
     # mark the job as Processing so it is not picked up by a concurrent run.
@@ -220,19 +242,60 @@ def main(argv=None):
         if scard.type == '2':
             lund_location = scard.generator or ""
             if not lund_location.startswith('/volatile/clas12/'):
-                print("Error: lund location must start with /volatile/clas12/ — got: {!r}".format(
-                    lund_location
-                ))
-                return 1
+                reason = "location must start with /volatile/clas12/"
+                if not args.test:
+                    _mark_failed_to_read_directory(
+                        db_name,
+                        user_submission_id,
+                        lund_location,
+                        reason,
+                    )
+                    terminal_status_set = True
+                else:
+                    print("TEST MODE: would mark '{}' for {}.".format(
+                        FAILED_TO_READ_DIRECTORY,
+                        reason,
+                    ))
+                return 0
             from generators.lund_helper import write_lund_files, LUND_FILES
-            lund_count = write_lund_files(
-                lund_location,
-                output_file=os.path.join(job_dir, LUND_FILES),
-                test=args.test,
-            )
+            try:
+                lund_count = write_lund_files(
+                    lund_location,
+                    output_file=os.path.join(job_dir, LUND_FILES),
+                    test=args.test,
+                )
+            except (subprocess.CalledProcessError, ValueError) as exc:
+                if not args.test:
+                    _mark_failed_to_read_directory(
+                        db_name,
+                        user_submission_id,
+                        lund_location,
+                        exc,
+                    )
+                    terminal_status_set = True
+                else:
+                    print("TEST MODE: would mark '{}' after Lund lookup failure: {}".format(
+                        FAILED_TO_READ_DIRECTORY,
+                        exc,
+                    ))
+                return 0
             if lund_count == 0:
-                print("Error: no lund files found at {!r}.".format(lund_location))
-                return 1
+                reason = "no lund files found"
+                if not args.test:
+                    _mark_failed_to_read_directory(
+                        db_name,
+                        user_submission_id,
+                        lund_location,
+                        reason,
+                    )
+                    terminal_status_set = True
+                else:
+                    print("TEST MODE: would mark '{}' because {} at {!r}.".format(
+                        FAILED_TO_READ_DIRECTORY,
+                        reason,
+                        lund_location,
+                    ))
+                return 0
 
         # For run_list submissions, stage runs.json, run_list.txt, and select_run.py
         # so the worker node can pick a run weighted by luminosity at runtime.
@@ -294,7 +357,6 @@ def main(argv=None):
             print("TEST MODE: skipping condor_submit.")
             return 0
 
-        import subprocess
         import re
         result = subprocess.run(
             ["condor_submit", "clas12.condor"],
@@ -333,7 +395,7 @@ def main(argv=None):
 
         return 0
     finally:
-        if marked_processing and not condor_submit_succeeded:
+        if marked_processing and not condor_submit_succeeded and not terminal_status_set:
             with Database(database_name=db_name) as db:
                 db.execute(
                     "UPDATE submissions SET run_status = %s "
