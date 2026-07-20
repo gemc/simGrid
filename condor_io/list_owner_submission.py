@@ -5,7 +5,7 @@ list_owner_submission.py
 Build a combined view of:
 1. HTCondor batches for one owner (via get_owner_batches)
 2. Matching MySQL submission rows where submissions.pool_node == ClusterId
-3. Extra MySQL rows with run_status = 'Not Submitted'
+3. Extra MySQL rows with pending or terminal pre-submit statuses
 
 Options:
   -h            show help
@@ -33,7 +33,7 @@ if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE, print_job
-from statuses import NOTSUBMITTED
+from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
@@ -201,7 +201,8 @@ def collect_for_database(owner, credentials, database_name):
 
 			results.append(entry)
 
-		not_submitted_rows = db.query(
+		extra_statuses = [NOTSUBMITTED, FAILED_TO_READ_DIRECTORY]
+		extra_rows = db.query(
 			"""
 			SELECT user,
 			       user_submission_id,
@@ -210,15 +211,16 @@ def collect_for_database(owner, credentials, database_name):
 			       run_status,
 			       priority
 			FROM submissions
-			WHERE run_status = %s
+			WHERE run_status IN (%s, %s)
 			ORDER BY user_submission_id
 			""",
-			[NOTSUBMITTED],
+			extra_statuses,
 		)
 
-		for row in not_submitted_rows:
+		for row in extra_rows:
 			submission_id = safe_int(row.get("user_submission_id"))
 			pool_node = row.get("pool_node")
+			run_status = row.get("run_status")
 
 			if submission_id is not None and submission_id in seen_submission_ids:
 				continue
@@ -232,9 +234,9 @@ def collect_for_database(owner, credentials, database_name):
 				"run":                None,
 				"idle":               None,
 				"hold":               None,
-				"osg id":             str(pool_node) if pool_node is not None else NOTSUBMITTED,
+				"osg id":             str(pool_node) if pool_node is not None else run_status,
 				"pool_node":          pool_node,
-				"mysql_status":       row.get("run_status"),
+				"mysql_status":       run_status,
 				"mysql_client_time":  row.get("client_time"),
 				"user_submission_id": submission_id,
 				"priority":           row.get("priority"),
