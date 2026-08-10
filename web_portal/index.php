@@ -12,9 +12,11 @@ header("Expires: 0");
 
 <section class="page-section page-section--center">
 	<h2 class="section-title">
-// 		<span style="color: red;">
-// 			NOTE: OSG jobs are on hold because JLab's SciComp computing resources are still down.
-// 		</span><br><br>
+		<!--
+		<span style="color: red;">
+			NOTE: OSG jobs are on hold because JLab's SciComp computing resources are still down.
+		</span><br><br>
+		-->
 		Summary of current jobs <?php echo $IS_DEVEL_MODE ? '(devel)' : ''; ?>
 	</h2>
 	<div id="osgLog_summary"></div>
