@@ -14,6 +14,7 @@ Typical flow for a type-2 submission:
 
 import os
 import subprocess
+import time
 
 # Short-lived OAuth2 bearer token injected by the HTCondor CredMon.
 # The job environment provides BEARER_TOKEN_FILE; this default is the
@@ -25,6 +26,9 @@ _ALLOWED_EXTENSIONS = {".dat", ".txt", ".lund"}
 LUND_FILES = "lund_files"
 
 _MOCK_FILENAMES = ["lund1.dat", "lund2.dat", "lund3.dat"]
+
+_PELICAN_LS_ATTEMPTS = 5
+_PELICAN_LS_RETRY_DELAY_SECONDS = 2
 
 
 def to_pelican_path(lund_location):
@@ -62,6 +66,31 @@ def _test_mode_warning(lines):
     print(border)
 
 
+def _run_pelican_ls(pelican_path):
+    """Run ``pelican object ls``, retrying transient command failures."""
+    for attempt in range(1, _PELICAN_LS_ATTEMPTS + 1):
+        try:
+            return subprocess.run(
+                ["pelican", "object", "ls", pelican_path],
+                stdout=subprocess.PIPE,
+                universal_newlines=True,
+                check=True,
+                env=_pelican_env(),
+            )
+        except subprocess.CalledProcessError:
+            if attempt == _PELICAN_LS_ATTEMPTS:
+                raise
+            print(
+                "lund_helper: pelican object ls failed (attempt {}/{}); "
+                "retrying in {} seconds.".format(
+                    attempt,
+                    _PELICAN_LS_ATTEMPTS,
+                    _PELICAN_LS_RETRY_DELAY_SECONDS,
+                )
+            )
+            time.sleep(_PELICAN_LS_RETRY_DELAY_SECONDS)
+
+
 def _list_lund_files(lund_location, test=False):
     """Return a list of full OSDF pelican URIs for lund files at lund_location.
 
@@ -83,13 +112,7 @@ def _list_lund_files(lund_location, test=False):
     base = pelican_path.rstrip("/")
 
     try:
-        result = subprocess.run(
-            ["pelican", "object", "ls", pelican_path],
-            stdout=subprocess.PIPE,
-            universal_newlines=True,
-            check=True,
-            env=_pelican_env(),
-        )
+        result = _run_pelican_ls(pelican_path)
     except FileNotFoundError:
         if not test:
             raise RuntimeError(
