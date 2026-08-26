@@ -6,7 +6,7 @@ priority for pending jobs, and write those priorities to a JSON file.
 
 This script uses the `Database` class from `database.py` and fetches:
 
-    SELECT user, user_submission_id, client_time, run_status
+    SELECT user, user_submission_id, client_time, server_time, run_status
     FROM submissions
 
 Priorities are assigned only to rows where:
@@ -43,13 +43,15 @@ For ALL algorithms the denominator combines two components:
 
 history_load_submitted  (decay-weighted, non-pending jobs only)
     --history-half-life-days controls the exponential decay applied to jobs
-    whose run_status is NOT 'Not Submitted'.  The weight of such a job whose
-    client_time is `age_days` old is:
+    whose run_status is NOT 'Not Submitted'. The age is measured from
+    server_time, which records when the portal served the submission, with
+    client_time as a fallback. The weight of a job whose service time is
+    `age_days` old is:
 
         weight(age_days) = 2 ^ (-age_days / history_half_life_days)
 
-    A completed job right now has weight 1; one submitted T_h days ago has
-    weight 0.5; and so on.  Jobs with missing/malformed timestamps are treated
+    A job served right now has weight 1; one served T_h days ago has weight
+    0.5; and so on. Jobs with missing/malformed timestamps are treated
     as brand-new (weight 1) as a conservative fallback.
 
 history_load_pending  (raw count, no decay)
@@ -119,7 +121,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from database import Database
+from db_io.database import Database
 from statuses import NOTSUBMITTED
 ESTIMATE_HOURS_PER_JOB = 10.0
 
@@ -147,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
 		"--days",
 		type=int,
 		default=None,
-		help="Limit client_time to the last N days.",
+		help="Limit client_time or server_time to the last N days.",
 	)
 
 	parser.add_argument(
@@ -311,6 +313,69 @@ def get_queue_hours(client_time: str, time_format: str) -> float:
 	return diff_hours if diff_hours > 0 else 0.0
 
 
+def get_history_time(row: dict, time_format: str) -> datetime | None:
+	"""
+	Return the time when a non-pending submission was served.
+
+	Use server_time when available because it records when osg_submit sent the
+	job to HTCondor. Fall back to client_time for older rows that do not have a
+	server timestamp. Return None when neither value can be parsed.
+	"""
+	for field in ("server_time", "client_time"):
+		value = row.get(field)
+		if value is None or not str(value).strip():
+			continue
+		try:
+			return parse_client_time(str(value).strip(), time_format)
+		except (ValueError, TypeError):
+			continue
+
+	return None
+
+
+def get_recent_service_streak(
+		rows: list[dict],
+		time_format: str,
+) -> tuple[str | None, int]:
+	"""Return the most recently served user and their consecutive count."""
+	served_rows = []
+
+	for row in rows:
+		status = str(row.get("run_status", "")).strip()
+		if status == NOTSUBMITTED:
+			continue
+
+		server_time = row.get("server_time")
+		if server_time is None or not str(server_time).strip():
+			continue
+
+		try:
+			served_dt = parse_client_time(str(server_time).strip(), time_format)
+		except (ValueError, TypeError):
+			continue
+
+		try:
+			submission_id = int(row.get("user_submission_id"))
+		except (TypeError, ValueError):
+			submission_id = -1
+
+		served_rows.append((served_dt, submission_id, str(row.get("user", ""))))
+
+	if not served_rows:
+		return None, 0
+
+	served_rows.sort(reverse=True)
+	recent_user = served_rows[0][2]
+	streak = 0
+
+	for _, _, user in served_rows:
+		if user != recent_user:
+			break
+		streak += 1
+
+	return recent_user, streak
+
+
 def compute_history_loads(
 		rows: list[dict],
 		time_format: str,
@@ -346,7 +411,7 @@ def compute_history_loads(
 	rows:
 		All rows returned from the database (any run_status).
 	time_format:
-		Python datetime format string for client_time.
+		Python datetime format string for server_time and client_time.
 	history_half_life_days:
 		Half-life for the exponential decay applied to non-pending jobs
 		(must be > 0).
@@ -385,21 +450,15 @@ def compute_history_loads(
 				pending_load_by_user[user] += 1.0
 			continue
 
-		# Non-pending jobs: smooth exponential decay by age.
-		client_time = str(row.get("client_time", "")).strip()
-		if not client_time:
+		# Non-pending jobs decay from the time they were served, not from the
+		# time the user originally created the submission.
+		history_dt = get_history_time(row, time_format)
+		if history_dt is None:
 			# Conservative fallback: treat as brand-new (weight 1).
 			submitted_load_by_user[user] += 1.0
 			continue
 
-		try:
-			client_dt = parse_client_time(client_time, time_format)
-		except ValueError:
-			# Conservative fallback: treat as brand-new (weight 1).
-			submitted_load_by_user[user] += 1.0
-			continue
-
-		age_days = (now - client_dt).total_seconds() / 86400.0
+		age_days = (now - history_dt).total_seconds() / 86400.0
 		if age_days < 0:
 			age_days = 0.0
 
@@ -455,7 +514,8 @@ def compute_priorities(
 	aging_interleaved
 		Compute a user-level score from the next pending job for each user, then
 		assign priorities in rounds, taking at most burst_per_user jobs per user
-		per round. This avoids large contiguous blocks from the same user.
+		per round. The first round continues the recent server_time streak, so a
+		priority recalculation cannot restart the last user's burst.
 	"""
 	if half_life_days <= 0:
 		raise ValueError("half_life_days must be > 0")
@@ -469,7 +529,12 @@ def compute_priorities(
 	]
 
 	pending_counts = Counter(str(row.get("user", "")) for row in pending_rows)
-	history_load_by_user, submitted_load_by_user, pending_load_by_user, jobs_for_user_counts = compute_history_loads(
+	(
+		history_load_by_user,
+		submitted_load_by_user,
+		pending_load_by_user,
+		jobs_for_user_counts,
+	) = compute_history_loads(
 		rows=rows,
 		time_format=time_format,
 		history_half_life_days=history_half_life_days,
@@ -536,6 +601,7 @@ def compute_priorities(
 		)
 
 	elif algorithm == "aging_interleaved":
+		recent_user, recent_streak = get_recent_service_streak(rows, time_format)
 		per_user: dict[str, list[dict]] = {}
 		for row in pending_rows:
 			user = str(row.get("user", ""))
@@ -560,6 +626,7 @@ def compute_priorities(
 			)
 
 		ordered_pending: list[dict] = []
+		first_round = True
 
 		while per_user:
 			active_users = []
@@ -577,11 +644,27 @@ def compute_priorities(
 				))
 
 			active_users.sort(key=lambda item: (-item[1], item[2], item[3]))
+			first_user_limit = None
+
+			if (
+				first_round
+				and len(active_users) > 1
+				and active_users[0][0] == recent_user
+			):
+				# Continue the burst already consumed before this recalculation.
+				# Once exhausted, put every other active user first.
+				remaining_burst = max(burst_per_user - recent_streak, 0)
+				if remaining_burst == 0:
+					active_users.append(active_users.pop(0))
+				else:
+					first_user_limit = remaining_burst
 
 			users_to_delete = []
-			for user, _, _, _ in active_users:
+			for user_index, (user, _, _, _) in enumerate(active_users):
 				user_rows = per_user[user]
 				take_n = min(burst_per_user, len(user_rows))
+				if user_index == 0 and first_user_limit is not None:
+					take_n = min(take_n, first_user_limit)
 
 				for _ in range(take_n):
 					job = user_rows.pop(0)
@@ -596,6 +679,8 @@ def compute_priorities(
 
 			for user in users_to_delete:
 				del per_user[user]
+
+			first_round = False
 
 		scored_pending = ordered_pending
 
@@ -937,7 +1022,12 @@ def main() -> int:
 				)
 				print(f"DEBUG unparsable/blank client_time rows: {bad_time['n']}")
 
-		rows_with_priority, prioritized_pending_rows, submitted_load_by_user, pending_load_by_user = compute_priorities(
+		(
+			rows_with_priority,
+			prioritized_pending_rows,
+			submitted_load_by_user,
+			pending_load_by_user,
+		) = compute_priorities(
 			rows=rows,
 			algorithm=args.priority_algorithm,
 			time_format=args.time_format,

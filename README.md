@@ -122,4 +122,32 @@ to `$OUTPUT_FILE` and uploaded directly via `write_to_jlab`.
 | `--print-condor-card` | Print the generated HTCondor submit file to stdout |
 | `--target-site SITE` | Pin all jobs to one `GLIDEIN_Site` (e.g. `CNAF`) |
 
+## Priority systems
+
+The portal uses two independent priority values:
+
+- Pending-submission priority is the sequential `submissions.priority` value in MySQL. The calculation is in
+  `db_io/priority_submissions.py`; priority 1 is the next `Not Submitted` row selected by `osg_submit.py`. Use
+  `--write-to-db` to store a newly calculated queue in MySQL. Historical load decays from `server_time`, falling
+  back to `client_time`. Interleaved recalculations continue the most recently served user's burst instead of
+  restarting it.
+- HTCondor runtime priority is `JobPrio` for jobs that have already been submitted. It is calculated and applied
+  by `condor_io/run_priority_map.py` and does not change the pending MySQL queue.
+
+Production applies runtime priorities every ten minutes with:
+
+```bash
+~/venv/pymysql/bin/python3 condor_io/run_priority_map.py -p -a -m 20
+```
+
+`update_simgrid.sh` only pulls repository updates; it does not calculate either priority value.
+
+This selects the 20 oldest Condor clusters and assigns priorities from -5 to 5 based on each cluster's running
+job count relative to the selected-cluster average. The calculation balances clusters, not portal users, because
+all clusters use the shared Condor owner `gemc`.
+
+The submissions table displayed by `condor_io/list_owner_submission.py` shows the MySQL
+`submissions.priority` for matched database rows. It does not show the `JobPrio` applied by
+`run_priority_map.py`.
+
 ## Condor_io

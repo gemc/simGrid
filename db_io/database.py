@@ -446,7 +446,7 @@ class Database(object):
 		if days_past is None:
 			return self.query(
 				"""
-				SELECT user, user_submission_id, client_time, run_status
+				SELECT user, user_submission_id, client_time, server_time, run_status
 				FROM submissions
 				ORDER BY user_submission_id
 				"""
@@ -454,15 +454,20 @@ class Database(object):
 
 		return self.query(
 			"""
-			SELECT user, user_submission_id, client_time, run_status
+			SELECT user, user_submission_id, client_time, server_time, run_status
 			FROM submissions
-			WHERE client_time IS NOT NULL
-			  AND TRIM(client_time) != ''
-			  AND STR_TO_DATE(client_time, %s) IS NOT NULL
-			  AND STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
+			WHERE (
+				client_time IS NOT NULL
+				AND TRIM(client_time) != ''
+				AND STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
+			) OR (
+				server_time IS NOT NULL
+				AND TRIM(server_time) != ''
+				AND STR_TO_DATE(server_time, %s) >= NOW() - INTERVAL %s DAY
+			)
 			ORDER BY user_submission_id
 			""",
-			[client_time_format, client_time_format, days_past],
+			[client_time_format, days_past, client_time_format, days_past],
 		)
 
 	def get_submission_times(
