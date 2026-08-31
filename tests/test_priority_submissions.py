@@ -3,7 +3,11 @@
 import unittest
 from datetime import datetime, timedelta
 
-from db_io.priority_submissions import compute_history_loads, compute_priorities
+from db_io.priority_submissions import (
+    compute_history_loads,
+    compute_priorities,
+    compute_running_jobs_by_user,
+)
 from statuses import NOTSUBMITTED, SUBMITTED
 
 
@@ -55,8 +59,55 @@ class PriorityHistoryTests(unittest.TestCase):
         self.assertGreater(submitted_loads["recently_served"], 0.99)
         self.assertAlmostEqual(submitted_loads["client_time_fallback"], 0.25, delta=0.01)
 
+    def test_running_jobs_are_summed_by_portal_user(self):
+        submission_rows = [
+            {"user": "alpha", "pool_node": "101"},
+            {"user": "alpha", "pool_node": 102},
+            {"user": "beta", "pool_node": "103"},
+        ]
+        condor_batches = {
+            101: {"counts": {"RUN": 4000}},
+            102: {"counts": {"RUN": 6822}},
+            103: {"counts": {"RUN": 7}},
+            999: {"counts": {"RUN": 500}},
+        }
+
+        self.assertEqual(
+            compute_running_jobs_by_user(submission_rows, condor_batches),
+            {"alpha": 10822, "beta": 7},
+        )
+
 
 class InterleavedPriorityTests(unittest.TestCase):
+    def test_user_with_10822_running_jobs_is_not_first(self):
+        now = datetime.now().replace(microsecond=0)
+        rows = [
+            pending_row("nlbucuru", 1, now - timedelta(days=30)),
+            pending_row("other", 2, now - timedelta(days=1)),
+        ]
+
+        _, baseline, _, _ = compute_priorities(
+            rows=rows,
+            algorithm="aging_interleaved",
+            time_format=TIME_FORMAT,
+            half_life_days=7.0,
+            queue_penalty_exponent=0.25,
+            history_half_life_days=7.0,
+        )
+        _, prioritized, _, _ = compute_priorities(
+            rows=rows,
+            algorithm="aging_interleaved",
+            time_format=TIME_FORMAT,
+            half_life_days=7.0,
+            queue_penalty_exponent=0.25,
+            history_half_life_days=7.0,
+            running_jobs_by_user={"nlbucuru": 10822},
+        )
+
+        self.assertEqual(baseline[0]["user"], "nlbucuru")
+        self.assertEqual(prioritized[0]["user"], "other")
+        self.assertEqual(prioritized[1]["running_jobs_for_user"], 10822)
+
     def test_recalculation_continues_recent_users_burst(self):
         now = datetime.now().replace(microsecond=0)
         old_client_time = now - timedelta(days=60)

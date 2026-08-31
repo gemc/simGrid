@@ -20,7 +20,8 @@ The assigned priority is a sequential integer from 1 to N, where:
 Supported priority algorithms
 -----------------------------
 inverse_count
-    Score = 1 / history_load_for_user
+    Score = 1 / ((history_load_for_user ^ queue_penalty_exponent) *
+                 runtime_load_factor)
 
     Uses the recency-weighted history load (see below) rather than a raw
     pending-job count, so users with a large job history are penalised even
@@ -28,7 +29,8 @@ inverse_count
 
 aging
     Score = 2^(age_days / half_life_days) /
-            (history_load_for_user ^ queue_penalty_exponent)
+            ((history_load_for_user ^ queue_penalty_exponent) *
+             runtime_load_factor)
 
 aging_interleaved
     Same score as aging, but priorities are assigned in rounds with per-user
@@ -37,9 +39,12 @@ aging_interleaved
 
 History-weighted load
 ---------------------
-For ALL algorithms the denominator combines two components:
+For ALL algorithms the score combines the history denominator with the user's
+current HTCondor runtime load:
 
     history_load_for_user = history_load_submitted + history_load_pending
+
+    runtime_load_factor = 1 + running_jobs_for_user
 
 history_load_submitted  (decay-weighted, non-pending jobs only)
     --history-half-life-days controls the exponential decay applied to jobs
@@ -63,6 +68,11 @@ Together:
     history_load_for_user =
         Σ  2^(-age_j / T_h)          (over non-pending jobs)
       + N_pending                     (raw count of pending jobs)
+
+running_jobs_for_user is the sum of live HTCondor jobs in the RUN state for
+all clusters mapped to that portal user through submissions.pool_node. This
+factor is not softened by --queue-penalty-exponent: users already occupying
+many cores must yield pending-queue positions to users with less runtime load.
 
 For all algorithms, ties are broken by:
 1. ascending client_time
@@ -222,6 +232,15 @@ def build_parser() -> argparse.ArgumentParser:
 			"Forces history_load_pending to zero for all users, so the "
 			"denominator depends only on the decay-weighted history of "
 			"completed jobs."
+		),
+	)
+
+	parser.add_argument(
+		"--condor-owner",
+		default="gemc",
+		help=(
+			"HTCondor owner whose live running jobs are included in the priority "
+			"calculation (default: %(default)s)."
 		),
 	)
 
@@ -473,6 +492,34 @@ def compute_history_loads(
 	return history_load_by_user, submitted_load_by_user, pending_load_by_user, jobs_for_user_counts
 
 
+def compute_running_jobs_by_user(
+		submission_rows: list[dict],
+		condor_batches: dict[int, dict],
+) -> dict[str, int]:
+	"""Return live HTCondor RUN counts summed by portal user."""
+	user_by_pool_node = {}
+	for row in submission_rows:
+		pool_node = row.get("pool_node")
+		user = row.get("user")
+		if pool_node is None or user is None:
+			continue
+		user_by_pool_node[str(pool_node).strip()] = str(user)
+
+	running_jobs_by_user: dict[str, int] = Counter()
+	for cluster_id, batch in condor_batches.items():
+		user = user_by_pool_node.get(str(cluster_id))
+		if user is None:
+			continue
+
+		try:
+			running_jobs = int(batch.get("counts", {}).get("RUN", 0))
+		except (TypeError, ValueError):
+			running_jobs = 0
+		running_jobs_by_user[user] += max(running_jobs, 0)
+
+	return dict(running_jobs_by_user)
+
+
 def compute_priorities(
 		rows: list[dict],
 		algorithm: str,
@@ -482,6 +529,7 @@ def compute_priorities(
 		history_half_life_days: float,
 		burst_per_user: int = 1,
 		no_queue_penalty: bool = False,
+		running_jobs_by_user: dict[str, int] | None = None,
 ) -> tuple[list[dict], list[dict], dict[str, float], dict[str, float]]:
 	"""
 	Compute priorities for rows with run_status == 'Not Submitted'.
@@ -493,6 +541,8 @@ def compute_priorities(
 	  and is used in the denominator for all algorithms.
 	  submitted_load_for_user is decay-weighted (non-pending jobs only).
 	  pending_load_for_user is a raw count (pending jobs, no decay).
+	- running_jobs_for_user is the user's current HTCondor RUN count and
+	  contributes a separate, unsoftened factor of 1 + running jobs.
 
 	Algorithms
 	----------
@@ -529,6 +579,7 @@ def compute_priorities(
 	]
 
 	pending_counts = Counter(str(row.get("user", "")) for row in pending_rows)
+	running_jobs_by_user = running_jobs_by_user or {}
 	(
 		history_load_by_user,
 		submitted_load_by_user,
@@ -550,15 +601,18 @@ def compute_priorities(
 	def row_queue_hours(row: dict) -> float:
 		return get_queue_hours(str(row.get("client_time", "")), time_format)
 
-	def aging_score(age_days: float, history_load_for_user: float) -> float:
+	def runtime_load_factor(user: str) -> float:
+		return 1.0 + max(int(running_jobs_by_user.get(user, 0)), 0)
+
+	def aging_score(age_days: float, history_load_for_user: float, user: str) -> float:
 		effective_load = max(history_load_for_user, 1e-12)
 		return math.pow(2.0, age_days / half_life_days) / math.pow(
 			effective_load, queue_penalty_exponent
-		)
+		) / runtime_load_factor(user)
 
-	def inverse_count_score(history_load_for_user: float) -> float:
+	def inverse_count_score(history_load_for_user: float, user: str) -> float:
 		effective_load = max(history_load_for_user, 1e-12)
-		return 1.0 / math.pow(effective_load, queue_penalty_exponent)
+		return 1.0 / math.pow(effective_load, queue_penalty_exponent) / runtime_load_factor(user)
 
 	scored_pending: list[dict] = []
 
@@ -574,11 +628,11 @@ def compute_priorities(
 			estimate_time_hours = ESTIMATE_HOURS_PER_JOB
 
 			if algorithm == "inverse_count":
-				score = inverse_count_score(history_load_for_user)
+				score = inverse_count_score(history_load_for_user, user)
 				age_days = None
 			else:
 				age_days = row_age_days(row)
-				score = aging_score(age_days, history_load_for_user)
+				score = aging_score(age_days, history_load_for_user, user)
 
 			enriched = dict(row)
 			enriched["pending_jobs_for_user"] = pending_jobs
@@ -586,6 +640,7 @@ def compute_priorities(
 			enriched["submitted_load_for_user"] = submitted_load_by_user.get(user, 0.0)
 			enriched["pending_load_for_user"] = pending_load_by_user.get(user, 0.0)
 			enriched["history_load_for_user"] = history_load_for_user
+			enriched["running_jobs_for_user"] = running_jobs_by_user.get(user, 0)
 			enriched["score"] = score
 			enriched["age_days"] = age_days
 			enriched["estimate_time_hours"] = estimate_time_hours
@@ -618,6 +673,7 @@ def compute_priorities(
 			enriched["submitted_load_for_user"] = submitted_load_by_user.get(user, 0.0)
 			enriched["pending_load_for_user"] = pending_load_by_user.get(user, 0.0)
 			enriched["history_load_for_user"] = history_load_by_user.get(user, 0.0)
+			enriched["running_jobs_for_user"] = running_jobs_by_user.get(user, 0)
 			per_user.setdefault(user, []).append(enriched)
 
 		for user in per_user:
@@ -635,6 +691,7 @@ def compute_priorities(
 				score = aging_score(
 					head["age_days"],
 					head["history_load_for_user"],
+					user,
 				)
 				active_users.append((
 					user,
@@ -671,6 +728,7 @@ def compute_priorities(
 					job["score"] = aging_score(
 						job["age_days"],
 						job["history_load_for_user"],
+						user,
 					)
 					ordered_pending.append(job)
 
@@ -766,14 +824,15 @@ def print_summary(
 		rows: list[dict],
 		submitted_load_by_user: dict[str, float],
 		pending_load_by_user: dict[str, float],
+		running_jobs_by_user: dict[str, int] | None = None,
 		days_considered: int | None = None,
 		time_format: str = "%Y-%m-%d %H:%M:%S",
 		no_queue_penalty: bool = False,
 ) -> None:
 	"""
 	Print a summary table with the number of jobs per user, estimated time
-	for 'Not Submitted' jobs, and the two denominator components used for
-	priority scoring.
+	for 'Not Submitted' jobs, and the load components used for priority
+	scoring.
 
 	Columns
 	-------
@@ -783,6 +842,7 @@ def print_summary(
 	weight        : decay-weighted count of non-pending jobs
 	                (controlled by --history-half-life-days)
 	pending_jobs  : integer count of 'Not Submitted' jobs (no decay)
+	running_jobs  : current HTCondor RUN count for the portal user
 
 	One row in the `submissions` table is counted as one job.
 	Each pending job contributes 10 estimated hours.
@@ -803,6 +863,7 @@ def print_summary(
 		return
 
 	job_counts = Counter(str(row.get("user", "")) for row in rows)
+	running_jobs_by_user = running_jobs_by_user or {}
 
 	estimate_time_by_user: dict[str, float] = {}
 	for row in rows:
@@ -822,11 +883,19 @@ def print_summary(
 			"estimate_days": estimate_time_by_user.get(user, 0.0),
 			"weight":       submitted_load_by_user.get(user, 0.0),
 			"pending_jobs": int(round(pending_load_by_user.get(user, 0.0))),
+			"running_jobs": running_jobs_by_user.get(user, 0),
 		}
 		for user, count in sorted(job_counts.items(), key=lambda item: (-item[1], item[0]))
 	]
 
-	headers = ["user", "total_submissions", "estimate_days", "weight", "pending_jobs"]
+	headers = [
+		"user",
+		"total_submissions",
+		"estimate_days",
+		"weight",
+		"pending_jobs",
+		"running_jobs",
+	]
 
 	widths = {}
 	for header in headers:
@@ -856,6 +925,7 @@ def print_summary(
 				f"{row['estimate_days']:.2f}".ljust(widths["estimate_days"]),
 				f"{row['weight']:.2f}".ljust(widths["weight"]),
 				str(row["pending_jobs"]).ljust(widths["pending_jobs"]),
+				str(row["running_jobs"]).ljust(widths["running_jobs"]),
 			])
 		)
 
@@ -887,6 +957,7 @@ def write_priority_json(
 		days_considered: int | None,
 		submitted_load_by_user: dict[str, float],
 		pending_load_by_user: dict[str, float],
+		running_jobs_by_user: dict[str, int] | None = None,
 		no_queue_penalty: bool = False,
 ) -> None:
 	"""
@@ -908,9 +979,12 @@ def write_priority_json(
 		Decay-weighted count of non-pending jobs per user.
 	pending_load_by_user:
 		Raw count of pending jobs per user.
+	running_jobs_by_user:
+		Current HTCondor RUN count per portal user.
 	"""
 	now = datetime.now()
 	user_counts = Counter(str(row.get("user", "")) for row in all_rows)
+	running_jobs_by_user = running_jobs_by_user or {}
 
 	pending_hours_by_user: dict[str, float] = {}
 	for row in all_rows:
@@ -924,6 +998,7 @@ def write_priority_json(
 			"jobs":           count,
 			"submitted_load": round(submitted_load_by_user.get(user, 0.0), 4),
 			"pending_jobs":   int(round(pending_load_by_user.get(user, 0.0))),
+			"running_jobs":   running_jobs_by_user.get(user, 0),
 			"estimate_days":  round(pending_hours_by_user.get(user, 0.0) / 24.0, 4),
 		}
 		for user, count in sorted(user_counts.items(), key=lambda item: (-item[1], item[0]))
@@ -953,6 +1028,7 @@ def write_priority_json(
 				"submitted_load_for_user": row.get("submitted_load_for_user"),
 				"pending_load_for_user":  row.get("pending_load_for_user"),
 				"history_load_for_user":  row.get("history_load_for_user"),
+				"running_jobs_for_user":  row.get("running_jobs_for_user"),
 				"score": f"{row['score']:.1f}",
 				"age_days":               row["age_days"],
 			}
@@ -1004,6 +1080,14 @@ def main() -> int:
 				days_past=args.days,
 				client_time_format="%Y-%m-%d %H:%i:%s",
 			)
+			pool_node_rows = db.query(
+				"""
+				SELECT user, pool_node
+				FROM submissions
+				WHERE pool_node IS NOT NULL
+				ORDER BY user_submission_id
+				"""
+			)
 			print(f"DEBUG fetched rows: {len(rows)}")
 
 			if args.days is not None:
@@ -1022,6 +1106,15 @@ def main() -> int:
 				)
 				print(f"DEBUG unparsable/blank client_time rows: {bad_time['n']}")
 
+		from condor_io.htcondor_utils import get_owner_batches
+
+		condor_batches = get_owner_batches(args.condor_owner)
+		running_jobs_by_user = compute_running_jobs_by_user(pool_node_rows, condor_batches)
+		print(
+			f"DEBUG live HTCondor RUN jobs for {len(running_jobs_by_user)} portal user(s): "
+			f"{sum(running_jobs_by_user.values())}"
+		)
+
 		(
 			rows_with_priority,
 			prioritized_pending_rows,
@@ -1036,6 +1129,7 @@ def main() -> int:
 			history_half_life_days=history_half_life_days,
 			burst_per_user=args.burst_per_user,
 			no_queue_penalty=args.no_queue_penalty,
+			running_jobs_by_user=running_jobs_by_user,
 		)
 
 		print_table(rows_with_priority)
@@ -1043,6 +1137,7 @@ def main() -> int:
 			rows_with_priority,
 			submitted_load_by_user=submitted_load_by_user,
 			pending_load_by_user=pending_load_by_user,
+			running_jobs_by_user=running_jobs_by_user,
 			days_considered=args.days,
 			time_format=args.time_format,
 			no_queue_penalty=args.no_queue_penalty,
@@ -1058,6 +1153,7 @@ def main() -> int:
 			days_considered=args.days,
 			submitted_load_by_user=submitted_load_by_user,
 			pending_load_by_user=pending_load_by_user,
+			running_jobs_by_user=running_jobs_by_user,
 			no_queue_penalty=args.no_queue_penalty,
 		)
 
