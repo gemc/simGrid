@@ -278,6 +278,7 @@ function runSelected() {
 		if (userRuns) userRuns.disabled = false;
 		document.getElementById("fields").innerHTML =
 			"<option value=\"\" selected hidden></option>";
+		vertexSelected();
 		return;
 	}
 
@@ -310,6 +311,7 @@ function runSelected() {
 						"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
 				}
 				bkmergingSelected();
+				vertexSelected();
 			}
 		}
 	};
@@ -405,8 +407,24 @@ function vertexSelected() {
 				var rast = myObj[selected_experiment]["raster"];
 				var bspot = myObj[selected_experiment]["beam_spot"];
 
+				// Experiment-level z-position default (may be absent).
+				var zvalue = (zpos && zpos.length) ? zpos[0] : "";
+
+				// A run selected from the runs map may carry its own
+				// "z-position", which overrides the experiment-level entry
+				// one level up.
+				var run_number = document.getElementById("run_number").value;
+				var runs = myObj[selected_experiment].runs;
+				if (run_number && runs && typeof runs === "object" &&
+					run_number in runs && runs[run_number] &&
+					typeof runs[run_number] === "object" &&
+					!Array.isArray(runs[run_number]) &&
+					"z-position" in runs[run_number]) {
+					zvalue = runs[run_number]["z-position"];
+				}
+
 				if (document.getElementById("zposition-check").checked) {
-					textz = zpos[0];
+					textz = zvalue;
 				} else {
 					textz = "";
 				}
