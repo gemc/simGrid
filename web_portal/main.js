@@ -831,7 +831,11 @@ function osgLogtoTable(mode) {
 					txt += "</td>";
 				}
 
-				txt += "<td></td></tr>";
+				var pendingOrder = "";
+				if (String(val.mysql_status || "").trim() === "Not Submitted" && val.priority != null) {
+					pendingOrder = val.priority;
+				}
+				txt += "<td>" + escapeHtml(pendingOrder) + "</td></tr>";
 
 				if (data_summary.user.includes(val.user)) {
 					var idx = data_summary.user.indexOf(val.user);
@@ -895,49 +899,6 @@ function osgLogtoTable(mode) {
 
 			ensureJobDetailsModal();
 
-			fetch("data/submission_priorities.json")
-				.then(function (r) {
-					return r.json();
-				})
-				.then(function (priorityObj) {
-					var priorities = (priorityObj && priorityObj.priorities) ? priorityObj.priorities : [];
-					var priorityMap = {};
-
-					for (var p = 0; p < priorities.length; p++) {
-						var entry = priorities[p];
-						if (entry.user_submission_id != null) {
-							priorityMap[String(entry.user_submission_id).trim()] = entry.priority;
-						}
-					}
-
-					var rows = document.querySelectorAll("#osgLog table tr");
-					for (var r = 1; r < rows.length; r++) {
-						var cells = rows[r].querySelectorAll("td");
-						if (!cells.length) continue;
-
-						var lastCell = cells[cells.length - 1];
-						var link = rows[r].querySelector(".job-id-link");
-						var jobId = link ? link.dataset.jobId : "";
-
-						var osgIdCell = null;
-						var headerCells = rows[0] ? rows[0].querySelectorAll("th") : [];
-						for (var h = 0; h < headerCells.length; h++) {
-							if (headerCells[h].textContent.trim() === "osg id") {
-								osgIdCell = cells[h];
-								break;
-							}
-						}
-
-						var osgIdVal = osgIdCell ? osgIdCell.textContent.trim() : "";
-						if ((osgIdVal === "null" || osgIdVal === "" || osgIdVal === "Not Submitted") &&
-							priorityMap.hasOwnProperty(jobId)) {
-							lastCell.textContent = priorityMap[jobId];
-						}
-					}
-				})
-				.catch(function (e) {
-					console.warn("priorities fetch failed:", e);
-				});
 		})
 		.catch(function (e) {
 			document.getElementById("osgLog").innerHTML =
