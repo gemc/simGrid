@@ -1156,10 +1156,6 @@ def main() -> int:
 
 		if args.write_to_db:
 			with Database(args.credentials) as db:
-				db.execute(
-					"UPDATE submissions SET priority = '0' WHERE run_status != %s",
-					[NOTSUBMITTED],
-				)
 				updated = db.update_priorities(prioritized_pending_rows)
 			print(f"Updated {updated} row(s) in the database.")
 

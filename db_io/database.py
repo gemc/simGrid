@@ -532,10 +532,7 @@ class Database(object):
 
 	def update_priorities(self, prioritized_pending_rows):
 		# type: (List[Dict[str, Any]]) -> int
-		"""Update the priority field for many submission rows."""
-		if not prioritized_pending_rows:
-			return 0
-
+		"""Replace pending priorities and compact them under the queue lock."""
 		params = []  # type: List[tuple]
 		for row in prioritized_pending_rows:
 			if "user_submission_id" not in row or "priority" not in row:
@@ -560,7 +557,11 @@ class Database(object):
 		"""
 		with self.pending_priority_lock():
 			with self.connection.cursor() as cursor:
-				affected_rows = cursor.executemany(sql, params)
+				cursor.execute(
+					"UPDATE submissions SET priority = %s WHERE run_status != %s",
+					("0", NOTSUBMITTED),
+				)
+				affected_rows = cursor.executemany(sql, params) if params else 0
 				if not self.autocommit:
 					self.connection.commit()
 			self._compact_pending_priorities_locked()
