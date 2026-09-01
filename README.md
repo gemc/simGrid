@@ -129,7 +129,7 @@ The portal uses two independent priority values:
 - Pending-submission priority is the sequential `submissions.priority` value in MySQL. The calculation is in
   `db_io/priority_submissions.py`; priority 1 is the next `Not Submitted` row selected by `osg_submit.py`. Use
   `--write-to-db` to store a newly calculated queue in MySQL. Historical load decays from `server_time`,
-  falling back to `client_time`. The score also includes each portal user's current number of running HTCondor
+  falling back to `client_time`. Ordering first considers each portal user's current number of running HTCondor
   jobs, so a user already occupying many cores yields pending-queue positions to users with less runtime load.
   This reads current occupancy, not the separate Condor `JobPrio` value. Interleaved recalculations continue the
   most recently served user's burst instead of restarting it.

@@ -90,7 +90,7 @@ class InterleavedPriorityTests(unittest.TestCase):
             rows=rows,
             algorithm="aging_interleaved",
             time_format=TIME_FORMAT,
-            half_life_days=7.0,
+            half_life_days=0.5,
             queue_penalty_exponent=0.25,
             history_half_life_days=7.0,
         )
@@ -98,7 +98,7 @@ class InterleavedPriorityTests(unittest.TestCase):
             rows=rows,
             algorithm="aging_interleaved",
             time_format=TIME_FORMAT,
-            half_life_days=7.0,
+            half_life_days=0.5,
             queue_penalty_exponent=0.25,
             history_half_life_days=7.0,
             running_jobs_by_user={"nlbucuru": 10822},

@@ -20,8 +20,7 @@ The assigned priority is a sequential integer from 1 to N, where:
 Supported priority algorithms
 -----------------------------
 inverse_count
-    Score = 1 / ((history_load_for_user ^ queue_penalty_exponent) *
-                 runtime_load_factor)
+    Score = 1 / (history_load_for_user ^ queue_penalty_exponent)
 
     Uses the recency-weighted history load (see below) rather than a raw
     pending-job count, so users with a large job history are penalised even
@@ -29,8 +28,7 @@ inverse_count
 
 aging
     Score = 2^(age_days / half_life_days) /
-            ((history_load_for_user ^ queue_penalty_exponent) *
-             runtime_load_factor)
+            (history_load_for_user ^ queue_penalty_exponent)
 
 aging_interleaved
     Same score as aging, but priorities are assigned in rounds with per-user
@@ -39,12 +37,10 @@ aging_interleaved
 
 History-weighted load
 ---------------------
-For ALL algorithms the score combines the history denominator with the user's
-current HTCondor runtime load:
+For ALL algorithms, users are ordered first by ascending current HTCondor
+runtime load, then by descending history/aging score:
 
     history_load_for_user = history_load_submitted + history_load_pending
-
-    runtime_load_factor = 1 + running_jobs_for_user
 
 history_load_submitted  (decay-weighted, non-pending jobs only)
     --history-half-life-days controls the exponential decay applied to jobs
@@ -70,9 +66,10 @@ Together:
       + N_pending                     (raw count of pending jobs)
 
 running_jobs_for_user is the sum of live HTCondor jobs in the RUN state for
-all clusters mapped to that portal user through submissions.pool_node. This
-factor is not softened by --queue-penalty-exponent: users already occupying
-many cores must yield pending-queue positions to users with less runtime load.
+all clusters mapped to that portal user through submissions.pool_node. It is
+the primary ordering key and is not softened by --queue-penalty-exponent:
+users already occupying more cores yield pending-queue positions to users
+with less runtime load.
 
 For all algorithms, ties are broken by:
 1. ascending client_time
@@ -541,8 +538,8 @@ def compute_priorities(
 	  and is used in the denominator for all algorithms.
 	  submitted_load_for_user is decay-weighted (non-pending jobs only).
 	  pending_load_for_user is a raw count (pending jobs, no decay).
-	- running_jobs_for_user is the user's current HTCondor RUN count and
-	  contributes a separate, unsoftened factor of 1 + running jobs.
+	- running_jobs_for_user is the user's current HTCondor RUN count and is
+	  the primary ascending ordering key.
 
 	Algorithms
 	----------
@@ -601,18 +598,15 @@ def compute_priorities(
 	def row_queue_hours(row: dict) -> float:
 		return get_queue_hours(str(row.get("client_time", "")), time_format)
 
-	def runtime_load_factor(user: str) -> float:
-		return 1.0 + max(int(running_jobs_by_user.get(user, 0)), 0)
-
-	def aging_score(age_days: float, history_load_for_user: float, user: str) -> float:
+	def aging_score(age_days: float, history_load_for_user: float) -> float:
 		effective_load = max(history_load_for_user, 1e-12)
 		return math.pow(2.0, age_days / half_life_days) / math.pow(
 			effective_load, queue_penalty_exponent
-		) / runtime_load_factor(user)
+		)
 
-	def inverse_count_score(history_load_for_user: float, user: str) -> float:
+	def inverse_count_score(history_load_for_user: float) -> float:
 		effective_load = max(history_load_for_user, 1e-12)
-		return 1.0 / math.pow(effective_load, queue_penalty_exponent) / runtime_load_factor(user)
+		return 1.0 / math.pow(effective_load, queue_penalty_exponent)
 
 	scored_pending: list[dict] = []
 
@@ -628,11 +622,11 @@ def compute_priorities(
 			estimate_time_hours = ESTIMATE_HOURS_PER_JOB
 
 			if algorithm == "inverse_count":
-				score = inverse_count_score(history_load_for_user, user)
+				score = inverse_count_score(history_load_for_user)
 				age_days = None
 			else:
 				age_days = row_age_days(row)
-				score = aging_score(age_days, history_load_for_user, user)
+				score = aging_score(age_days, history_load_for_user)
 
 			enriched = dict(row)
 			enriched["pending_jobs_for_user"] = pending_jobs
@@ -649,6 +643,7 @@ def compute_priorities(
 
 		scored_pending.sort(
 			key=lambda row: (
+				row["running_jobs_for_user"],
 				-row["score"],
 				row["_client_dt"],
 				row["user_submission_id"],
@@ -691,16 +686,16 @@ def compute_priorities(
 				score = aging_score(
 					head["age_days"],
 					head["history_load_for_user"],
-					user,
 				)
 				active_users.append((
 					user,
+					head["running_jobs_for_user"],
 					score,
 					head["_client_dt"],
 					head["user_submission_id"],
 				))
 
-			active_users.sort(key=lambda item: (-item[1], item[2], item[3]))
+			active_users.sort(key=lambda item: (item[1], -item[2], item[3], item[4]))
 			first_user_limit = None
 
 			if (
@@ -717,7 +712,7 @@ def compute_priorities(
 					first_user_limit = remaining_burst
 
 			users_to_delete = []
-			for user_index, (user, _, _, _) in enumerate(active_users):
+			for user_index, (user, _, _, _, _) in enumerate(active_users):
 				user_rows = per_user[user]
 				take_n = min(burst_per_user, len(user_rows))
 				if user_index == 0 and first_user_limit is not None:
@@ -728,7 +723,6 @@ def compute_priorities(
 					job["score"] = aging_score(
 						job["age_days"],
 						job["history_load_for_user"],
-						user,
 					)
 					ordered_pending.append(job)
 
