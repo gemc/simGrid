@@ -82,11 +82,7 @@ def _mark_failed_to_read_directory(db_name, user_submission_id, lund_location, r
     from db_io.database import Database
 
     with Database(database_name=db_name) as db:
-        db.execute(
-            "UPDATE submissions SET run_status = %s, priority = %s "
-            "WHERE user_submission_id = %s",
-            [FAILED_TO_READ_DIRECTORY, "0", user_submission_id],
-        )
+        db.mark_submission_terminal(user_submission_id, FAILED_TO_READ_DIRECTORY)
     print("Status → '{}'; priority set to 0.".format(FAILED_TO_READ_DIRECTORY))
     print("Skipping submission for Lund directory {!r}: {}".format(lund_location, reason))
 
@@ -216,10 +212,10 @@ def main(argv=None):
     # mark the job as Processing so it is not picked up by a concurrent run.
     if not args.test:
         with Database(database_name=db_name) as db:
-            db.execute(
-                "UPDATE submissions SET run_status = %s WHERE user_submission_id = %s",
-                [PROCESSING, user_submission_id],
-            )
+            claimed = db.mark_submission_processing(user_submission_id, PROCESSING)
+        if claimed != 1:
+            print("Submission {} is no longer pending.".format(user_submission_id))
+            return 0
         marked_processing = True
         print("Status → '{}'.".format(PROCESSING))
     else:
@@ -386,10 +382,11 @@ def main(argv=None):
             print("Warning: could not parse cluster ID from condor_submit output.")
 
         with Database(database_name=db_name) as db:
-            db.execute(
-                "UPDATE submissions SET run_status = %s, server_time = %s, pool_node = %s"
-                " WHERE user_submission_id = %s",
-                [SUBMITTED, current_timestamp(), cluster_id, user_submission_id],
+            db.mark_submission_submitted(
+                user_submission_id,
+                SUBMITTED,
+                current_timestamp(),
+                cluster_id,
             )
         print("Status → '{}', server_time and pool_node recorded.".format(SUBMITTED))
 
@@ -397,11 +394,7 @@ def main(argv=None):
     finally:
         if marked_processing and not condor_submit_succeeded and not terminal_status_set:
             with Database(database_name=db_name) as db:
-                db.execute(
-                    "UPDATE submissions SET run_status = %s "
-                    "WHERE user_submission_id = %s AND run_status = %s",
-                    [NOTSUBMITTED, user_submission_id, PROCESSING],
-                )
+                db.restore_pending_submission(user_submission_id, PROCESSING)
             print("Status → '{}' because submission did not reach HTCondor.".format(
                 NOTSUBMITTED
             ))

@@ -15,6 +15,7 @@ import configparser
 import json
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -34,6 +35,30 @@ DEFAULT_RECENT_SUBMISSIONS_QUERY = (
 )
 
 DEFAULT_CREDENTIALS_FILE = (Path(__file__).resolve().parent / "msql_conn.txt")
+PENDING_PRIORITY_LOCK = "simgrid_pending_priorities"
+
+
+def build_contiguous_priority_updates(rows):
+	# type: (List[Dict[str, Any]]) -> List[tuple]
+	"""Return ``(priority, submission_id)`` updates ordered by current queue position."""
+	def sort_key(row):
+		try:
+			priority = int(row.get("priority") or 0)
+		except (TypeError, ValueError):
+			priority = 0
+
+		return (
+			priority <= 0,
+			priority if priority > 0 else 0,
+			str(row.get("client_time") or ""),
+			int(row["user_submission_id"]),
+		)
+
+	ordered_rows = sorted(rows, key=sort_key)
+	return [
+		(str(priority), int(row["user_submission_id"]))
+		for priority, row in enumerate(ordered_rows, start=1)
+	]
 
 
 def debug(enabled, message):
@@ -253,6 +278,25 @@ class Database(object):
 			autocommit=self.autocommit,
 		)
 
+	@contextmanager
+	def pending_priority_lock(self, timeout_seconds=10):
+		# type: (int) -> Any
+		"""Serialize operations that insert, remove, or reorder pending rows."""
+		row = self.query_one(
+			"SELECT GET_LOCK(%s, %s) AS acquired",
+			[PENDING_PRIORITY_LOCK, timeout_seconds],
+		)
+		if row is None or int(row.get("acquired") or 0) != 1:
+			raise RuntimeError("Could not acquire the pending-priority database lock")
+
+		try:
+			yield
+		finally:
+			self.query_one(
+				"SELECT RELEASE_LOCK(%s) AS released",
+				[PENDING_PRIORITY_LOCK],
+			)
+
 	def close(self):
 		# type: () -> None
 		"""Close the current MySQL connection."""
@@ -365,9 +409,6 @@ class Database(object):
 	):
 		# type: (...) -> int
 		"""Insert a row into submissions and return user_submission_id."""
-		if self.database_name == "CLAS12TEST":
-			priority = 1
-
 		debug(debug_enabled, "Inserting submission row")
 		sql = """
             INSERT INTO submissions (
@@ -381,30 +422,113 @@ class Database(object):
                 priority
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-		self.execute(
-			sql,
-			[
-				username,
-				user_id,
-				client_time,
-				pool_node,
-				scard,
-				client_ip,
-				run_status,
-				priority,
-			],
-		)
+		with self.pending_priority_lock():
+			self.execute(
+				sql,
+				[
+					username,
+					user_id,
+					client_time,
+					pool_node,
+					scard,
+					client_ip,
+					run_status,
+					priority,
+				],
+			)
 
-		row = self.query_one("SELECT LAST_INSERT_ID() AS user_submission_id")
-		if row is None or row.get("user_submission_id") is None:
-			raise RuntimeError("Failed to retrieve user_submission_id after INSERT")
+			row = self.query_one("SELECT LAST_INSERT_ID() AS user_submission_id")
+			if row is None or row.get("user_submission_id") is None:
+				raise RuntimeError("Failed to retrieve user_submission_id after INSERT")
 
-		submission_id = int(row["user_submission_id"])
+			submission_id = int(row["user_submission_id"])
+			if run_status == NOTSUBMITTED:
+				self._compact_pending_priorities_locked()
 		debug(
 			debug_enabled,
 			"Inserted submission with user_submission_id={0}".format(submission_id),
 		)
 		return submission_id
+
+	def _compact_pending_priorities_locked(self):
+		# type: () -> int
+		"""Renumber pending priorities while the caller holds the queue lock."""
+		rows = self.query(
+			"""
+			SELECT user_submission_id, client_time, priority
+			FROM submissions
+			WHERE run_status = %s
+			""",
+			[NOTSUBMITTED],
+		)
+		params = build_contiguous_priority_updates(rows)
+		if not params:
+			return 0
+
+		assert self.connection is not None
+		with self.connection.cursor() as cursor:
+			updated = cursor.executemany(
+				"UPDATE submissions SET priority = %s WHERE user_submission_id = %s",
+				params,
+			)
+			if not self.autocommit:
+				self.connection.commit()
+		return updated
+
+	def compact_pending_priorities(self):
+		# type: () -> int
+		"""Renumber all pending priorities consecutively from 1."""
+		with self.pending_priority_lock():
+			return self._compact_pending_priorities_locked()
+
+	def mark_submission_processing(self, submission_id, processing_status):
+		# type: (int, str) -> int
+		"""Claim one pending row for processing and compact the remaining queue."""
+		with self.pending_priority_lock():
+			updated = self.execute(
+				"UPDATE submissions SET run_status = %s "
+				"WHERE user_submission_id = %s AND run_status = %s",
+				[processing_status, submission_id, NOTSUBMITTED],
+			)
+			if updated:
+				self._compact_pending_priorities_locked()
+			return updated
+
+	def mark_submission_submitted(self, submission_id, status, server_time, pool_node):
+		# type: (int, str, str, Any) -> int
+		"""Mark one row submitted, clear its priority, and compact the queue."""
+		with self.pending_priority_lock():
+			updated = self.execute(
+				"UPDATE submissions SET run_status = %s, server_time = %s, "
+				"pool_node = %s, priority = %s WHERE user_submission_id = %s",
+				[status, server_time, pool_node, "0", submission_id],
+			)
+			self._compact_pending_priorities_locked()
+			return updated
+
+	def mark_submission_terminal(self, submission_id, status):
+		# type: (int, str) -> int
+		"""Mark one row terminal, clear its priority, and compact the queue."""
+		with self.pending_priority_lock():
+			updated = self.execute(
+				"UPDATE submissions SET run_status = %s, priority = %s "
+				"WHERE user_submission_id = %s",
+				[status, "0", submission_id],
+			)
+			self._compact_pending_priorities_locked()
+			return updated
+
+	def restore_pending_submission(self, submission_id, processing_status):
+		# type: (int, str) -> int
+		"""Restore a processing row to the pending queue and compact priorities."""
+		with self.pending_priority_lock():
+			updated = self.execute(
+				"UPDATE submissions SET run_status = %s "
+				"WHERE user_submission_id = %s AND run_status = %s",
+				[NOTSUBMITTED, submission_id, processing_status],
+			)
+			self._compact_pending_priorities_locked()
+			return updated
 
 	def update_priorities(self, prioritized_pending_rows):
 		# type: (List[Dict[str, Any]]) -> int
@@ -419,22 +543,28 @@ class Database(object):
 					"Each row must have 'user_submission_id' and 'priority' keys. "
 					"Got: {0}".format(list(row.keys()))
 				)
-			params.append((str(row["priority"]), int(row["user_submission_id"])))
+			params.append((
+				str(row["priority"]),
+				int(row["user_submission_id"]),
+				NOTSUBMITTED,
+			))
 
 		if self.connection is None:
 			self.connect()
 
 		assert self.connection is not None
 		sql = """
-            UPDATE submissions
-            SET priority = %s
-            WHERE user_submission_id = %s
-        """
-		with self.connection.cursor() as cursor:
-			affected_rows = cursor.executemany(sql, params)
-			if not self.autocommit:
-				self.connection.commit()
-		return affected_rows
+			UPDATE submissions
+			SET priority = %s
+			WHERE user_submission_id = %s AND run_status = %s
+		"""
+		with self.pending_priority_lock():
+			with self.connection.cursor() as cursor:
+				affected_rows = cursor.executemany(sql, params)
+				if not self.autocommit:
+					self.connection.commit()
+			self._compact_pending_priorities_locked()
+			return affected_rows
 
 	def get_submissions_with_status(
 			self,
@@ -683,8 +813,10 @@ class Database(object):
 			SELECT user, user_submission_id, client_time, server_time, run_status, priority, scard
 			FROM submissions
 			WHERE run_status = %s
-			  AND priority > '0'
-			ORDER BY CAST(priority AS UNSIGNED) ASC
+			ORDER BY CASE WHEN CAST(priority AS UNSIGNED) > 0 THEN 0 ELSE 1 END,
+			         CAST(priority AS UNSIGNED) ASC,
+			         client_time ASC,
+			         user_submission_id ASC
 			LIMIT 1
 			""",
 			[NOTSUBMITTED],

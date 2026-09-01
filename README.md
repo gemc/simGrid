@@ -132,7 +132,8 @@ The portal uses two independent priority values:
   falling back to `client_time`. Ordering first considers each portal user's current number of running HTCondor
   jobs, so a user already occupying many cores yields pending-queue positions to users with less runtime load.
   This reads current occupancy, not the separate Condor `JobPrio` value. Interleaved recalculations continue the
-  most recently served user's burst instead of restarting it.
+  most recently served user's burst instead of restarting it. Pending positions are compacted to `1..N` whenever
+  a submission enters or leaves the queue; new submissions are appended instead of remaining at priority 0.
 - HTCondor runtime priority is `JobPrio` for jobs that have already been submitted. It is calculated and applied
   by `condor_io/run_priority_map.py` and does not change the pending MySQL queue.
 

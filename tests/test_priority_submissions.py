@@ -8,6 +8,7 @@ from db_io.priority_submissions import (
     compute_priorities,
     compute_running_jobs_by_user,
 )
+from db_io.database import build_contiguous_priority_updates
 from statuses import NOTSUBMITTED, SUBMITTED
 
 
@@ -31,6 +32,30 @@ def pending_row(user, submission_id, client_time):
 
 
 class PriorityHistoryTests(unittest.TestCase):
+    def test_pending_priorities_are_compacted_and_zero_rows_are_appended(self):
+        rows = [
+            {
+                "user_submission_id": 11651,
+                "client_time": "2026-07-31 05:54:17",
+                "priority": "21",
+            },
+            {
+                "user_submission_id": 11787,
+                "client_time": "2026-08-25 18:12:19",
+                "priority": "6",
+            },
+            {
+                "user_submission_id": 11810,
+                "client_time": "2026-08-31 14:14:51",
+                "priority": "0",
+            },
+        ]
+
+        self.assertEqual(
+            build_contiguous_priority_updates(rows),
+            [("1", 11787), ("2", 11651), ("3", 11810)],
+        )
+
     def test_submitted_load_uses_server_time_before_client_time(self):
         now = datetime.now().replace(microsecond=0)
         rows = [
