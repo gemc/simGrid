@@ -4,5 +4,6 @@
 NOTSUBMITTED      = 'Not Submitted'
 PROCESSING        = 'Processing'
 SUBMITTED         = 'Submitted to OSG'
+COMPLETED         = 'Completed'
 SCRIPTS_GENERATED = 'Submission scripts generated'
 FAILED_TO_READ_DIRECTORY = 'Failed to Read Directory'

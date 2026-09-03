@@ -42,6 +42,60 @@ function formatAgeDays(value) {
 	return num.toFixed(2);
 }
 
+function parseSubmissionTime(value, now) {
+	var text = String(value || "").trim();
+	var fullDate = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+	var shortDate = text.match(/^(\d{1,2})\/(\d{1,2})\s+(\d{2}):(\d{2})$/);
+	var submittedAt = null;
+
+	if (fullDate) {
+		submittedAt = new Date(
+			Number(fullDate[1]), Number(fullDate[2]) - 1, Number(fullDate[3]),
+			Number(fullDate[4]), Number(fullDate[5]), Number(fullDate[6] || 0)
+		);
+	} else if (shortDate) {
+		submittedAt = new Date(
+			now.getFullYear(), Number(shortDate[1]) - 1, Number(shortDate[2]),
+			Number(shortDate[3]), Number(shortDate[4])
+		);
+		if (submittedAt > now) {
+			submittedAt.setFullYear(submittedAt.getFullYear() - 1);
+		}
+	}
+
+	return submittedAt && isFinite(submittedAt.getTime()) ? submittedAt : null;
+}
+
+function calculateSubmissionCompletionRate(submittedOn, done, now) {
+	done = Number(done);
+	var submittedAt = parseSubmissionTime(submittedOn, now);
+	if (!isFinite(done) || done <= 0 || submittedAt === null) return null;
+
+	var elapsedDays = (now.getTime() - submittedAt.getTime()) / (24 * 60 * 60 * 1000);
+	return elapsedDays > 0 ? done / elapsedDays : null;
+}
+
+function formatEstimatedTimeRemaining(pending, submitted, jobs, done, completionRates) {
+	pending = Number(pending);
+	submitted = Number(submitted);
+	jobs = Number(jobs);
+	done = Number(done);
+
+	if (![pending, submitted, jobs, done].every(isFinite) || submitted <= 0 || !completionRates.length) {
+		return "N/A";
+	}
+
+	var totalJobs = (pending + submitted) * jobs / submitted;
+	var remainingJobs = Math.max(totalJobs - done, 0);
+	var averageCompletionRate = completionRates.reduce(function (total, rate) {
+		return total + rate;
+	}, 0) / completionRates.length;
+	if (!isFinite(averageCompletionRate) || averageCompletionRate <= 0) return "N/A";
+
+	var remainingDays = remainingJobs / averageCompletionRate;
+	return remainingDays.toFixed(1) + " days";
+}
+
 function _padEnd(str, len) {
 	str = String(str);
 	while (str.length < len) str += " ";
@@ -769,12 +823,16 @@ function osgLogtoTable(mode) {
 
 			var data_summary = {
 				"user": [],
-				"submissions": [],
+				"pending": [],
+				"submitted": [],
 				"jobs": [],
 				"done": [],
 				"run": [],
 				"idle": []
 			};
+			var completionRatesByUser = [];
+			var allCompletionRates = [];
+			var estimateTime = new Date();
 
 			var keys = Object.keys(userData[0]);
 
@@ -802,12 +860,20 @@ function osgLogtoTable(mode) {
 			}
 			txt += "<th>order</th></tr>";
 
-			for (var s in Object.keys(data_summary)) {
-				txt_summary += "<th>" + escapeHtml(Object.keys(data_summary)[s]) + "</th>";
+			var summaryHeaders = Object.keys(data_summary).concat(["estimated time remaining"]);
+			for (var s in summaryHeaders) {
+				txt_summary += "<th>" + escapeHtml(summaryHeaders[s]) + "</th>";
 			}
 
 			for (var row = 0; row < userData.length; row++) {
 				var val = userData[row];
+				var submissionStatus = String(val.mysql_status || "").trim();
+				var isPending = submissionStatus === "Not Submitted";
+				var isSubmitted = submissionStatus === "Submitted to OSG";
+				var completionRate = calculateSubmissionCompletionRate(
+					val["submitted on"], val.done, estimateTime
+				);
+				if (completionRate !== null) allCompletionRates.push(completionRate);
 				txt += "<tr>";
 
 				for (var col = 0; col < keys.length; col++) {
@@ -832,7 +898,7 @@ function osgLogtoTable(mode) {
 				}
 
 				var pendingOrder = "";
-				if (String(val.mysql_status || "").trim() === "Not Submitted" && val.priority != null) {
+				if (isPending && val.priority != null) {
 					pendingOrder = val.priority;
 				}
 				txt += "<td>" + escapeHtml(pendingOrder) + "</td></tr>";
@@ -843,14 +909,18 @@ function osgLogtoTable(mode) {
 					data_summary.done[idx] += Number(val.done || 0);
 					data_summary.run[idx] += Number(val.run || 0);
 					data_summary.idle[idx] += Number(val.idle || 0);
-					data_summary.submissions[idx] += 1;
+					data_summary.pending[idx] += isPending ? 1 : 0;
+					data_summary.submitted[idx] += isSubmitted ? 1 : 0;
+					if (completionRate !== null) completionRatesByUser[idx].push(completionRate);
 				} else {
 					data_summary.user.push(val.user || "");
-					data_summary.submissions.push(1);
+					data_summary.pending.push(isPending ? 1 : 0);
+					data_summary.submitted.push(isSubmitted ? 1 : 0);
 					data_summary.jobs.push(Number(val.jobs || 0));
 					data_summary.done.push(Number(val.done || 0));
 					data_summary.run.push(Number(val.run || 0));
 					data_summary.idle.push(Number(val.idle || 0));
+					completionRatesByUser.push(completionRate === null ? [] : [completionRate]);
 				}
 			}
 
@@ -859,29 +929,47 @@ function osgLogtoTable(mode) {
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
 				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.submissions[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.pending[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(data_summary.submitted[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.jobs[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.done[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.run[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatEstimatedTimeRemaining(
+					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
+					data_summary.done[u], completionRatesByUser[u]
+				)) + "</td>";
 			}
 
+			var totalPending = data_summary.pending.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var totalSubmitted = data_summary.submitted.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var totalJobs = data_summary.jobs.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var totalDone = data_summary.done.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var totalRun = data_summary.run.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var totalIdle = data_summary.idle.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+
 			txt_summary += "</tr><tr><td>totals</td>";
-			txt_summary += "<td>" + data_summary.submissions.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.jobs.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.done.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.run.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0) + "</td>";
-			txt_summary += "<td>" + data_summary.idle.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0) + "</td>";
+			txt_summary += "<td>" + totalPending + "</td>";
+			txt_summary += "<td>" + totalSubmitted + "</td>";
+			txt_summary += "<td>" + totalJobs + "</td>";
+			txt_summary += "<td>" + totalDone + "</td>";
+			txt_summary += "<td>" + totalRun + "</td>";
+			txt_summary += "<td>" + totalIdle + "</td>";
+			txt_summary += "<td>" + escapeHtml(formatEstimatedTimeRemaining(
+				totalPending, totalSubmitted, totalJobs, totalDone, allCompletionRates
+			)) + "</td>";
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
