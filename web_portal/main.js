@@ -2,6 +2,7 @@
 // each load forces the browser/proxy to re-fetch data/*.json (so edits to
 // setup.json show up), while all fetches within one load share one cached copy.
 var ASSET_VERSION = Date.now();
+var EXPECTED_HOURS_PER_JOB = 15;
 
 //Multiplication (https://stackoverflow.com/questions/21223164/multiplying-two-inputs-with-javascript-displaying-in-text-box)
 function calculate() {
@@ -75,24 +76,93 @@ function calculateSubmissionCompletionRate(submittedOn, done, now) {
 	return elapsedDays > 0 ? done / elapsedDays : null;
 }
 
-function formatEstimatedTimeRemaining(pending, submitted, jobs, done, completionRates) {
+function calculateSubmissionHealth(row, now) {
+	var jobs = Number(row.jobs || 0);
+	var done = Number(row.done || 0);
+	var running = Number(row.run || 0);
+	var idle = Number(row.idle || 0);
+	var held = Number(row.hold || 0);
+	var submittedAt = parseSubmissionTime(row["submitted on"], now);
+	var elapsedHours = submittedAt === null ? null : (now - submittedAt) / (60 * 60 * 1000);
+	var health = null;
+
+	if (held > 0 && jobs > 0) {
+		var heldPercent = held / jobs * 100;
+		if (heldPercent > 20) {
+			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-high", severity: 7};
+		} else if (heldPercent >= 5) {
+			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-medium", severity: 6};
+		} else {
+			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-low", severity: 4};
+		}
+	}
+
+	var previousDone = Number(row.progress_previous_done);
+	var progressWindow = Number(row.progress_window_hours);
+	var hasProgressHistory = row.progress_previous_done != null && row.progress_window_hours != null;
+	if (hasProgressHistory && progressWindow >= 6 && running > 0 && done <= previousDone) {
+		health = worseSubmissionHealth(health, {label: "Stalled", className: "stalled", severity: 5});
+	}
+
+	if (elapsedHours !== null && elapsedHours > 6 && running <= 0 && idle > 0) {
+		health = worseSubmissionHealth(health, {label: "Waiting", className: "waiting", severity: 3});
+	}
+
+	if (elapsedHours !== null && done <= 0 && elapsedHours < EXPECTED_HOURS_PER_JOB) {
+		health = worseSubmissionHealth(health, {label: "Starting", className: "starting", severity: 0});
+	}
+
+	if (elapsedHours !== null && elapsedHours >= EXPECTED_HOURS_PER_JOB && running > 0) {
+		var observedRate = done / elapsedHours;
+		var expectedRate = running / EXPECTED_HOURS_PER_JOB;
+		if (observedRate < expectedRate * 0.5) {
+			health = worseSubmissionHealth(health, {label: "Slow", className: "slow", severity: 2});
+		}
+	}
+
+	return health || {label: "Healthy", className: "healthy", severity: 1};
+}
+
+function worseSubmissionHealth(current, candidate) {
+	if (candidate === null) return current;
+	if (!current || candidate.severity > current.severity) return candidate;
+	return current;
+}
+
+function renderJobHealthCell(health) {
+	if (health === null) {
+		health = {label: "Queued", className: "queued"};
+	}
+	return "<td class=\"job-health job-health--" + health.className + "\">" +
+		escapeHtml(health.label) + "</td>";
+}
+
+function formatEstimatedTimeRemaining(pending, submitted, jobs, done, running, completionRates) {
 	pending = Number(pending);
 	submitted = Number(submitted);
 	jobs = Number(jobs);
 	done = Number(done);
+	running = Number(running);
 
-	if (![pending, submitted, jobs, done].every(isFinite) || submitted <= 0 || !completionRates.length) {
+	if (![pending, submitted, jobs, done, running].every(isFinite) || submitted <= 0) {
 		return "N/A";
 	}
 
 	var totalJobs = (pending + submitted) * jobs / submitted;
 	var remainingJobs = Math.max(totalJobs - done, 0);
-	var averageCompletionRate = completionRates.reduce(function (total, rate) {
-		return total + rate;
-	}, 0) / completionRates.length;
-	if (!isFinite(averageCompletionRate) || averageCompletionRate <= 0) return "N/A";
+	var remainingDays;
 
-	var remainingDays = remainingJobs / averageCompletionRate;
+	if (completionRates.length) {
+		var averageCompletionRate = completionRates.reduce(function (total, rate) {
+			return total + rate;
+		}, 0) / completionRates.length;
+		if (!isFinite(averageCompletionRate) || averageCompletionRate <= 0) return "N/A";
+		remainingDays = remainingJobs / averageCompletionRate;
+	} else {
+		if (running <= 0) return "N/A";
+		remainingDays = remainingJobs * EXPECTED_HOURS_PER_JOB / running / 24;
+	}
+
 	return remainingDays.toFixed(1) + " days";
 }
 
@@ -831,7 +901,9 @@ function osgLogtoTable(mode) {
 				"idle": []
 			};
 			var completionRatesByUser = [];
+			var healthByUser = [];
 			var allCompletionRates = [];
+			var overallHealth = null;
 			var estimateTime = new Date();
 
 			var keys = Object.keys(userData[0]);
@@ -842,6 +914,8 @@ function osgLogtoTable(mode) {
 					"mysql_client_time",
 					"priority",
 					"pool_node",
+					"progress_previous_done",
+					"progress_window_hours",
 					"user_submission_id"
 				].includes(key);
 			});
@@ -860,7 +934,10 @@ function osgLogtoTable(mode) {
 			}
 			txt += "<th>order</th></tr>";
 
-			var summaryHeaders = Object.keys(data_summary).concat(["estimated time remaining"]);
+			var summaryHeaders = Object.keys(data_summary).concat([
+				"estimated time remaining",
+				"job health"
+			]);
 			for (var s in summaryHeaders) {
 				txt_summary += "<th>" + escapeHtml(summaryHeaders[s]) + "</th>";
 			}
@@ -873,7 +950,9 @@ function osgLogtoTable(mode) {
 				var completionRate = calculateSubmissionCompletionRate(
 					val["submitted on"], val.done, estimateTime
 				);
+				var submissionHealth = isSubmitted ? calculateSubmissionHealth(val, estimateTime) : null;
 				if (completionRate !== null) allCompletionRates.push(completionRate);
+				overallHealth = worseSubmissionHealth(overallHealth, submissionHealth);
 				txt += "<tr>";
 
 				for (var col = 0; col < keys.length; col++) {
@@ -912,6 +991,7 @@ function osgLogtoTable(mode) {
 					data_summary.pending[idx] += isPending ? 1 : 0;
 					data_summary.submitted[idx] += isSubmitted ? 1 : 0;
 					if (completionRate !== null) completionRatesByUser[idx].push(completionRate);
+					healthByUser[idx] = worseSubmissionHealth(healthByUser[idx], submissionHealth);
 				} else {
 					data_summary.user.push(val.user || "");
 					data_summary.pending.push(isPending ? 1 : 0);
@@ -921,6 +1001,7 @@ function osgLogtoTable(mode) {
 					data_summary.run.push(Number(val.run || 0));
 					data_summary.idle.push(Number(val.idle || 0));
 					completionRatesByUser.push(completionRate === null ? [] : [completionRate]);
+					healthByUser.push(submissionHealth);
 				}
 			}
 
@@ -937,8 +1018,9 @@ function osgLogtoTable(mode) {
 				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(formatEstimatedTimeRemaining(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
-					data_summary.done[u], completionRatesByUser[u]
+					data_summary.done[u], data_summary.run[u], completionRatesByUser[u]
 				)) + "</td>";
+				txt_summary += renderJobHealthCell(healthByUser[u]);
 			}
 
 			var totalPending = data_summary.pending.reduce(function (a, b) {
@@ -968,8 +1050,9 @@ function osgLogtoTable(mode) {
 			txt_summary += "<td>" + totalRun + "</td>";
 			txt_summary += "<td>" + totalIdle + "</td>";
 			txt_summary += "<td>" + escapeHtml(formatEstimatedTimeRemaining(
-				totalPending, totalSubmitted, totalJobs, totalDone, allCompletionRates
+				totalPending, totalSubmitted, totalJobs, totalDone, totalRun, allCompletionRates
 			)) + "</td>";
+			txt_summary += renderJobHealthCell(overallHealth);
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
