@@ -112,13 +112,6 @@ tbody tr:hover td {
 	color: #1b5e20;
 }
 
-.job-health.job-health--slow,
-.job-health.job-health--waiting {
-	background-color: #fff8e1;
-	border-color: #f9a825;
-	color: #7a5b00;
-}
-
 .job-health.job-health--stalled {
 	background-color: #ffcdd2;
 	border-color: #b71c1c;
@@ -135,13 +128,6 @@ tbody tr:hover td {
 	background-color: #ef9a9a;
 	border-color: #8b0000;
 	color: #5a0000;
-}
-
-.job-health.job-health--starting,
-.job-health.job-health--queued {
-	background-color: #eceff1;
-	border-color: #90a4ae;
-	color: #455a64;
 }
 
 /* =========================
