@@ -92,8 +92,6 @@ function calculateSubmissionHealth(row, now) {
 			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-high", severity: 7};
 		} else if (heldPercent >= 5) {
 			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-medium", severity: 6};
-		} else {
-			health = {label: "Held (" + heldPercent.toFixed(1) + "%)", className: "held-low", severity: 4};
 		}
 	}
 
@@ -137,6 +135,12 @@ function renderJobHealthCell(health) {
 		escapeHtml(health.label) + "</td>";
 }
 
+function submissionColumnLabel(name) {
+	if (name === "jobs") return "n. jobs submitted";
+	if (name === "run") return "running";
+	return name;
+}
+
 function formatEstimatedTimeRemaining(pending, submitted, jobs, done, running, completionRates) {
 	pending = Number(pending);
 	submitted = Number(submitted);
@@ -144,26 +148,27 @@ function formatEstimatedTimeRemaining(pending, submitted, jobs, done, running, c
 	done = Number(done);
 	running = Number(running);
 
-	if (![pending, submitted, jobs, done, running].every(isFinite) || submitted <= 0) {
+	if (![pending, submitted, jobs, done].every(isFinite) || submitted <= 0) {
 		return "N/A";
 	}
 
 	var totalJobs = (pending + submitted) * jobs / submitted;
 	var remainingJobs = Math.max(totalJobs - done, 0);
+	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
 	var remainingDays;
 
 	if (completionRates.length) {
 		var averageCompletionRate = completionRates.reduce(function (total, rate) {
 			return total + rate;
 		}, 0) / completionRates.length;
-		if (!isFinite(averageCompletionRate) || averageCompletionRate <= 0) return "N/A";
+		if (!isFinite(averageCompletionRate) || averageCompletionRate <= 0) return jobsLeft + "N/A";
 		remainingDays = remainingJobs / averageCompletionRate;
 	} else {
-		if (running <= 0) return "N/A";
+		if (!isFinite(running) || running <= 0) return jobsLeft + "N/A";
 		remainingDays = remainingJobs * EXPECTED_HOURS_PER_JOB / running / 24;
 	}
 
-	return remainingDays.toFixed(1) + " days";
+	return jobsLeft + remainingDays.toFixed(1) + " days";
 }
 
 function _padEnd(str, len) {
@@ -930,7 +935,7 @@ function osgLogtoTable(mode) {
 
 			txt += "<tr>";
 			for (var i = 0; i < keys.length; i++) {
-				txt += "<th>" + escapeHtml(keys[i]) + "</th>";
+				txt += "<th>" + escapeHtml(submissionColumnLabel(keys[i])) + "</th>";
 			}
 			txt += "<th>order</th></tr>";
 
@@ -939,7 +944,7 @@ function osgLogtoTable(mode) {
 				"job health"
 			]);
 			for (var s in summaryHeaders) {
-				txt_summary += "<th>" + escapeHtml(summaryHeaders[s]) + "</th>";
+				txt_summary += "<th>" + escapeHtml(submissionColumnLabel(summaryHeaders[s])) + "</th>";
 			}
 
 			for (var row = 0; row < userData.length; row++) {
