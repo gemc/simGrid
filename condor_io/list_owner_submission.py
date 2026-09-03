@@ -23,7 +23,7 @@ import os
 import sys
 import argparse
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -38,8 +38,6 @@ from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
-PROGRESS_WINDOW_HOURS = 6
-PROGRESS_SNAPSHOT_LIMIT = 100
 
 
 def build_parser():
@@ -162,69 +160,6 @@ def empty_db_payload(database_name, owner, timestamp):
 		"count":            0,
 		"results":          [],
 	}
-
-
-def snapshot_update_time(snapshot):
-	# type: (Dict[str, Any]) -> Optional[datetime]
-	"""Return a snapshot update time as a datetime."""
-	value = snapshot.get("update_time")
-	if isinstance(value, datetime):
-		return value
-	if isinstance(value, str):
-		for time_format in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
-			try:
-				return datetime.strptime(value, time_format)
-			except ValueError:
-				continue
-	return None
-
-
-def select_progress_snapshot(snapshots, current_time, window_hours=PROGRESS_WINDOW_HOURS):
-	# type: (List[Dict[str, Any]], datetime, int) -> Optional[Dict[str, Any]]
-	"""Return the newest snapshot at least window_hours older than current_time."""
-	cutoff = current_time - timedelta(hours=window_hours)
-	eligible = [
-		snapshot
-		for snapshot in snapshots
-		if snapshot_update_time(snapshot) is not None
-		and snapshot_update_time(snapshot) <= cutoff
-	]
-	if not eligible:
-		return None
-	return max(eligible, key=lambda snapshot: snapshot_update_time(snapshot))
-
-
-def add_progress_history(current_results, historical_snapshot, database_name, current_time):
-	# type: (List[Dict[str, Any]], Optional[Dict[str, Any]], str, datetime) -> None
-	"""Attach previous done counts to rows also present in a historical snapshot."""
-	if historical_snapshot is None:
-		return
-
-	historical_time = snapshot_update_time(historical_snapshot)
-	if historical_time is None:
-		return
-
-	payload = historical_snapshot.get("payload", {})
-	database_payload = payload.get(database_name, {}) if isinstance(payload, dict) else {}
-	historical_results = database_payload.get("results", [])
-	if not isinstance(historical_results, list):
-		return
-
-	historical_done = {}
-	for row in historical_results:
-		if not isinstance(row, dict):
-			continue
-		submission_id = safe_int(row.get("user_submission_id", row.get("submission id")))
-		done = safe_int(row.get("done"))
-		if submission_id is not None and done is not None:
-			historical_done[submission_id] = done
-
-	window_hours = (current_time - historical_time).total_seconds() / 3600.0
-	for row in current_results:
-		submission_id = safe_int(row.get("user_submission_id", row.get("submission id")))
-		if submission_id in historical_done:
-			row["progress_previous_done"] = historical_done[submission_id]
-			row["progress_window_hours"] = round(window_hours, 3)
 
 
 ## type: (str, str, str) -> Dict[str, Any]
@@ -404,22 +339,6 @@ def main():
 					"count":            selected_payload["count"],
 					"results":          selected_payload["results"],
 				}
-
-				snapshots = db.get_owner_submission_snapshots(
-					database_name=selected_database,
-					owner=args.owner,
-					limit=PROGRESS_SNAPSHOT_LIMIT,
-				)
-				historical_snapshot = select_progress_snapshot(
-					snapshots,
-					current_time,
-				)
-				add_progress_history(
-					final_payload[selected_database]["results"],
-					historical_snapshot,
-					selected_database,
-					current_time,
-				)
 
 				if args.store_db:
 					db.insert_owner_submission_snapshot(
