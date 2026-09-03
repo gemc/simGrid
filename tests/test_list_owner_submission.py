@@ -3,10 +3,19 @@
 import unittest
 from datetime import datetime, timedelta
 
-from condor_io.list_owner_submission import add_progress_history, select_progress_snapshot
+from condor_io.list_owner_submission import (
+    add_progress_history,
+    select_progress_snapshot,
+    snapshot_update_time,
+)
 
 
 class SubmissionProgressHistoryTests(unittest.TestCase):
+    def test_parses_database_timestamp_without_fromisoformat(self):
+        snapshot = {"update_time": "2026-09-03 16:05:01"}
+
+        self.assertEqual(snapshot_update_time(snapshot), datetime(2026, 9, 3, 16, 5, 1))
+
     def test_selects_newest_snapshot_at_least_six_hours_old(self):
         current_time = datetime(2026, 9, 3, 16, 0, 0)
         snapshots = [

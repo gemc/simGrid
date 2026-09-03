@@ -171,10 +171,11 @@ def snapshot_update_time(snapshot):
 	if isinstance(value, datetime):
 		return value
 	if isinstance(value, str):
-		try:
-			return datetime.fromisoformat(value)
-		except ValueError:
-			return None
+		for time_format in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+			try:
+				return datetime.strptime(value, time_format)
+			except ValueError:
+				continue
 	return None
 
 
@@ -358,7 +359,8 @@ def main():
 		return 1
 
 	selected_database = TEST_DATABASE if args.dev else PRODUCTION_DATABASE
-	update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	current_time = datetime.now()
+	update_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
 
 	try:
 		with Database(
@@ -410,13 +412,13 @@ def main():
 				)
 				historical_snapshot = select_progress_snapshot(
 					snapshots,
-					datetime.fromisoformat(update_time),
+					current_time,
 				)
 				add_progress_history(
 					final_payload[selected_database]["results"],
 					historical_snapshot,
 					selected_database,
-					datetime.fromisoformat(update_time),
+					current_time,
 				)
 
 				if args.store_db:
