@@ -77,7 +77,7 @@ function calculateSubmissionCompletionRate(submittedOn, done, now) {
 }
 
 function submissionColumnLabel(name) {
-	if (name === "jobs") return "n. jobs submitted";
+	if (name === "jobs") return "n. jobs";
 	if (name === "run") return "running";
 	return name;
 }

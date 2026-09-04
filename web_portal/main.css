@@ -102,7 +102,7 @@ tbody tr:hover td {
 }
 
 .estimated-time-remaining {
-	border: 4px solid;
+	border: 2px solid;
 }
 
 .estimated-time-remaining.estimated-time-remaining--green {
