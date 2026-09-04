@@ -93,7 +93,7 @@ function calculateEstimatedTimeRemaining(
 	var estimatedQueuedJobs = Math.max(pending * jobs / submitted, 0);
 	var osgJobsRemaining = Math.max(jobs - done, 0);
 	var remainingJobs = estimatedQueuedJobs + osgJobsRemaining;
-	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
+	var jobsLeft = "left: " + Math.round(remainingJobs) + " — ";
 	var totalSubmissions = pending + submitted;
 
 	if (remainingJobs > 0 && (!isFinite(totalRunning) || totalRunning <= 0 ||
@@ -164,12 +164,12 @@ function renderEstimateNote(
 	var submissionsRateText = isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
 		Number(currentSubmissionsRate).toFixed(1) : "N/A";
 
-	return "<div class=\"estimate-note\">** Estimate combines processing time tproc and queue to OSG time tqueue." +
-        "tproc uses the completion rate and " +
-		"concurrent jobs per submission. tqueue uses the highest queue position and current " +
+	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and queue to OSG time <b>tqueue</b>." +
+        "<b>tproc</b> uses the completion rate and " +
+		"running jobs per submission. <b>tqueue</b> uses the highest queue position and current " +
 		"submissions rate." +
 		"<table class=\"estimate-metrics\"><tbody>" +
-		"<tr><th>Average concurrent jobs per submission</th><td>" +
+		"<tr><th>Average running jobs per submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
 		"<tr><th>Completion Rate (last 2 days)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
