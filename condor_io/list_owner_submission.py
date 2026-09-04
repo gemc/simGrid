@@ -39,6 +39,7 @@ PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
 QUEUE_HISTORY_DAYS = 60
+COMPLETION_WINDOW_HOURS = 48
 
 
 def build_parser():
@@ -159,7 +160,6 @@ def build_condor_entry(cluster_id, batch):
 		"pool_node":          condor_osg_id,
 		"mysql_status":       None,
 		"mysql_client_time":  None,
-		"mysql_server_time":  None,
 		"user_submission_id": None,
 		"priority":           batch.get("current_priority"),
 	}
@@ -190,14 +190,17 @@ def empty_db_payload(database_name, owner, timestamp):
 		"owner":            owner,
 		"count":            0,
 		"average_queue_to_osg_hours": None,
+		"average_completions_per_day": None,
 		"results":          [],
 	}
 
 
 ## type: (str, str, str) -> Dict[str, Any]
 def collect_for_database(owner, credentials, database_name):
-	from htcondor_utils import get_owner_batches
+	from htcondor_utils import get_completed_job_count, get_owner_batches
 	batches = get_owner_batches(owner)
+	completed_jobs = get_completed_job_count(owner, hours=COMPLETION_WINDOW_HOURS)
+	average_completions_per_day = completed_jobs * 24.0 / COMPLETION_WINDOW_HOURS
 
 	results = []  # type: List[Dict[str, Any]]
 	seen_submission_ids = set()  # type: Set[int]
@@ -227,7 +230,6 @@ def collect_for_database(owner, credentials, database_name):
 				SELECT user,
 				       user_submission_id,
 				       client_time,
-				       server_time,
 				       pool_node,
 				       run_status,
 				       priority
@@ -252,7 +254,6 @@ def collect_for_database(owner, credentials, database_name):
 			entry["pool_node"] = mysql_row.get("pool_node")
 			entry["mysql_status"] = mysql_row.get("run_status")
 			entry["mysql_client_time"] = mysql_row.get("client_time")
-			entry["mysql_server_time"] = mysql_row.get("server_time")
 			entry["priority"] = mysql_row.get("priority", entry["priority"])
 			apply_terminal_pre_submit_status(entry, entry["mysql_status"])
 
@@ -267,7 +268,6 @@ def collect_for_database(owner, credentials, database_name):
 			SELECT user,
 			       user_submission_id,
 			       client_time,
-			       server_time,
 			       pool_node,
 			       run_status,
 			       priority
@@ -302,7 +302,6 @@ def collect_for_database(owner, credentials, database_name):
 				"pool_node":          pool_node,
 				"mysql_status":       run_status,
 				"mysql_client_time":  row.get("client_time"),
-				"mysql_server_time":  row.get("server_time"),
 				"user_submission_id": submission_id,
 				"priority":           row.get("priority"),
 			}
@@ -313,6 +312,7 @@ def collect_for_database(owner, credentials, database_name):
 		"owner":    owner,
 		"count":    len(results),
 		"average_queue_to_osg_hours": average_queue_to_osg_hours,
+		"average_completions_per_day": average_completions_per_day,
 		"results":  results,
 	}
 
@@ -385,6 +385,9 @@ def main():
 					"count":            selected_payload["count"],
 					"average_queue_to_osg_hours": selected_payload[
 						"average_queue_to_osg_hours"
+					],
+					"average_completions_per_day": selected_payload[
+						"average_completions_per_day"
 					],
 					"results":          selected_payload["results"],
 				}

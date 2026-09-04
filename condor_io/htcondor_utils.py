@@ -134,6 +134,24 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 	return batches
 
 
+def get_completed_job_count(owner: str, hours: int = 48) -> int:
+	"""Return the number of jobs completed for owner during the last N hours."""
+	if hours <= 0:
+		raise ValueError("hours must be greater than zero")
+
+	cutoff_epoch = int(datetime.now(tz=timezone.utc).timestamp()) - hours * 3600
+	constraint = (
+		f'(Owner =!= UNDEFINED) && (Owner == "{owner}") && '
+		f'(JobStatus == 4) && (CompletionDate >= {cutoff_epoch})'
+	)
+	ads = htcondor.Schedd().history(
+		constraint=constraint,
+		projection=["ClusterId", "ProcId"],
+		match=-1,
+	)
+	return sum(1 for _ in ads)
+
+
 def set_cluster_job_priority(cluster_id: int, priority: int) -> Any:
 	"""
 	Set JobPrio for all jobs in a given cluster.
