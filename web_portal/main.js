@@ -67,7 +67,7 @@ function formatJobsWithEstimatedPending(pending, submitted, jobs) {
 
 function calculateEstimatedTimeRemaining(
 		pending, submitted, jobs, done, completionShareCount, averageCompletionsPerDay,
-		maxPendingPriority, averageQueueToOsgHours
+		averageQueueToOsgHours
 ) {
 	pending = Number(pending);
 	submitted = Number(submitted);
@@ -77,7 +77,7 @@ function calculateEstimatedTimeRemaining(
 	averageCompletionsPerDay = Number(averageCompletionsPerDay);
 
 	if (![pending, submitted, jobs, done].every(isFinite) || submitted <= 0) {
-		return {text: "N/A", days: null};
+		return {text: "N/A", days: null, remainingJobs: null, estimatedQueuedJobs: null};
 	}
 
 	var estimatedQueuedJobs = Math.max(pending * jobs / submitted, 0);
@@ -86,19 +86,22 @@ function calculateEstimatedTimeRemaining(
 	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
 	var queueDelayDays = 0;
 
-	if (pending > 0 && maxPendingPriority != null && averageQueueToOsgHours != null) {
-		maxPendingPriority = Number(maxPendingPriority);
+	if (pending > 0 && averageQueueToOsgHours != null) {
 		averageQueueToOsgHours = Number(averageQueueToOsgHours);
-		if (isFinite(maxPendingPriority) && maxPendingPriority > 0 &&
-			isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0) {
-			queueDelayDays = maxPendingPriority * averageQueueToOsgHours / 24;
+		if (isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0) {
+			queueDelayDays = averageQueueToOsgHours / 24;
 		}
 	}
 
 	if (remainingJobs > 0 && (!isFinite(averageCompletionsPerDay) ||
 		averageCompletionsPerDay <= 0 || !isFinite(completionShareCount) ||
 		completionShareCount <= 0)) {
-		return {text: jobsLeft + "N/A", days: null};
+		return {
+			text: jobsLeft + "N/A",
+			days: null,
+			remainingJobs: remainingJobs,
+			estimatedQueuedJobs: estimatedQueuedJobs
+		};
 	}
 
 	var userCompletionsPerDay = averageCompletionsPerDay / completionShareCount;
@@ -108,7 +111,9 @@ function calculateEstimatedTimeRemaining(
 	return {
 		text: jobsLeft + remainingDays.toFixed(1) + " days",
 		days: remainingDays,
-		queueDelayDays: queueDelayDays
+		queueDelayDays: queueDelayDays,
+		remainingJobs: remainingJobs,
+		estimatedQueuedJobs: estimatedQueuedJobs
 	};
 }
 
@@ -120,14 +125,7 @@ function estimatedTimeRemainingClass(days) {
 	return "red";
 }
 
-function renderEstimatedTimeRemainingCell(
-		pending, submitted, jobs, done, completionShareCount, averageCompletionsPerDay,
-		maxPendingPriority, averageQueueToOsgHours
-) {
-	var estimate = calculateEstimatedTimeRemaining(
-		pending, submitted, jobs, done, completionShareCount, averageCompletionsPerDay,
-		maxPendingPriority, averageQueueToOsgHours
-	);
+function renderEstimatedTimeRemainingCell(estimate) {
 	var colorClass = estimatedTimeRemainingClass(estimate.days);
 	var classAttribute = colorClass === "" ? "" :
 		" class=\"estimated-time-remaining estimated-time-remaining--" + colorClass + "\"";
@@ -144,7 +142,8 @@ function renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay) {
 
 	return "<p class=\"estimate-note\">** Processing time uses the last 48 hours' average " +
 		"completions per day, divided equally among active users. Queue delay is added for queued " +
-		"work.<br/>Average queue-to-OSG time " +
+		"work once, using the 30-day average. The total is the sum of available user estimates; " +
+		"users with N/A job counts are excluded.<br/>Average queue-to-OSG time " +
 		"(last 30 days): " +
 		escapeHtml(queueHoursText) + " hours.<br/>Average completions / day (last 2 days): " +
 		escapeHtml(completionRateText) + ".</p>";
@@ -884,8 +883,6 @@ function osgLogtoTable(mode) {
 				"run": [],
 				"idle": []
 			};
-			var maxPendingPriorityByUser = [];
-			var maxPendingPriority = 0;
 			var averageQueueToOsgHours = selectedBlock.average_queue_to_osg_hours;
 			var averageCompletionsPerDay = selectedBlock.average_completions_per_day;
 
@@ -927,9 +924,6 @@ function osgLogtoTable(mode) {
 				var submissionStatus = String(val.mysql_status || "").trim();
 				var isPending = submissionStatus === "Not Submitted";
 				var isSubmitted = submissionStatus === "Submitted to OSG";
-				var pendingPriority = isPending ? Number(val.priority) : 0;
-				if (!isFinite(pendingPriority) || pendingPriority < 0) pendingPriority = 0;
-				maxPendingPriority = Math.max(maxPendingPriority, pendingPriority);
 				txt += "<tr>";
 
 				for (var col = 0; col < keys.length; col++) {
@@ -967,9 +961,6 @@ function osgLogtoTable(mode) {
 					data_summary.idle[idx] += Number(val.idle || 0);
 					data_summary.pending[idx] += isPending ? 1 : 0;
 					data_summary.submitted[idx] += isSubmitted ? 1 : 0;
-					maxPendingPriorityByUser[idx] = Math.max(
-						maxPendingPriorityByUser[idx], pendingPriority
-					);
 				} else {
 					data_summary.user.push(val.user || "");
 					data_summary.pending.push(isPending ? 1 : 0);
@@ -978,7 +969,6 @@ function osgLogtoTable(mode) {
 					data_summary.done.push(Number(val.done || 0));
 					data_summary.run.push(Number(val.run || 0));
 					data_summary.idle.push(Number(val.idle || 0));
-					maxPendingPriorityByUser.push(pendingPriority);
 				}
 			}
 
@@ -990,6 +980,10 @@ function osgLogtoTable(mode) {
 				var hasWork = data_summary.pending[index] > 0 || data_summary.submitted[index] > 0;
 				return count + (hasWork ? 1 : 0);
 			}, 0);
+			var totalEstimatedQueuedJobs = 0;
+			var totalRemainingJobs = 0;
+			var totalRemainingDays = 0;
+			var hasUnavailableEstimate = false;
 
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
@@ -1002,11 +996,21 @@ function osgLogtoTable(mode) {
 				txt_summary += "<td>" + escapeHtml(data_summary.done[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.run[u]) + "</td>";
 				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
-				txt_summary += renderEstimatedTimeRemainingCell(
+				var userEstimate = calculateEstimatedTimeRemaining(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
 					data_summary.done[u], activeUserCount, averageCompletionsPerDay,
-					maxPendingPriorityByUser[u], averageQueueToOsgHours
+					averageQueueToOsgHours
 				);
+				if (userEstimate.remainingJobs !== null) {
+					totalEstimatedQueuedJobs += userEstimate.estimatedQueuedJobs;
+					totalRemainingJobs += userEstimate.remainingJobs;
+					if (userEstimate.days === null && userEstimate.remainingJobs > 0) {
+						hasUnavailableEstimate = true;
+					} else if (userEstimate.days !== null) {
+						totalRemainingDays += userEstimate.days;
+					}
+				}
+				txt_summary += renderEstimatedTimeRemainingCell(userEstimate);
 			}
 
 			var totalPending = data_summary.pending.reduce(function (a, b) {
@@ -1028,16 +1032,16 @@ function osgLogtoTable(mode) {
 			txt_summary += "</tr><tr><td>totals</td>";
 			txt_summary += "<td>" + totalPending + "</td>";
 			txt_summary += "<td>" + totalSubmitted + "</td>";
-			txt_summary += "<td>" + escapeHtml(formatJobsWithEstimatedPending(
-				totalPending, totalSubmitted, totalJobs
-			)) + "</td>";
+			txt_summary += "<td>" + totalJobs + " (" + Math.round(totalEstimatedQueuedJobs) + ")</td>";
 			txt_summary += "<td>" + totalDone + "</td>";
 			txt_summary += "<td>" + totalRun + "</td>";
 			txt_summary += "<td>" + totalIdle + "</td>";
-			txt_summary += renderEstimatedTimeRemainingCell(
-				totalPending, totalSubmitted, totalJobs, totalDone, 1, averageCompletionsPerDay,
-				maxPendingPriority, averageQueueToOsgHours
-			);
+			var totalEstimate = {
+				text: "Jobs left: " + Math.round(totalRemainingJobs) + " — " +
+					(hasUnavailableEstimate ? "N/A" : totalRemainingDays.toFixed(1) + " days"),
+				days: hasUnavailableEstimate ? null : totalRemainingDays
+			};
+			txt_summary += renderEstimatedTimeRemainingCell(totalEstimate);
 			txt_summary += "</tr></table>";
 			txt_summary += renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay);
 
