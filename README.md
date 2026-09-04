@@ -187,6 +187,11 @@ This script calculates only `submissions.priority`; it never writes HTCondor `Jo
 8. With `--write-to-db`, uses one locked operation to clear non-pending priority values, write the
    calculated pending queue, and compact it to `1..N`.
 
+On the submit node, the live running-job counts come directly from the `htcondor2` Python bindings.
+On the web server, where HTCondor is not installed, the calculation uses the latest
+`owner_submission_snapshots` row written by `condor_io/list_owner_submission.py --store-db`. The
+calculation stops with an error if neither source is available.
+
 The current production wrapper is equivalent to:
 
 ```bash

@@ -517,6 +517,30 @@ def compute_running_jobs_by_user(
 	return dict(running_jobs_by_user)
 
 
+def compute_running_jobs_from_snapshot(
+		snapshot: dict,
+		database_name: str,
+) -> dict[str, int]:
+	"""Return per-user RUN counts from a stored owner-submission snapshot."""
+	payload = snapshot.get("payload", {})
+	database_payload = payload.get(database_name, {}) if isinstance(payload, dict) else {}
+	results = database_payload.get("results", [])
+	if not isinstance(results, list):
+		raise ValueError("Stored owner-submission snapshot has no results list")
+
+	running_jobs_by_user: dict[str, int] = Counter()
+	for row in results:
+		if not isinstance(row, dict) or row.get("user") is None or row.get("run") is None:
+			continue
+		try:
+			running_jobs = int(row.get("run", 0))
+		except (TypeError, ValueError):
+			running_jobs = 0
+		running_jobs_by_user[str(row["user"])] += max(running_jobs, 0)
+
+	return dict(running_jobs_by_user)
+
+
 def compute_priorities(
 		rows: list[dict],
 		algorithm: str,
@@ -1100,12 +1124,40 @@ def main() -> int:
 				)
 				print(f"DEBUG unparsable/blank client_time rows: {bad_time['n']}")
 
-		from condor_io.htcondor_utils import get_owner_batches
+		try:
+			from condor_io.htcondor_utils import get_owner_batches
 
-		condor_batches = get_owner_batches(args.condor_owner)
-		running_jobs_by_user = compute_running_jobs_by_user(pool_node_rows, condor_batches)
+			condor_batches = get_owner_batches(args.condor_owner)
+			running_jobs_by_user = compute_running_jobs_by_user(pool_node_rows, condor_batches)
+			running_jobs_source = "live HTCondor"
+		except ModuleNotFoundError as exc:
+			if exc.name != "htcondor2":
+				raise
+
+			with Database(args.credentials) as db:
+				database_row = db.query_one("SELECT DATABASE() AS database_name")
+				database_name = str(database_row["database_name"])
+				snapshot = db.get_latest_owner_submission_snapshot(
+					database_name=database_name,
+					owner=args.condor_owner,
+				)
+
+			if snapshot is None:
+				raise RuntimeError(
+					"HTCondor Python bindings are unavailable and no stored owner-submission "
+					"snapshot was found for database={0}, owner={1}".format(
+						database_name,
+						args.condor_owner,
+					)
+				)
+
+			running_jobs_by_user = compute_running_jobs_from_snapshot(snapshot, database_name)
+			running_jobs_source = "stored snapshot {0} from {1}".format(
+				snapshot.get("snapshot_id", "unknown"),
+				snapshot.get("update_time", "unknown time"),
+			)
 		print(
-			f"DEBUG live HTCondor RUN jobs for {len(running_jobs_by_user)} portal user(s): "
+			f"DEBUG {running_jobs_source} RUN jobs for {len(running_jobs_by_user)} portal user(s): "
 			f"{sum(running_jobs_by_user.values())}"
 		)
 

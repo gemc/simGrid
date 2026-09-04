@@ -121,6 +121,12 @@ tbody tr:hover td {
 	border-color: #b71c1c;
 }
 
+.estimate-note {
+	margin: 0.75rem auto 0;
+	max-width: 70rem;
+	font-size: 0.9rem;
+}
+
 /* =========================
    Forms
    ========================= */

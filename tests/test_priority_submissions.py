@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from db_io.priority_submissions import (
     compute_history_loads,
     compute_priorities,
+    compute_running_jobs_from_snapshot,
     compute_running_jobs_by_user,
 )
 from db_io.database import build_contiguous_priority_updates
@@ -99,6 +100,25 @@ class PriorityHistoryTests(unittest.TestCase):
 
         self.assertEqual(
             compute_running_jobs_by_user(submission_rows, condor_batches),
+            {"alpha": 10822, "beta": 7},
+        )
+
+    def test_running_jobs_are_read_from_stored_snapshot(self):
+        snapshot = {
+            "payload": {
+                "CLAS12OCR": {
+                    "results": [
+                        {"user": "alpha", "run": 4000},
+                        {"user": "alpha", "run": 6822},
+                        {"user": "beta", "run": 7},
+                        {"user": "pending", "run": None},
+                    ]
+                }
+            }
+        }
+
+        self.assertEqual(
+            compute_running_jobs_from_snapshot(snapshot, "CLAS12OCR"),
             {"alpha": 10822, "beta": 7},
         )
 

@@ -915,7 +915,7 @@ function osgLogtoTable(mode) {
 			}
 			txt += "<th>order</th></tr>";
 
-			var summaryHeaders = Object.keys(data_summary).concat(["estimated time remaining"]);
+			var summaryHeaders = Object.keys(data_summary).concat(["estimated time remaining **"]);
 			for (var s in summaryHeaders) {
 				txt_summary += "<th>" + escapeHtml(summaryColumnLabel(summaryHeaders[s])) + "</th>";
 			}
@@ -1029,6 +1029,11 @@ function osgLogtoTable(mode) {
 			txt_summary += renderEstimatedTimeRemainingCell(
 				totalPending, totalSubmitted, totalJobs, totalDone, totalRun, allCompletionRates
 			);
+			txt_summary += "</tr></table>";
+			txt_summary += "<p class=\"estimate-note\">** Estimate includes pending submissions, using " +
+				"the average jobs per submitted submission, and projects time from the average observed " +
+				"job-completion rate. When no completion history is available, it assumes 15 hours per " +
+				"job at the current number of running jobs.</p>";
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
