@@ -164,10 +164,9 @@ function renderEstimateNote(
 	var submissionsRateText = isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
 		Number(currentSubmissionsRate).toFixed(1) : "N/A";
 
-	return "<div class=\"estimate-note\">** Processing time uses current concurrent jobs per " +
-		"running submission and the current completion rate for unfinished OSG jobs and estimated " +
-		"queued jobs. Queue delay is the user's highest queue position divided by the current " +
-		"submissions rate. The total time sums available user estimates." +
+	return "<div class=\"estimate-note\">** Processing time uses the current completion rate and " +
+		"concurrent jobs per submission. Queue time uses the highest queue position and current " +
+		"submissions rate." +
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Current concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +

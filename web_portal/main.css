@@ -129,7 +129,7 @@ tbody tr:hover td {
 
 .estimate-metrics {
 	width: auto;
-	margin-top: 0.5rem;
+	margin: 0.5rem auto 0;
 	box-shadow: none;
 }
 
