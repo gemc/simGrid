@@ -3,7 +3,7 @@
 import unittest
 from datetime import datetime, timedelta
 
-from condor_io.list_owner_submission import calculate_typical_queue_to_osg_hours
+from condor_io.list_owner_submission import calculate_average_queue_to_osg_hours
 from db_io.priority_submissions import (
     compute_history_loads,
     compute_priorities,
@@ -34,7 +34,7 @@ def pending_row(user, submission_id, client_time):
 
 
 class PriorityHistoryTests(unittest.TestCase):
-    def test_typical_queue_to_osg_hours_uses_median_of_valid_durations(self):
+    def test_average_queue_to_osg_hours_includes_valid_outliers(self):
         rows = [
             {"client_time": "2026-08-01 10:00:00", "server_time": "2026-08-01 12:00:00"},
             {"client_time": "2026-08-02 10:00:00", "server_time": "2026-08-02 14:00:00"},
@@ -43,7 +43,7 @@ class PriorityHistoryTests(unittest.TestCase):
             {"client_time": "2026-08-04 14:00:00", "server_time": "2026-08-04 10:00:00"},
         ]
 
-        self.assertEqual(calculate_typical_queue_to_osg_hours(rows), 4.0)
+        self.assertAlmostEqual(calculate_average_queue_to_osg_hours(rows), 106.0 / 3.0)
 
     def test_pending_priorities_are_compacted_and_zero_rows_are_appended(self):
         rows = [

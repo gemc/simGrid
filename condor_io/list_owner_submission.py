@@ -25,7 +25,6 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from statistics import median
 from typing import Any, Dict, List, Optional, Set
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +38,7 @@ from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
-QUEUE_HISTORY_DAYS = 60
+QUEUE_HISTORY_DAYS = 30
 COMPLETION_WINDOW_HOURS = 48
 
 
@@ -118,9 +117,9 @@ def parse_database_time(value):
 		return None
 
 
-def calculate_typical_queue_to_osg_hours(rows):
+def calculate_average_queue_to_osg_hours(rows):
 	# type: (List[Dict[str, Any]]) -> Optional[float]
-	"""Median positive client_time-to-server_time duration in hours."""
+	"""Average positive client_time-to-server_time duration in hours."""
 	durations = []
 	for row in rows:
 		client_time = parse_database_time(row.get("client_time"))
@@ -131,7 +130,7 @@ def calculate_typical_queue_to_osg_hours(rows):
 
 	if not durations:
 		return None
-	return float(median(durations))
+	return sum(durations) / len(durations)
 
 
 def build_condor_entry(cluster_id, batch):
@@ -190,7 +189,7 @@ def empty_db_payload(database_name, owner, timestamp):
 		"database":         database_name,
 		"owner":            owner,
 		"count":            0,
-		"typical_queue_to_osg_hours": None,
+		"average_queue_to_osg_hours": None,
 		"average_completions_per_day": None,
 		"results":          [],
 	}
@@ -224,7 +223,7 @@ def collect_for_database(owner, credentials, database_name):
 				QUEUE_HISTORY_DAYS,
 			],
 		)
-		typical_queue_to_osg_hours = calculate_typical_queue_to_osg_hours(queue_history_rows)
+		average_queue_to_osg_hours = calculate_average_queue_to_osg_hours(queue_history_rows)
 
 		for cluster_id in sorted(batches):
 			batch = batches[cluster_id]
@@ -318,7 +317,7 @@ def collect_for_database(owner, credentials, database_name):
 		"database": database_name,
 		"owner":    owner,
 		"count":    len(results),
-		"typical_queue_to_osg_hours": typical_queue_to_osg_hours,
+		"average_queue_to_osg_hours": average_queue_to_osg_hours,
 		"average_completions_per_day": average_completions_per_day,
 		"results":  results,
 	}
@@ -390,8 +389,8 @@ def main():
 					"database":         selected_payload["database"],
 					"owner":            selected_payload["owner"],
 					"count":            selected_payload["count"],
-					"typical_queue_to_osg_hours": selected_payload[
-						"typical_queue_to_osg_hours"
+					"average_queue_to_osg_hours": selected_payload[
+						"average_queue_to_osg_hours"
 					],
 					"average_completions_per_day": selected_payload[
 						"average_completions_per_day"
