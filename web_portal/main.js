@@ -66,14 +66,13 @@ function formatJobsWithEstimatedPending(pending, submitted, jobs) {
 }
 
 function calculateEstimatedTimeRemaining(
-		pending, submitted, jobs, done, completionShareCount, averageCompletionsPerDay,
-		averageQueueToOsgHours
+		pending, submitted, jobs, done, runningUserCount, averageCompletionsPerDay
 ) {
 	pending = Number(pending);
 	submitted = Number(submitted);
 	jobs = Number(jobs);
 	done = Number(done);
-	completionShareCount = Number(completionShareCount);
+	runningUserCount = Number(runningUserCount);
 	averageCompletionsPerDay = Number(averageCompletionsPerDay);
 
 	if (![pending, submitted, jobs, done].every(isFinite) || submitted <= 0) {
@@ -81,21 +80,12 @@ function calculateEstimatedTimeRemaining(
 	}
 
 	var estimatedQueuedJobs = Math.max(pending * jobs / submitted, 0);
-	var osgJobsRemaining = Math.max(jobs - done, 0);
-	var remainingJobs = estimatedQueuedJobs + osgJobsRemaining;
+	var remainingJobs = Math.max(jobs - done, 0);
 	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
-	var queueDelayDays = 0;
-
-	if (pending > 0 && averageQueueToOsgHours != null) {
-		averageQueueToOsgHours = Number(averageQueueToOsgHours);
-		if (isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0) {
-			queueDelayDays = averageQueueToOsgHours / 24;
-		}
-	}
 
 	if (remainingJobs > 0 && (!isFinite(averageCompletionsPerDay) ||
-		averageCompletionsPerDay <= 0 || !isFinite(completionShareCount) ||
-		completionShareCount <= 0)) {
+		averageCompletionsPerDay <= 0 || !isFinite(runningUserCount) ||
+		runningUserCount <= 0)) {
 		return {
 			text: jobsLeft + "N/A",
 			days: null,
@@ -104,14 +94,12 @@ function calculateEstimatedTimeRemaining(
 		};
 	}
 
-	var userCompletionsPerDay = averageCompletionsPerDay / completionShareCount;
-	var processingDays = remainingJobs > 0 ? remainingJobs / userCompletionsPerDay : 0;
-	var remainingDays = processingDays + queueDelayDays;
+	var userCompletionsPerDay = averageCompletionsPerDay / runningUserCount;
+	var remainingDays = remainingJobs > 0 ? remainingJobs / userCompletionsPerDay : 0;
 
 	return {
 		text: jobsLeft + remainingDays.toFixed(1) + " days",
 		days: remainingDays,
-		queueDelayDays: queueDelayDays,
 		remainingJobs: remainingJobs,
 		estimatedQueuedJobs: estimatedQueuedJobs
 	};
@@ -132,18 +120,25 @@ function renderEstimatedTimeRemainingCell(estimate) {
 	return "<td" + classAttribute + ">" + escapeHtml(estimate.text) + "</td>";
 }
 
-function renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay) {
+function renderEstimateNote(
+		averageQueueToOsgHours, averageCompletionsPerDay, totalRunning, runningUserCount
+) {
 	var queueHoursText = averageQueueToOsgHours != null &&
 		isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0 ?
 		Number(averageQueueToOsgHours).toFixed(1) : "N/A";
 	var completionRateText = averageCompletionsPerDay != null &&
 		isFinite(averageCompletionsPerDay) && averageCompletionsPerDay >= 0 ?
 		Number(averageCompletionsPerDay).toFixed(1) : "N/A";
+	var averageConcurrentJobsText = isFinite(totalRunning) && Number(totalRunning) >= 0 &&
+		isFinite(runningUserCount) && Number(runningUserCount) > 0 ?
+		(Number(totalRunning) / Number(runningUserCount)).toFixed(1) : "N/A";
 
 	return "<p class=\"estimate-note\">** Processing time uses the last 48 hours' average " +
-		"completions per day, divided equally among active users. Queue delay is added for queued " +
-		"work once, using the 30-day average. The total is the sum of available user estimates; " +
-		"users with N/A job counts are excluded.<br/>Average queue-to-OSG time " +
+		"completions per day, divided by the number of users currently running jobs. This assumes " +
+		"each user receives the average concurrent workload of those running users. Only jobs already " +
+		"on OSG are included; estimated queued jobs are shown in parentheses but excluded from the " +
+		"ETA. The total sums available user estimates.<br/>Average concurrent jobs per running user: " +
+		escapeHtml(averageConcurrentJobsText) + ".<br/>Average queue-to-OSG time " +
 		"(last 30 days): " +
 		escapeHtml(queueHoursText) + " hours.<br/>Average completions / day (last 2 days): " +
 		escapeHtml(completionRateText) + ".</p>";
@@ -976,9 +971,8 @@ function osgLogtoTable(mode) {
 			var totalRun = data_summary.run.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0);
-			var activeUserCount = data_summary.user.reduce(function (count, user, index) {
-				var hasWork = data_summary.pending[index] > 0 || data_summary.submitted[index] > 0;
-				return count + (hasWork ? 1 : 0);
+			var runningUserCount = data_summary.run.reduce(function (count, runningJobs) {
+				return count + (Number(runningJobs) > 0 ? 1 : 0);
 			}, 0);
 			var totalEstimatedQueuedJobs = 0;
 			var totalRemainingJobs = 0;
@@ -998,8 +992,7 @@ function osgLogtoTable(mode) {
 				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
 				var userEstimate = calculateEstimatedTimeRemaining(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
-					data_summary.done[u], activeUserCount, averageCompletionsPerDay,
-					averageQueueToOsgHours
+					data_summary.done[u], runningUserCount, averageCompletionsPerDay
 				);
 				if (userEstimate.remainingJobs !== null) {
 					totalEstimatedQueuedJobs += userEstimate.estimatedQueuedJobs;
@@ -1043,7 +1036,9 @@ function osgLogtoTable(mode) {
 			};
 			txt_summary += renderEstimatedTimeRemainingCell(totalEstimate);
 			txt_summary += "</tr></table>";
-			txt_summary += renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay);
+			txt_summary += renderEstimateNote(
+				averageQueueToOsgHours, averageCompletionsPerDay, totalRun, runningUserCount
+			);
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
