@@ -165,9 +165,8 @@ function renderEstimateNote(
 		Number(currentSubmissionsRate).toFixed(1) : "N/A";
 
 	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and queue to OSG time <b>tqueue</b>." +
-        "<b>tproc</b> uses the completion rate and " +
-		"running jobs per submission. <b>tqueue</b> uses the highest queue position and current " +
-		"submissions rate." +
+        "<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
+        "<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average running jobs per submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
