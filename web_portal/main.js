@@ -83,7 +83,9 @@ function submissionColumnLabel(name) {
 }
 
 function summaryColumnLabel(name) {
-	if (name === "jobs") return "n. jobs (est. pending)";
+	if (name === "pending") return "queued";
+	if (name === "submitted") return "on OSG";
+	if (name === "jobs") return "OSG jobs (est. jobs on queue)";
 	return submissionColumnLabel(name);
 }
 
@@ -108,7 +110,8 @@ function calculateEstimatedTimeRemaining(pending, submitted, jobs, done, running
 		return {text: "N/A", days: null};
 	}
 
-	var remainingJobs = Math.max(jobs - done, 0);
+	var estimatedPendingJobs = pending * jobs / submitted;
+	var remainingJobs = Math.max(estimatedPendingJobs + jobs - done, 0);
 	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
 	var remainingDays;
 
@@ -1030,9 +1033,10 @@ function osgLogtoTable(mode) {
 			);
 			txt_summary += "</tr></table>";
 			txt_summary += "<p class=\"estimate-note\">** Pending jobs are estimated from the average " +
-				"jobs per submitted submission. Time remaining covers submitted jobs only and uses the " +
-				"average observed job-completion rate. When no completion history is available, it " +
-				"assumes 15 hours per job at the current number of running jobs.</p>";
+				"jobs per submitted submission. Time remaining includes submitted and estimated pending " +
+				"jobs, minus completed jobs, and uses the average observed job-completion rate. When no " +
+				"completion history is available, it assumes 15 hours per job at the current number of " +
+				"running jobs.</p>";
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
