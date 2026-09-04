@@ -38,6 +38,7 @@ from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
+QUEUE_HISTORY_DAYS = 60
 
 
 def build_parser():
@@ -102,6 +103,35 @@ def safe_int(value):
 		return None
 
 
+def parse_database_time(value):
+	# type: (Any) -> Optional[datetime]
+	"""Return a submissions timestamp as a datetime, or None when invalid."""
+	if isinstance(value, datetime):
+		return value
+	if value is None:
+		return None
+	try:
+		return datetime.strptime(str(value).strip(), "%Y-%m-%d %H:%M:%S")
+	except (TypeError, ValueError):
+		return None
+
+
+def calculate_average_queue_to_osg_hours(rows):
+	# type: (List[Dict[str, Any]]) -> Optional[float]
+	"""Average positive client_time-to-server_time duration in hours."""
+	durations = []
+	for row in rows:
+		client_time = parse_database_time(row.get("client_time"))
+		server_time = parse_database_time(row.get("server_time"))
+		if client_time is None or server_time is None or server_time < client_time:
+			continue
+		durations.append((server_time - client_time).total_seconds() / 3600.0)
+
+	if not durations:
+		return None
+	return sum(durations) / len(durations)
+
+
 def build_condor_entry(cluster_id, batch):
 	from htcondor_utils import format_submitted_time
 	total = safe_int(batch.get("total_submit_procs")) or 0
@@ -129,6 +159,7 @@ def build_condor_entry(cluster_id, batch):
 		"pool_node":          condor_osg_id,
 		"mysql_status":       None,
 		"mysql_client_time":  None,
+		"mysql_server_time":  None,
 		"user_submission_id": None,
 		"priority":           batch.get("current_priority"),
 	}
@@ -158,6 +189,7 @@ def empty_db_payload(database_name, owner, timestamp):
 		"database":         database_name,
 		"owner":            owner,
 		"count":            0,
+		"average_queue_to_osg_hours": None,
 		"results":          [],
 	}
 
@@ -174,6 +206,15 @@ def collect_for_database(owner, credentials, database_name):
 			credentials_file=credentials,
 			database_name=database_name,
 	) as db:
+		queue_history_rows = db.query(
+			"""
+			SELECT client_time, server_time
+			FROM submissions
+			WHERE STR_TO_DATE(server_time, %s) >= NOW() - INTERVAL %s DAY
+			""",
+			["%Y-%m-%d %H:%i:%s", QUEUE_HISTORY_DAYS],
+		)
+		average_queue_to_osg_hours = calculate_average_queue_to_osg_hours(queue_history_rows)
 
 		for cluster_id in sorted(batches):
 			batch = batches[cluster_id]
@@ -186,6 +227,7 @@ def collect_for_database(owner, credentials, database_name):
 				SELECT user,
 				       user_submission_id,
 				       client_time,
+				       server_time,
 				       pool_node,
 				       run_status,
 				       priority
@@ -210,6 +252,7 @@ def collect_for_database(owner, credentials, database_name):
 			entry["pool_node"] = mysql_row.get("pool_node")
 			entry["mysql_status"] = mysql_row.get("run_status")
 			entry["mysql_client_time"] = mysql_row.get("client_time")
+			entry["mysql_server_time"] = mysql_row.get("server_time")
 			entry["priority"] = mysql_row.get("priority", entry["priority"])
 			apply_terminal_pre_submit_status(entry, entry["mysql_status"])
 
@@ -224,6 +267,7 @@ def collect_for_database(owner, credentials, database_name):
 			SELECT user,
 			       user_submission_id,
 			       client_time,
+			       server_time,
 			       pool_node,
 			       run_status,
 			       priority
@@ -258,6 +302,7 @@ def collect_for_database(owner, credentials, database_name):
 				"pool_node":          pool_node,
 				"mysql_status":       run_status,
 				"mysql_client_time":  row.get("client_time"),
+				"mysql_server_time":  row.get("server_time"),
 				"user_submission_id": submission_id,
 				"priority":           row.get("priority"),
 			}
@@ -267,6 +312,7 @@ def collect_for_database(owner, credentials, database_name):
 		"database": database_name,
 		"owner":    owner,
 		"count":    len(results),
+		"average_queue_to_osg_hours": average_queue_to_osg_hours,
 		"results":  results,
 	}
 
@@ -337,6 +383,9 @@ def main():
 					"database":         selected_payload["database"],
 					"owner":            selected_payload["owner"],
 					"count":            selected_payload["count"],
+					"average_queue_to_osg_hours": selected_payload[
+						"average_queue_to_osg_hours"
+					],
 					"results":          selected_payload["results"],
 				}
 
