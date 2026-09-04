@@ -37,6 +37,17 @@ function formatNumber(value, digits = 1) {
 	return num.toFixed(digits);
 }
 
+function formatNumberWithCommas(value, digits) {
+	if (value === null || value === undefined || value === "") return "";
+	var num = Number(value);
+	if (!isFinite(num)) return "";
+
+	var formatted = digits === undefined ? String(Math.round(num)) : num.toFixed(digits);
+	var parts = formatted.split(".");
+	parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+	return parts.join(".");
+}
+
 function formatAgeDays(value) {
 	var num = Number(value);
 	if (!isFinite(num)) return "";
@@ -63,7 +74,8 @@ function formatJobsWithEstimatedPending(pending, submitted, jobs) {
 
 	if (![pending, submitted, jobs].every(isFinite)) return "N/A (N/A)";
 	var estimatedPending = submitted > 0 ? Math.round(pending * jobs / submitted) : "N/A";
-	return jobs + " (" + estimatedPending + ")";
+	return formatNumberWithCommas(jobs) + " (" +
+		(estimatedPending === "N/A" ? estimatedPending : formatNumberWithCommas(estimatedPending)) + ")";
 }
 
 function calculateEstimatedTimeRemaining(
@@ -93,7 +105,7 @@ function calculateEstimatedTimeRemaining(
 	var estimatedQueuedJobs = Math.max(pending * jobs / submitted, 0);
 	var osgJobsRemaining = Math.max(jobs - done, 0);
 	var remainingJobs = estimatedQueuedJobs + osgJobsRemaining;
-	var jobsLeft = "left: " + Math.round(remainingJobs) + " — ";
+	var jobsLeft = "left: " + formatNumberWithCommas(remainingJobs) + " — ";
 	var totalSubmissions = pending + submitted;
 
 	if (remainingJobs > 0 && (!isFinite(totalRunning) || totalRunning <= 0 ||
@@ -158,17 +170,18 @@ function renderEstimateNote(
 ) {
 	var concurrentJobsText = isFinite(concurrentJobsPerSubmission) &&
 		Number(concurrentJobsPerSubmission) >= 0 ?
-		Number(concurrentJobsPerSubmission).toFixed(0) : "N/A";
+		formatNumberWithCommas(concurrentJobsPerSubmission, 0) : "N/A";
 	var completionRateText = isFinite(currentCompletionRate) && Number(currentCompletionRate) >= 0 ?
-		Number(currentCompletionRate).toFixed(1) : "N/A";
+		formatNumberWithCommas(currentCompletionRate, 1) : "N/A";
 	var submissionsRateText = isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
-		Number(currentSubmissionsRate).toFixed(1) : "N/A";
+		formatNumberWithCommas(currentSubmissionsRate, 1) : "N/A";
 
-	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and queue to OSG time <b>tqueue</b>." +
-        "<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
-        "<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
+	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and " +
+		"queue to OSG time <b>tqueue</b>." +
+		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
+		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
 		"<table class=\"estimate-metrics\"><tbody>" +
-		"<tr><th>Average running jobs per submission</th><td>" +
+		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
 		"<tr><th>Completion Rate (last 2 days)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
@@ -916,6 +929,7 @@ function osgLogtoTable(mode) {
 			var runningSubmissionCount = 0;
 
 			var keys = Object.keys(userData[0]);
+			var submissionCountColumns = ["jobs", "done", "run", "idle", "hold"];
 
 			keys = keys.filter(function (key) {
 				return ![
@@ -969,6 +983,8 @@ function osgLogtoTable(mode) {
 						} else {
 							txt += escapeHtml(val.pool_node);
 						}
+					} else if (submissionCountColumns.includes(String(key).toLowerCase().trim())) {
+						txt += escapeHtml(formatNumberWithCommas(val[key]));
 					} else {
 						txt += escapeHtml(val[key]);
 					}
@@ -1026,14 +1042,14 @@ function osgLogtoTable(mode) {
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
 				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.pending[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.submitted[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatNumberWithCommas(data_summary.pending[u])) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatNumberWithCommas(data_summary.submitted[u])) + "</td>";
 				txt_summary += "<td>" + escapeHtml(formatJobsWithEstimatedPending(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u]
 				)) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.done[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.run[u]) + "</td>";
-				txt_summary += "<td>" + escapeHtml(data_summary.idle[u]) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatNumberWithCommas(data_summary.done[u])) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatNumberWithCommas(data_summary.run[u])) + "</td>";
+				txt_summary += "<td>" + escapeHtml(formatNumberWithCommas(data_summary.idle[u])) + "</td>";
 				var userEstimate = calculateEstimatedTimeRemaining(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
 					data_summary.done[u], highestPendingPriorities[u], totalRun,
@@ -1069,14 +1085,15 @@ function osgLogtoTable(mode) {
 			}, 0);
 
 			txt_summary += "</tr><tr><td>totals</td>";
-			txt_summary += "<td>" + totalPending + "</td>";
-			txt_summary += "<td>" + totalSubmitted + "</td>";
-			txt_summary += "<td>" + totalJobs + " (" + Math.round(totalEstimatedQueuedJobs) + ")</td>";
-			txt_summary += "<td>" + totalDone + "</td>";
-			txt_summary += "<td>" + totalRun + "</td>";
-			txt_summary += "<td>" + totalIdle + "</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalPending) + "</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalSubmitted) + "</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalJobs) + " (" +
+				formatNumberWithCommas(totalEstimatedQueuedJobs) + ")</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalDone) + "</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalRun) + "</td>";
+			txt_summary += "<td>" + formatNumberWithCommas(totalIdle) + "</td>";
 			var totalEstimate = {
-				text: "Jobs left: " + Math.round(totalRemainingJobs) + " — " +
+				text: "Jobs left: " + formatNumberWithCommas(totalRemainingJobs) + " — " +
 					(hasUnavailableEstimate ? "N/A" : totalRemainingDays.toFixed(1) + " days"),
 				days: hasUnavailableEstimate ? null : totalRemainingDays
 			};
