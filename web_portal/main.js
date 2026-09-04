@@ -67,7 +67,7 @@ function formatJobsWithEstimatedPending(pending, submitted, jobs) {
 
 function calculateEstimatedTimeRemaining(
 		pending, submitted, jobs, done, running, totalRunning,
-		averageCompletionsPerDay, maxPendingPriority, averageQueueToOsgHours
+		averageCompletionsPerDay, maxPendingPriority, typicalQueueToOsgHours
 ) {
 	pending = Number(pending);
 	submitted = Number(submitted);
@@ -87,12 +87,12 @@ function calculateEstimatedTimeRemaining(
 	var remainingDays;
 	var queueDelayDays = 0;
 
-	if (pending > 0 && maxPendingPriority != null && averageQueueToOsgHours != null) {
+	if (pending > 0 && maxPendingPriority != null && typicalQueueToOsgHours != null) {
 		maxPendingPriority = Number(maxPendingPriority);
-		averageQueueToOsgHours = Number(averageQueueToOsgHours);
+		typicalQueueToOsgHours = Number(typicalQueueToOsgHours);
 		if (isFinite(maxPendingPriority) && maxPendingPriority > 0 &&
-			isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0) {
-			queueDelayDays = maxPendingPriority * averageQueueToOsgHours / 24;
+			isFinite(typicalQueueToOsgHours) && typicalQueueToOsgHours >= 0) {
+			queueDelayDays = maxPendingPriority * typicalQueueToOsgHours / 24;
 		}
 	}
 
@@ -125,11 +125,11 @@ function estimatedTimeRemainingClass(days) {
 
 function renderEstimatedTimeRemainingCell(
 		pending, submitted, jobs, done, running, totalRunning,
-		averageCompletionsPerDay, maxPendingPriority, averageQueueToOsgHours
+		averageCompletionsPerDay, maxPendingPriority, typicalQueueToOsgHours
 ) {
 	var estimate = calculateEstimatedTimeRemaining(
 		pending, submitted, jobs, done, running, totalRunning,
-		averageCompletionsPerDay, maxPendingPriority, averageQueueToOsgHours
+		averageCompletionsPerDay, maxPendingPriority, typicalQueueToOsgHours
 	);
 	var colorClass = estimatedTimeRemainingClass(estimate.days);
 	var classAttribute = colorClass === "" ? "" :
@@ -137,17 +137,17 @@ function renderEstimatedTimeRemainingCell(
 	return "<td" + classAttribute + ">" + escapeHtml(estimate.text) + "</td>";
 }
 
-function renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay) {
-	var queueHoursText = averageQueueToOsgHours != null &&
-		isFinite(averageQueueToOsgHours) && averageQueueToOsgHours >= 0 ?
-		Number(averageQueueToOsgHours).toFixed(1) : "N/A";
+function renderEstimateNote(typicalQueueToOsgHours, averageCompletionsPerDay) {
+	var queueHoursText = typicalQueueToOsgHours != null &&
+		isFinite(typicalQueueToOsgHours) && typicalQueueToOsgHours >= 0 ?
+		Number(typicalQueueToOsgHours).toFixed(1) : "N/A";
 	var completionRateText = averageCompletionsPerDay != null &&
 		isFinite(averageCompletionsPerDay) && averageCompletionsPerDay >= 0 ?
 		Number(averageCompletionsPerDay).toFixed(1) : "N/A";
 
 	return "<p class=\"estimate-note\">** Processing time uses the last 48 hours' average " +
 		"completions per day and average processing time, allocated by each user's share of " +
-		"running jobs.<br/>Average queue-to-OSG time (last 60 days): " +
+		"running jobs.<br/>Typical queue-to-OSG time (last 60 days): " +
 		escapeHtml(queueHoursText) + " hours.<br/>Average completions / day: " +
 		escapeHtml(completionRateText) + ".</p>";
 }
@@ -888,7 +888,7 @@ function osgLogtoTable(mode) {
 			};
 			var maxPendingPriorityByUser = [];
 			var maxPendingPriority = 0;
-			var averageQueueToOsgHours = selectedBlock.average_queue_to_osg_hours;
+			var typicalQueueToOsgHours = selectedBlock.typical_queue_to_osg_hours;
 			var averageCompletionsPerDay = selectedBlock.average_completions_per_day;
 
 			var keys = Object.keys(userData[0]);
@@ -1003,7 +1003,7 @@ function osgLogtoTable(mode) {
 				txt_summary += renderEstimatedTimeRemainingCell(
 					data_summary.pending[u], data_summary.submitted[u], data_summary.jobs[u],
 					data_summary.done[u], data_summary.run[u], totalRun, averageCompletionsPerDay,
-					maxPendingPriorityByUser[u], averageQueueToOsgHours
+					maxPendingPriorityByUser[u], typicalQueueToOsgHours
 				);
 			}
 
@@ -1034,10 +1034,10 @@ function osgLogtoTable(mode) {
 			txt_summary += "<td>" + totalIdle + "</td>";
 			txt_summary += renderEstimatedTimeRemainingCell(
 				totalPending, totalSubmitted, totalJobs, totalDone, totalRun, totalRun,
-				averageCompletionsPerDay, maxPendingPriority, averageQueueToOsgHours
+				averageCompletionsPerDay, maxPendingPriority, typicalQueueToOsgHours
 			);
 			txt_summary += "</tr></table>";
-			txt_summary += renderEstimateNote(averageQueueToOsgHours, averageCompletionsPerDay);
+			txt_summary += renderEstimateNote(typicalQueueToOsgHours, averageCompletionsPerDay);
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;

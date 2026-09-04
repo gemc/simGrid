@@ -25,6 +25,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
+from statistics import median
 from typing import Any, Dict, List, Optional, Set
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -117,9 +118,9 @@ def parse_database_time(value):
 		return None
 
 
-def calculate_average_queue_to_osg_hours(rows):
+def calculate_typical_queue_to_osg_hours(rows):
 	# type: (List[Dict[str, Any]]) -> Optional[float]
-	"""Average positive client_time-to-server_time duration in hours."""
+	"""Median positive client_time-to-server_time duration in hours."""
 	durations = []
 	for row in rows:
 		client_time = parse_database_time(row.get("client_time"))
@@ -130,7 +131,7 @@ def calculate_average_queue_to_osg_hours(rows):
 
 	if not durations:
 		return None
-	return sum(durations) / len(durations)
+	return float(median(durations))
 
 
 def build_condor_entry(cluster_id, batch):
@@ -189,7 +190,7 @@ def empty_db_payload(database_name, owner, timestamp):
 		"database":         database_name,
 		"owner":            owner,
 		"count":            0,
-		"average_queue_to_osg_hours": None,
+		"typical_queue_to_osg_hours": None,
 		"average_completions_per_day": None,
 		"results":          [],
 	}
@@ -213,11 +214,17 @@ def collect_for_database(owner, credentials, database_name):
 			"""
 			SELECT client_time, server_time
 			FROM submissions
-			WHERE STR_TO_DATE(server_time, %s) >= NOW() - INTERVAL %s DAY
+			WHERE STR_TO_DATE(client_time, %s) >= NOW() - INTERVAL %s DAY
+			  AND STR_TO_DATE(server_time, %s) >= NOW() - INTERVAL %s DAY
 			""",
-			["%Y-%m-%d %H:%i:%s", QUEUE_HISTORY_DAYS],
+			[
+				"%Y-%m-%d %H:%i:%s",
+				QUEUE_HISTORY_DAYS,
+				"%Y-%m-%d %H:%i:%s",
+				QUEUE_HISTORY_DAYS,
+			],
 		)
-		average_queue_to_osg_hours = calculate_average_queue_to_osg_hours(queue_history_rows)
+		typical_queue_to_osg_hours = calculate_typical_queue_to_osg_hours(queue_history_rows)
 
 		for cluster_id in sorted(batches):
 			batch = batches[cluster_id]
@@ -311,7 +318,7 @@ def collect_for_database(owner, credentials, database_name):
 		"database": database_name,
 		"owner":    owner,
 		"count":    len(results),
-		"average_queue_to_osg_hours": average_queue_to_osg_hours,
+		"typical_queue_to_osg_hours": typical_queue_to_osg_hours,
 		"average_completions_per_day": average_completions_per_day,
 		"results":  results,
 	}
@@ -383,8 +390,8 @@ def main():
 					"database":         selected_payload["database"],
 					"owner":            selected_payload["owner"],
 					"count":            selected_payload["count"],
-					"average_queue_to_osg_hours": selected_payload[
-						"average_queue_to_osg_hours"
+					"typical_queue_to_osg_hours": selected_payload[
+						"typical_queue_to_osg_hours"
 					],
 					"average_completions_per_day": selected_payload[
 						"average_completions_per_day"
