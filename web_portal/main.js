@@ -108,8 +108,7 @@ function calculateEstimatedTimeRemaining(pending, submitted, jobs, done, running
 		return {text: "N/A", days: null};
 	}
 
-	var totalJobs = (pending + submitted) * jobs / submitted;
-	var remainingJobs = Math.max(totalJobs - done, 0);
+	var remainingJobs = Math.max(jobs - done, 0);
 	var jobsLeft = "Jobs left: " + Math.round(remainingJobs) + " — ";
 	var remainingDays;
 
@@ -1030,10 +1029,10 @@ function osgLogtoTable(mode) {
 				totalPending, totalSubmitted, totalJobs, totalDone, totalRun, allCompletionRates
 			);
 			txt_summary += "</tr></table>";
-			txt_summary += "<p class=\"estimate-note\">** Estimate includes pending submissions, using " +
-				"the average jobs per submitted submission, and projects time from the average observed " +
-				"job-completion rate. When no completion history is available, it assumes 15 hours per " +
-				"job at the current number of running jobs.</p>";
+			txt_summary += "<p class=\"estimate-note\">** Pending jobs are estimated from the average " +
+				"jobs per submitted submission. Time remaining covers submitted jobs only and uses the " +
+				"average observed job-completion rate. When no completion history is available, it " +
+				"assumes 15 hours per job at the current number of running jobs.</p>";
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;
