@@ -201,12 +201,10 @@ function renderEstimateNote(
 		formatNumberWithCommas(currentSubmissionsRate, 1) : "N/A";
 
 	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and " +
-		"queue to OSG time <b>tqueue</b>." +
+		"queue time <b>tqueue</b>." +
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
-		"<br/>For users with no OSG submissions, <b>to osg</b> is the first queue position " +
-		"divided by the current submissions rate." +
-		"<br/>Note: Total time left does not include queue jobs not on OSG." +
+		"<br/>Note: Total time left does not include queue jobs that are not on OSG yet." +
         "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
