@@ -214,9 +214,7 @@ function renderEstimateNote(
 		"queue to OSG time <b>tqueue</b>." +
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
-		" When a user has no running jobs, its first queue position is shown as <b>to osg</b>." +
-		"<br/>The totals row divides jobs left by the completion rate and assumes 10,000 jobs " +
-		"per queued submission." +
+		"<br/>When a user has no running jobs, its first queue position is shown as <b>to osg</b>." +
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
