@@ -169,6 +169,21 @@ function calculateEstimatedTimeRemaining(
 	};
 }
 
+function calculateTotalEstimatedTimeRemaining(pending, jobs, done, completionRate) {
+	pending = Number(pending);
+	jobs = Number(jobs);
+	done = Number(done);
+	completionRate = Number(completionRate);
+
+	var estimatedQueuedJobs = Math.max(pending, 0) * ESTIMATED_JOBS_PER_SUBMISSION;
+	var remainingJobs = Math.max(jobs - done, 0) + estimatedQueuedJobs;
+	return {
+		estimatedQueuedJobs: estimatedQueuedJobs,
+		remainingJobs: remainingJobs,
+		days: isFinite(completionRate) && completionRate > 0 ? remainingJobs / completionRate : null
+	};
+}
+
 function estimatedTimeRemainingClass(days) {
 	if (days === null || !isFinite(days)) return "";
 	if (days <= 10) return "green";
@@ -200,6 +215,8 @@ function renderEstimateNote(
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
 		" When a user has no running jobs, its first queue position is shown as <b>to osg</b>." +
+		"<br/>The totals row divides jobs left by the completion rate and assumes 10,000 jobs " +
+		"per queued submission." +
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
@@ -1060,11 +1077,6 @@ function osgLogtoTable(mode) {
 			var currentSubmissionsRate = isFinite(averageCompletionsPerDay) &&
 				Number(averageCompletionsPerDay) >= 0 ?
 				Number(averageCompletionsPerDay) / ESTIMATED_JOBS_PER_SUBMISSION : null;
-			var totalEstimatedQueuedJobs = 0;
-			var totalRemainingJobs = 0;
-			var totalRemainingDays = 0;
-			var hasUnavailableEstimate = false;
-
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
 				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
@@ -1084,16 +1096,6 @@ function osgLogtoTable(mode) {
 					concurrentJobsPerSubmission, averageCompletionsPerDay,
 					currentSubmissionsRate
 				);
-				if (userEstimate.remainingJobs !== null) {
-					totalEstimatedQueuedJobs += userEstimate.estimatedQueuedJobs;
-					totalRemainingJobs += userEstimate.remainingJobs;
-					if ((userEstimate.days === null || userEstimate.queueOnly) &&
-						userEstimate.remainingJobs > 0) {
-						hasUnavailableEstimate = true;
-					} else if (userEstimate.days !== null) {
-						totalRemainingDays += userEstimate.days;
-					}
-				}
 				txt_summary += renderEstimatedTimeRemainingCell(userEstimate);
 			}
 
@@ -1112,20 +1114,20 @@ function osgLogtoTable(mode) {
 			var totalIdle = data_summary.idle.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0);
+			var totalEstimate = calculateTotalEstimatedTimeRemaining(
+				totalPending, totalJobs, totalDone, averageCompletionsPerDay
+			);
 
 			txt_summary += "</tr><tr><td>totals</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalPending) + "</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalSubmitted) + "</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalJobs) + " (" +
-				formatNumberWithCommas(totalEstimatedQueuedJobs) + ")</td>";
+				formatNumberWithCommas(totalEstimate.estimatedQueuedJobs) + ")</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalDone) + "</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalRun) + "</td>";
 			txt_summary += "<td>" + formatNumberWithCommas(totalIdle) + "</td>";
-			var totalEstimate = {
-				text: "Jobs left: " + formatNumberWithCommas(totalRemainingJobs) + " — " +
-					(hasUnavailableEstimate ? "N/A" : totalRemainingDays.toFixed(1) + " days"),
-				days: hasUnavailableEstimate ? null : totalRemainingDays
-			};
+			totalEstimate.text = "Jobs left: " + formatNumberWithCommas(totalEstimate.remainingJobs) + " — " +
+				(totalEstimate.days === null ? "N/A" : totalEstimate.days.toFixed(1) + " days");
 			txt_summary += renderEstimatedTimeRemainingCell(totalEstimate);
 			txt_summary += "</tr></table>";
 			txt_summary += renderEstimateNote(
