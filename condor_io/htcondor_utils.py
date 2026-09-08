@@ -134,7 +134,7 @@ def get_owner_batches(owner: str) -> Dict[int, Dict[str, Any]]:
 	return batches
 
 
-def get_completed_job_count(owner: str, hours: int = 48) -> int:
+def get_completed_job_count(owner: str, hours: int = 24) -> int:
 	"""Return the number of jobs completed for owner during the last N hours."""
 	if hours <= 0:
 		raise ValueError("hours must be greater than zero")

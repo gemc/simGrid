@@ -218,7 +218,7 @@ function renderEstimateNote(
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
-		"<tr><th>Completion Rate (last 2 days)</th><td>" +
+		"<tr><th>Completion Rate (last 24 hours)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
 		"<tr><th>Queue to OSG Rate (10,000 jobs / submission)</th><td>" +
 		escapeHtml(submissionsRateText) + " submissions / day</td></tr>" +
