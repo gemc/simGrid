@@ -121,16 +121,6 @@ function calculateEstimatedTimeRemaining(
 	var remainingJobs = estimatedQueuedJobs + osgJobsRemaining;
 	var jobsLeft = "left: " + formatNumberWithCommas(remainingJobs) + " — ";
 	var totalSubmissions = pending + submitted;
-	if (running <= 0 && hasQueueEstimate) {
-		return {
-			text: "to osg: " + queueDelayDays.toFixed(1) + " days",
-			days: queueDelayDays,
-			queueOnly: true,
-			remainingJobs: remainingJobs,
-			estimatedQueuedJobs: estimatedQueuedJobs,
-			osgJobsRemaining: osgJobsRemaining
-		};
-	}
 
 	if (remainingJobs > 0 && (!isFinite(totalRunning) || totalRunning <= 0 ||
 		!isFinite(concurrentJobsPerSubmission) || concurrentJobsPerSubmission <= 0 ||
@@ -214,7 +204,8 @@ function renderEstimateNote(
 		"queue to OSG time <b>tqueue</b>." +
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
-		"<br/>When a user has no running jobs, its first queue position is shown as <b>to osg</b>." +
+		"<br/>For users with no OSG submissions, <b>to osg</b> is the first queue position " +
+		"divided by the current submissions rate." +
 		"<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
