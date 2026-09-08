@@ -206,7 +206,8 @@ function renderEstimateNote(
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
 		"<br/>For users with no OSG submissions, <b>to osg</b> is the first queue position " +
 		"divided by the current submissions rate." +
-		"<table class=\"estimate-metrics\"><tbody>" +
+		"<br/>Note: Total time left does not include queue jobs not on OSG." +
+        "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per running submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
 		"<tr><th>Completion Rate (last 24 hours)</th><td>" +
