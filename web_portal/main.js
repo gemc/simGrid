@@ -63,7 +63,7 @@ function submissionColumnLabel(name) {
 function summaryColumnLabel(name) {
 	if (name === "pending") return "queued";
 	if (name === "submitted") return "on OSG";
-	if (name === "jobs") return "OSG jobs (est. jobs on queue)";
+	if (name === "jobs") return "n. jobs (est. on queue)";
 	return submissionColumnLabel(name);
 }
 
