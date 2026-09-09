@@ -204,9 +204,9 @@ function renderEstimateNote(
 		"queue time <b>tqueue</b>." +
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
-		"<br/>Note: Total time left does not include queue jobs that are not on OSG yet." +
+		"<br/>Note: Total time left includes 10,000 jobs for each queued submission." +
         "<table class=\"estimate-metrics\"><tbody>" +
-		"<tr><th>Average concurrent jobs per running submission</th><td>" +
+		"<tr><th>Average concurrent jobs per OSG submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
 		"<tr><th>Completion Rate (last 24 hours)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
@@ -952,7 +952,6 @@ function osgLogtoTable(mode) {
 			var averageCompletionsPerDay = selectedBlock.average_completions_per_day;
 			var firstPendingPriorities = [];
 			var highestPendingPriorities = [];
-			var runningSubmissionCount = 0;
 
 			var keys = Object.keys(userData[0]);
 			var submissionCountColumns = ["jobs", "done", "run", "idle", "hold"];
@@ -1026,8 +1025,6 @@ function osgLogtoTable(mode) {
 					if (!isFinite(pendingPriority) || pendingPriority <= 0) pendingPriority = 0;
 				}
 				txt += "<td>" + escapeHtml(pendingOrder) + "</td></tr>";
-				if (isSubmitted && Number(val.run || 0) > 0) runningSubmissionCount++;
-
 				if (data_summary.user.includes(val.user)) {
 					var idx = data_summary.user.indexOf(val.user);
 					data_summary.jobs[idx] += Number(val.jobs || 0);
@@ -1060,8 +1057,10 @@ function osgLogtoTable(mode) {
 			var totalRun = data_summary.run.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0);
-			var concurrentJobsPerSubmission = runningSubmissionCount > 0 ?
-				totalRun / runningSubmissionCount : null;
+			var totalSubmitted = data_summary.submitted.reduce(function (a, b) {
+				return Number(a) + Number(b);
+			}, 0);
+			var concurrentJobsPerSubmission = totalSubmitted > 0 ? totalRun / totalSubmitted : null;
 			var currentSubmissionsRate = isFinite(averageCompletionsPerDay) &&
 				Number(averageCompletionsPerDay) >= 0 ?
 				Number(averageCompletionsPerDay) / ESTIMATED_JOBS_PER_SUBMISSION : null;
@@ -1088,9 +1087,6 @@ function osgLogtoTable(mode) {
 			}
 
 			var totalPending = data_summary.pending.reduce(function (a, b) {
-				return Number(a) + Number(b);
-			}, 0);
-			var totalSubmitted = data_summary.submitted.reduce(function (a, b) {
 				return Number(a) + Number(b);
 			}, 0);
 			var totalJobs = data_summary.jobs.reduce(function (a, b) {
