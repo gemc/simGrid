@@ -485,12 +485,24 @@ write_to_jlab() {
     local submission_id="$3"
 
     local -a cmd=(
-        /usr/bin/pelican -d object put "${OUTPUT_FILE}"
+        "${PELICAN_BIN:-/usr/bin/pelican}" -d object put "${OUTPUT_FILE}"
         "osdf:///jlab-osdf/clas12/volatile/osg/${username}/${submission_id}/${OUTPUT_FILE}"
     )
     echo "Running: ${cmd[*]}"
     echo
-    "${cmd[@]}" || { echo "pelican upload failed."; return $EC_INFRASTRUCTURE; }
+    "${cmd[@]}" 2>&1 | awk '
+        { print; fflush() }
+        /level=debug msg="Successful upload of [0-9]+ bytes"/ { upload_complete=1 }
+        END { exit upload_complete ? 0 : 1 }
+    '
+    local -a pelican_status=("${PIPESTATUS[@]}")
+
+    # Pelican 7.21.1 can return zero after reporting a stalled upload. Require
+    # its debug-mode completion record in addition to a successful exit code.
+    if [[ ${pelican_status[0]} -ne 0 || ${pelican_status[1]} -ne 0 ]]; then
+        echo "pelican upload failed or did not report successful completion."
+        return $EC_INFRASTRUCTURE
+    fi
 
     echo "Additional cleanup"
     rm -f core* *.gcard
