@@ -171,8 +171,8 @@ clean_and_check_environment() {
         echo "ERROR: failed to source /etc/profile.d/modules.sh"
         return $EC_ENVIRONMENT
     }
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules
+    module use /cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/modulefiles
+    module use /cvmfs/jlab.opensciencegrid.org/geant4/modules
 
     unload_module_if_loaded gemc
     unload_module_if_loaded coatjava
@@ -242,7 +242,7 @@ check_modules_available() {
 
 diagnose_module_failure() {
     local module_name="$1"
-    local clas12_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw"
+    local clas12_home="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw"
     case "$module_name" in
         jdk/*|coatjava/*)
             echo "Diagnostic OSRELEASE: ${OSRELEASE:-unset}"
@@ -380,6 +380,8 @@ check_file_exists() {
     local file="$1"
     if [[ ! -f "$file" ]]; then
         echo "ERROR: required file not found: $file"
+        # CVMFS debug helper
+        attr -g logbuffer /cvmfs/jlab.opensciencegrid.org
         exit $EC_FILE_DOES_NOT_EXIST
     fi
     echo "Found: $file"
@@ -394,8 +396,94 @@ check_file_exists() {
 # zposition/beam_spot/raster: pass "n/a" to omit the corresponding GEMC option.
 run_gemc() {
     echo "GEMC path: $(which gemc)"
-    "$@" | sed '/G4Exception-START/,/G4Exception-END/d' || { echo "GEMC failed."; return $EC_GEMC; }
+
+    # glibc allocator tuning. HTCondor charges the job for peak RSS (VmHWM), and
+    # glibc can inflate that peak on many-core hosts by spawning extra per-thread
+    # arenas and by holding freed heap instead of returning it to the OS.
+    #   MALLOC_ARENA_MAX       caps the number of arenas (helps only when gemc is
+    #                          multi-threaded; harmless otherwise).
+    #   MALLOC_TRIM_THRESHOLD_ makes glibc return freed heap to the OS eagerly.
+    # Both can be overridden from the submit environment.
+    export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
+    export MALLOC_TRIM_THRESHOLD_="${MALLOC_TRIM_THRESHOLD_:-0}"
+    echo "Allocator: MALLOC_ARENA_MAX=${MALLOC_ARENA_MAX} MALLOC_TRIM_THRESHOLD_=${MALLOC_TRIM_THRESHOLD_}"
+
+    # Sample gemc memory over the run so the job log shows the RSS trajectory and
+    # the peak. Set GEMC_MEM_SAMPLE_INTERVAL=0 to disable.
+    local sampler_pid=""
+    if [[ "${GEMC_MEM_SAMPLE_INTERVAL:-30}" != "0" ]]; then
+        sample_gemc_memory & sampler_pid=$!
+    fi
+
+    # Capture gemc's real exit code, not sed's, so an OOM-kill (137) or a crash
+    # (139) is reported instead of being hidden by the pipe.
+    local rc
+    set -o pipefail
+    "$@" | sed '/G4Exception-START/,/G4Exception-END/d'
+    rc=${PIPESTATUS[0]}
+    set +o pipefail
+
+    if [[ -n "$sampler_pid" ]]; then
+        kill "$sampler_pid" 2>/dev/null
+        wait "$sampler_pid" 2>/dev/null
+    fi
+    report_gemc_memory
+
+    if [[ $rc -ne 0 ]]; then
+        echo "GEMC failed (exit ${rc})."
+        return $EC_GEMC
+    fi
     rm -f *.dat
+}
+
+# ── sample_gemc_memory / report_gemc_memory ────────────────────────────────────
+# Debug helpers for run_gemc (Linux /proc). sample_gemc_memory polls the running
+# gemc process and appends one row per interval to memory_trace.log: elapsed
+# seconds, then resident memory in MB (total, peak, anonymous, file-backed) and
+# thread count. report_gemc_memory echoes the trace and the peak to the job log.
+# Reading the trace: steadily rising vmrss/rssanon over events => a real leak;
+# an early peak that falls and then stays flat => a construction/voxelization
+# spike (rssfile is mostly mmap'd cvmfs libraries, not a leak).
+sample_gemc_memory() {
+    local interval="${GEMC_MEM_SAMPLE_INTERVAL:-30}"
+    local t0 pid rss hwm anon file thr
+    t0=$(date +%s)
+    echo "t_s vmrss_mb vmhwm_mb rssanon_mb rssfile_mb threads" > memory_trace.log
+    while :; do
+        pid=$(pgrep -x gemc 2>/dev/null | head -1)
+        if [[ -n "$pid" && -r "/proc/${pid}/status" ]]; then
+            rss=$(awk  '/^VmRSS:/   {print int($2/1024)}' "/proc/${pid}/status" 2>/dev/null)
+            hwm=$(awk  '/^VmHWM:/   {print int($2/1024)}' "/proc/${pid}/status" 2>/dev/null)
+            anon=$(awk '/^RssAnon:/ {print int($2/1024)}' "/proc/${pid}/status" 2>/dev/null)
+            file=$(awk '/^RssFile:/ {print int($2/1024)}' "/proc/${pid}/status" 2>/dev/null)
+            thr=$(awk  '/^Threads:/ {print $2}'           "/proc/${pid}/status" 2>/dev/null)
+            local row="$(( $(date +%s) - t0 )) ${rss:-0} ${hwm:-0} ${anon:-0} ${file:-0} ${thr:-0}"
+            echo "$row" >> memory_trace.log
+            # Also stream to stdout so the trajectory survives a whole-job OOM-kill,
+            # when report_gemc_memory would never run to print the file.
+            echo "MEMTRACE $row"
+        fi
+        sleep "$interval"
+    done
+}
+
+report_gemc_memory() {
+    [[ -f memory_trace.log ]] || return 0
+    echo
+    echo "── gemc memory trace (MB) ──"
+    cat memory_trace.log
+    awk 'NR>1 {
+             if ($2>rss)  rss=$2
+             if ($3>hwm)  hwm=$3
+             if ($4>anon) anon=$4
+             last_rss=$2; last_anon=$4
+         }
+         END {
+             if (NR>1)
+                 printf "peak VmRSS=%d  peak VmHWM=%d  peak RssAnon=%d  final VmRSS=%d  final RssAnon=%d\n",
+                        rss, hwm, anon, last_rss, last_anon
+         }' memory_trace.log
+    rm -f memory_trace.log
 }
 
 # ── merge_background ──────────────────────────────────────────────────────────
