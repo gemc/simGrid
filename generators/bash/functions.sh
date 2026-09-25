@@ -171,8 +171,8 @@ clean_and_check_environment() {
         echo "ERROR: failed to source /etc/profile.d/modules.sh"
         return $EC_ENVIRONMENT
     }
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/modulefiles
-    module use /cvmfs/oasis.opensciencegrid.org/jlab/geant4/modules
+    module use /cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/modulefiles
+    module use /cvmfs/jlab.opensciencegrid.org/geant4/modules
 
     unload_module_if_loaded gemc
     unload_module_if_loaded coatjava
@@ -242,7 +242,7 @@ check_modules_available() {
 
 diagnose_module_failure() {
     local module_name="$1"
-    local clas12_home="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw"
+    local clas12_home="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw"
     case "$module_name" in
         jdk/*|coatjava/*)
             echo "Diagnostic OSRELEASE: ${OSRELEASE:-unset}"
@@ -381,7 +381,7 @@ check_file_exists() {
     if [[ ! -f "$file" ]]; then
         echo "ERROR: required file not found: $file"
         # CVMFS debug helper
-        attr -g logbuffer /cvmfs/oasis.opensciencegrid.org/jlab/
+        attr -g logbuffer /cvmfs/jlab.opensciencegrid.org/
         exit $EC_FILE_DOES_NOT_EXIST
     fi
     echo "Found: $file"

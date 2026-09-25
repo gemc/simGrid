@@ -121,7 +121,11 @@ def create_reconstruction(sconfiguration):
 
     Reconstruction consumes the denoised file for older coatjava versions. For
     coatjava 14.0.0 and newer, the denoiser is skipped and recon-util consumes
-    the direct GEMC output, after optional background merging.
+    the direct GEMC output, after optional background merging.  workflow_run:
+    workflows: [ "Test" ]
+    types: [ completed ]
+    branches: [ main ]
+
     """
     coatjavav = sconfiguration.coatjavav or "latest"
     yaml_stem = reconstruction_yaml_stem(sconfiguration)
@@ -133,7 +137,7 @@ def create_reconstruction(sconfiguration):
         'run_timed load_module "jdk/21.0.2"\n'
         'run_timed load_module "coatjava/{coatjavav}"\n'
         'yaml="${{CLAS12_CONFIG}}/coatjava/{coatjavav}/{yaml_stem}.yaml"\n'
-        'recon_util="/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/noarch/coatjava/bin/recon-util"\n'
+        'recon_util="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/coatjava/bin/recon-util"\n'
         'run_timed require_executable "$recon_util"\n'
         'cmd=("$recon_util"\n'
         '    -y "$yaml"\n'
