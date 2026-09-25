@@ -83,7 +83,12 @@
 			</tr>
 			<tr>
 				<td>LUND File(s) <b>Volatile</b> Location</td>
-				<td><input type="text" name="lundFiles" required></td>
+				<td>
+					<input type="text" name="lundFiles" required pattern="\/volatile\/clas12\/.*"
+						   title="The LUND file location must start with /volatile/clas12/."
+						   aria-describedby="lund-location-help">
+					<br><small id="lund-location-help">Must start with /volatile/clas12/.</small>
+				</td>
 			</tr>
 			<tr>
 				<td>Example</td>
