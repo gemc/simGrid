@@ -4,26 +4,25 @@ def create_requirements(scard, target_site=None):
 
 	Each term guards against a class of known infrastructure failures:
 
-	HAS_SINGULARITY =?= TRUE
+	HAS_SINGULARITY =?= true
 	    The slot must support Singularity containers. Without this the
 	    CLAS12 container cannot be launched at all.
 
-	HAS_CVMFS_oasis_opensciencegrid_org =?= True
-	    The slot must have the OSG CVMFS oasis repository mounted. This is
-	    where the Singularity image catalogue lives.
+	HAS_CVMFS_jlab_opensciencegrid_org =?= true
+	    The slot must have the JLab CVMFS repository mounted.
 
 	OSG_HOST_KERNEL_VERSION >= 21700
 	    Requires kernel 2.17+ (encoded as integer major*10000+minor*100).
 	    Older kernels lack the namespace features needed by user-space
 	    Singularity.
 
-	CVMFS_oasis_opensciencegrid_org_REVISION >= 16688
-	    Ensures the CVMFS oasis repository is sufficiently up to date so
-	    that the requested clas12software image tag exists on the site.
-
 	OSG_GLIDEIN_VERSION >= 534
 	    Minimum OSG pilot (glidein) version. Earlier pilots have known
 	    bugs affecting file transfer and environment setup.
+
+	TARGET attributes
+	    Require an X86_64 Linux slot with sufficient disk and memory and
+	    file-transfer support.
 
 	Args:
 		scard:       SConfiguration instance (not used directly; included for
@@ -41,10 +40,14 @@ def create_requirements(scard, target_site=None):
 	)
 
 	return """# OSG slot requirements.
-Requirements = (HAS_SINGULARITY =?= TRUE) && \\
-               (HAS_CVMFS_oasis_opensciencegrid_org =?= True) && \\
+Requirements = ((HAS_SINGULARITY =?= true) && \\
+               (HAS_CVMFS_jlab_opensciencegrid_org =?= true) && \\
                (OSG_HOST_KERNEL_VERSION >= 21700) && \\
-               (CVMFS_oasis_opensciencegrid_org_REVISION >= 16688) && \\
-               (OSG_GLIDEIN_VERSION >= 534){0}
+               (OSG_GLIDEIN_VERSION >= 534)) && \\
+               (TARGET.Arch == "X86_64") && \\
+               (TARGET.OpSys == "LINUX") && \\
+               (TARGET.Disk >= RequestDisk) && \\
+               (TARGET.Memory >= RequestMemory) && \\
+               (TARGET.HasFileTransfer){0}
 
 """.format(site_clause)
