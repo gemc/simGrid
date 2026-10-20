@@ -37,8 +37,8 @@ aging_interleaved
 
 History-weighted load
 ---------------------
-For ALL algorithms, users are ordered first by ascending current HTCondor
-runtime load, then by descending history/aging score:
+Users are ordered within each round first by ascending current HTCondor
+RUN + IDLE load, then by descending history/aging score:
 
     history_load_for_user = history_load_submitted + history_load_pending
 
@@ -65,11 +65,12 @@ Together:
         Σ  2^(-age_j / T_h)          (over non-pending jobs)
       + N_pending                     (raw count of pending jobs)
 
-running_jobs_for_user is the sum of live HTCondor jobs in the RUN state for
-all clusters mapped to that portal user through submissions.pool_node. It is
-the primary ordering key and is not softened by --queue-penalty-exponent:
-users already occupying more cores yield pending-queue positions to users
-with less runtime load.
+outstanding_jobs_for_user is the sum of live HTCondor RUN and IDLE jobs for
+all clusters mapped to that portal user through submissions.pool_node.
+Already submitted idle work counts even when it has not started running.
+For aging_interleaved, server_time history preserves each waiting user's
+consumed allowance across recalculations, so lower-load users cannot renew
+their allowance before the other waiting users have had their turns.
 
 For all algorithms, ties are broken by:
 1. ascending client_time
@@ -236,7 +237,7 @@ def build_parser() -> argparse.ArgumentParser:
 		"--condor-owner",
 		default="gemc",
 		help=(
-			"HTCondor owner whose live running jobs are included in the priority "
+			"HTCondor owner whose live running and idle jobs are included in the priority "
 			"calculation (default: %(default)s)."
 		),
 	)
@@ -349,11 +350,27 @@ def get_history_time(row: dict, time_format: str) -> datetime | None:
 	return None
 
 
-def get_recent_service_streak(
+def get_round_service_counts(
 		rows: list[dict],
 		time_format: str,
-) -> tuple[str | None, int]:
-	"""Return the most recently served user and their consecutive count."""
+		burst_per_user: int,
+) -> dict[str, int]:
+	"""Replay service while current users were waiting to retain round allowances.
+
+	A user joins when their oldest remaining pending submission was created.
+	Services before that time belong to an earlier queue and do not consume
+	their allowance. Reset allowances only after all users waiting at that
+	point have received their burst. Users with no pending work do not block
+	the next round.
+	"""
+	waiting_since = {}
+	for row in rows:
+		if str(row.get("run_status", "")).strip() != NOTSUBMITTED:
+			continue
+		user = str(row.get("user", ""))
+		client_dt = parse_client_time(str(row.get("client_time", "")), time_format)
+		waiting_since[user] = min(waiting_since.get(user, client_dt), client_dt)
+
 	served_rows = []
 
 	for row in rows:
@@ -370,26 +387,25 @@ def get_recent_service_streak(
 		except (ValueError, TypeError):
 			continue
 
+		user = str(row.get("user", ""))
+		if user not in waiting_since or served_dt < waiting_since[user]:
+			continue
+
 		try:
 			submission_id = int(row.get("user_submission_id"))
 		except (TypeError, ValueError):
 			submission_id = -1
 
-		served_rows.append((served_dt, submission_id, str(row.get("user", ""))))
+		served_rows.append((served_dt, submission_id, user))
 
-	if not served_rows:
-		return None, 0
+	service_counts: dict[str, int] = Counter()
+	for served_dt, _, user in sorted(served_rows):
+		waiting_users = [name for name, queued_dt in waiting_since.items() if queued_dt <= served_dt]
+		if all(service_counts[name] >= burst_per_user for name in waiting_users):
+			service_counts.clear()
+		service_counts[user] = min(service_counts[user] + 1, burst_per_user)
 
-	served_rows.sort(reverse=True)
-	recent_user = served_rows[0][2]
-	streak = 0
-
-	for _, _, user in served_rows:
-		if user != recent_user:
-			break
-		streak += 1
-
-	return recent_user, streak
+	return dict(service_counts)
 
 
 def compute_history_loads(
@@ -489,11 +505,12 @@ def compute_history_loads(
 	return history_load_by_user, submitted_load_by_user, pending_load_by_user, jobs_for_user_counts
 
 
-def compute_running_jobs_by_user(
+def compute_condor_jobs_by_user(
 		submission_rows: list[dict],
 		condor_batches: dict[int, dict],
+		state: str = "RUN",
 ) -> dict[str, int]:
-	"""Return live HTCondor RUN counts summed by portal user."""
+	"""Return live HTCondor counts for one state, summed by portal user."""
 	user_by_pool_node = {}
 	for row in submission_rows:
 		pool_node = row.get("pool_node")
@@ -502,43 +519,45 @@ def compute_running_jobs_by_user(
 			continue
 		user_by_pool_node[str(pool_node).strip()] = str(user)
 
-	running_jobs_by_user: dict[str, int] = Counter()
+	jobs_by_user: dict[str, int] = Counter()
 	for cluster_id, batch in condor_batches.items():
 		user = user_by_pool_node.get(str(cluster_id))
 		if user is None:
 			continue
 
 		try:
-			running_jobs = int(batch.get("counts", {}).get("RUN", 0))
+			jobs = int(batch.get("counts", {}).get(state, 0))
 		except (TypeError, ValueError):
-			running_jobs = 0
-		running_jobs_by_user[user] += max(running_jobs, 0)
+			jobs = 0
+		jobs_by_user[user] += max(jobs, 0)
 
-	return dict(running_jobs_by_user)
+	return dict(jobs_by_user)
 
 
-def compute_running_jobs_from_snapshot(
+def compute_condor_jobs_from_snapshot(
 		snapshot: dict,
 		database_name: str,
+		state: str = "RUN",
 ) -> dict[str, int]:
-	"""Return per-user RUN counts from a stored owner-submission snapshot."""
+	"""Return per-user counts for one state from an owner-submission snapshot."""
 	payload = snapshot.get("payload", {})
 	database_payload = payload.get(database_name, {}) if isinstance(payload, dict) else {}
 	results = database_payload.get("results", [])
 	if not isinstance(results, list):
 		raise ValueError("Stored owner-submission snapshot has no results list")
 
-	running_jobs_by_user: dict[str, int] = Counter()
+	jobs_by_user: dict[str, int] = Counter()
+	field = state.lower()
 	for row in results:
-		if not isinstance(row, dict) or row.get("user") is None or row.get("run") is None:
+		if not isinstance(row, dict) or row.get("user") is None or row.get(field) is None:
 			continue
 		try:
-			running_jobs = int(row.get("run", 0))
+			jobs = int(row.get(field, 0))
 		except (TypeError, ValueError):
-			running_jobs = 0
-		running_jobs_by_user[str(row["user"])] += max(running_jobs, 0)
+			jobs = 0
+		jobs_by_user[str(row["user"])] += max(jobs, 0)
 
-	return dict(running_jobs_by_user)
+	return dict(jobs_by_user)
 
 
 def compute_priorities(
@@ -551,6 +570,7 @@ def compute_priorities(
 		burst_per_user: int = 1,
 		no_queue_penalty: bool = False,
 		running_jobs_by_user: dict[str, int] | None = None,
+		idle_jobs_by_user: dict[str, int] | None = None,
 ) -> tuple[list[dict], list[dict], dict[str, float], dict[str, float]]:
 	"""
 	Compute priorities for rows with run_status == 'Not Submitted'.
@@ -562,8 +582,8 @@ def compute_priorities(
 	  and is used in the denominator for all algorithms.
 	  submitted_load_for_user is decay-weighted (non-pending jobs only).
 	  pending_load_for_user is a raw count (pending jobs, no decay).
-	- running_jobs_for_user is the user's current HTCondor RUN count and is
-	  the primary ascending ordering key.
+	- outstanding_jobs_for_user is the user's current HTCondor RUN + IDLE
+	  count and is the primary ascending ordering key within each round.
 
 	Algorithms
 	----------
@@ -585,8 +605,8 @@ def compute_priorities(
 	aging_interleaved
 		Compute a user-level score from the next pending job for each user, then
 		assign priorities in rounds, taking at most burst_per_user jobs per user
-		per round. The first round continues the recent server_time streak, so a
-		priority recalculation cannot restart the last user's burst.
+		per round. Replay server_time history to preserve every waiting user's
+		remaining allowance across priority recalculations.
 	"""
 	if half_life_days <= 0:
 		raise ValueError("half_life_days must be > 0")
@@ -601,6 +621,11 @@ def compute_priorities(
 
 	pending_counts = Counter(str(row.get("user", "")) for row in pending_rows)
 	running_jobs_by_user = running_jobs_by_user or {}
+	idle_jobs_by_user = idle_jobs_by_user or {}
+	outstanding_jobs_by_user = {
+		user: running_jobs_by_user.get(user, 0) + idle_jobs_by_user.get(user, 0)
+		for user in pending_counts
+	}
 	(
 		history_load_by_user,
 		submitted_load_by_user,
@@ -659,6 +684,8 @@ def compute_priorities(
 			enriched["pending_load_for_user"] = pending_load_by_user.get(user, 0.0)
 			enriched["history_load_for_user"] = history_load_for_user
 			enriched["running_jobs_for_user"] = running_jobs_by_user.get(user, 0)
+			enriched["idle_jobs_for_user"] = idle_jobs_by_user.get(user, 0)
+			enriched["outstanding_jobs_for_user"] = outstanding_jobs_by_user[user]
 			enriched["score"] = score
 			enriched["age_days"] = age_days
 			enriched["estimate_time_hours"] = estimate_time_hours
@@ -667,7 +694,7 @@ def compute_priorities(
 
 		scored_pending.sort(
 			key=lambda row: (
-				row["running_jobs_for_user"],
+				row["outstanding_jobs_for_user"],
 				-row["score"],
 				row["_client_dt"],
 				row["user_submission_id"],
@@ -675,7 +702,7 @@ def compute_priorities(
 		)
 
 	elif algorithm == "aging_interleaved":
-		recent_user, recent_streak = get_recent_service_streak(rows, time_format)
+		service_counts = get_round_service_counts(rows, time_format, burst_per_user)
 		per_user: dict[str, list[dict]] = {}
 		for row in pending_rows:
 			user = str(row.get("user", ""))
@@ -684,7 +711,6 @@ def compute_priorities(
 				str(row.get("client_time", "")),
 				time_format,
 			)
-			estimate_time_hours = ESTIMATE_HOURS_PER_JOB
 			enriched["estimate_time_hours"] = ESTIMATE_HOURS_PER_JOB
 			enriched["age_days"] = row_age_days(row)
 			enriched["pending_jobs_for_user"] = pending_counts[user]
@@ -693,6 +719,8 @@ def compute_priorities(
 			enriched["pending_load_for_user"] = pending_load_by_user.get(user, 0.0)
 			enriched["history_load_for_user"] = history_load_by_user.get(user, 0.0)
 			enriched["running_jobs_for_user"] = running_jobs_by_user.get(user, 0)
+			enriched["idle_jobs_for_user"] = idle_jobs_by_user.get(user, 0)
+			enriched["outstanding_jobs_for_user"] = outstanding_jobs_by_user[user]
 			per_user.setdefault(user, []).append(enriched)
 
 		for user in per_user:
@@ -701,11 +729,14 @@ def compute_priorities(
 			)
 
 		ordered_pending: list[dict] = []
-		first_round = True
-
 		while per_user:
+			if all(service_counts.get(user, 0) >= burst_per_user for user in per_user):
+				service_counts.clear()
+
 			active_users = []
 			for user, user_rows in per_user.items():
+				if service_counts.get(user, 0) >= burst_per_user:
+					continue
 				head = user_rows[0]
 				score = aging_score(
 					head["age_days"],
@@ -713,34 +744,18 @@ def compute_priorities(
 				)
 				active_users.append((
 					user,
-					head["running_jobs_for_user"],
+					head["outstanding_jobs_for_user"],
 					score,
 					head["_client_dt"],
 					head["user_submission_id"],
 				))
 
 			active_users.sort(key=lambda item: (item[1], -item[2], item[3], item[4]))
-			first_user_limit = None
-
-			if (
-				first_round
-				and len(active_users) > 1
-				and active_users[0][0] == recent_user
-			):
-				# Continue the burst already consumed before this recalculation.
-				# Once exhausted, put every other active user first.
-				remaining_burst = max(burst_per_user - recent_streak, 0)
-				if remaining_burst == 0:
-					active_users.append(active_users.pop(0))
-				else:
-					first_user_limit = remaining_burst
-
 			users_to_delete = []
-			for user_index, (user, _, _, _, _) in enumerate(active_users):
+			for user, _, _, _, _ in active_users:
 				user_rows = per_user[user]
-				take_n = min(burst_per_user, len(user_rows))
-				if user_index == 0 and first_user_limit is not None:
-					take_n = min(take_n, first_user_limit)
+				take_n = min(burst_per_user - service_counts.get(user, 0), len(user_rows))
+				service_counts[user] = service_counts.get(user, 0) + take_n
 
 				for _ in range(take_n):
 					job = user_rows.pop(0)
@@ -755,8 +770,6 @@ def compute_priorities(
 
 			for user in users_to_delete:
 				del per_user[user]
-
-			first_round = False
 
 		scored_pending = ordered_pending
 
@@ -846,6 +859,7 @@ def print_summary(
 		days_considered: int | None = None,
 		time_format: str = "%Y-%m-%d %H:%M:%S",
 		no_queue_penalty: bool = False,
+		idle_jobs_by_user: dict[str, int] | None = None,
 ) -> None:
 	"""
 	Print a summary table with the number of jobs per user, estimated time
@@ -861,6 +875,8 @@ def print_summary(
 	                (controlled by --history-half-life-days)
 	pending_jobs  : integer count of 'Not Submitted' jobs (no decay)
 	running_jobs  : current HTCondor RUN count for the portal user
+	idle_jobs     : current HTCondor IDLE count for the portal user
+	outstanding_jobs : RUN + IDLE, used to order users within a round
 
 	One row in the `submissions` table is counted as one job.
 	Each pending job contributes 10 estimated hours.
@@ -882,6 +898,7 @@ def print_summary(
 
 	job_counts = Counter(str(row.get("user", "")) for row in rows)
 	running_jobs_by_user = running_jobs_by_user or {}
+	idle_jobs_by_user = idle_jobs_by_user or {}
 
 	estimate_time_by_user: dict[str, float] = {}
 	for row in rows:
@@ -902,6 +919,8 @@ def print_summary(
 			"weight":       submitted_load_by_user.get(user, 0.0),
 			"pending_jobs": int(round(pending_load_by_user.get(user, 0.0))),
 			"running_jobs": running_jobs_by_user.get(user, 0),
+			"idle_jobs": idle_jobs_by_user.get(user, 0),
+			"outstanding_jobs": running_jobs_by_user.get(user, 0) + idle_jobs_by_user.get(user, 0),
 		}
 		for user, count in sorted(job_counts.items(), key=lambda item: (-item[1], item[0]))
 	]
@@ -913,6 +932,8 @@ def print_summary(
 		"weight",
 		"pending_jobs",
 		"running_jobs",
+		"idle_jobs",
+		"outstanding_jobs",
 	]
 
 	widths = {}
@@ -944,6 +965,8 @@ def print_summary(
 				f"{row['weight']:.2f}".ljust(widths["weight"]),
 				str(row["pending_jobs"]).ljust(widths["pending_jobs"]),
 				str(row["running_jobs"]).ljust(widths["running_jobs"]),
+				str(row["idle_jobs"]).ljust(widths["idle_jobs"]),
+				str(row["outstanding_jobs"]).ljust(widths["outstanding_jobs"]),
 			])
 		)
 
@@ -977,6 +1000,7 @@ def write_priority_json(
 		pending_load_by_user: dict[str, float],
 		running_jobs_by_user: dict[str, int] | None = None,
 		no_queue_penalty: bool = False,
+		idle_jobs_by_user: dict[str, int] | None = None,
 ) -> None:
 	"""
 	Write the computed pending-job priorities to a JSON file for later use.
@@ -999,10 +1023,13 @@ def write_priority_json(
 		Raw count of pending jobs per user.
 	running_jobs_by_user:
 		Current HTCondor RUN count per portal user.
+	idle_jobs_by_user:
+		Current HTCondor IDLE count per portal user.
 	"""
 	now = datetime.now()
 	user_counts = Counter(str(row.get("user", "")) for row in all_rows)
 	running_jobs_by_user = running_jobs_by_user or {}
+	idle_jobs_by_user = idle_jobs_by_user or {}
 
 	pending_hours_by_user: dict[str, float] = {}
 	for row in all_rows:
@@ -1017,6 +1044,8 @@ def write_priority_json(
 			"submitted_load": round(submitted_load_by_user.get(user, 0.0), 4),
 			"pending_jobs":   int(round(pending_load_by_user.get(user, 0.0))),
 			"running_jobs":   running_jobs_by_user.get(user, 0),
+			"idle_jobs":      idle_jobs_by_user.get(user, 0),
+			"outstanding_jobs": running_jobs_by_user.get(user, 0) + idle_jobs_by_user.get(user, 0),
 			"estimate_days":  round(pending_hours_by_user.get(user, 0.0) / 24.0, 4),
 		}
 		for user, count in sorted(user_counts.items(), key=lambda item: (-item[1], item[0]))
@@ -1047,6 +1076,8 @@ def write_priority_json(
 				"pending_load_for_user":  row.get("pending_load_for_user"),
 				"history_load_for_user":  row.get("history_load_for_user"),
 				"running_jobs_for_user":  row.get("running_jobs_for_user"),
+				"idle_jobs_for_user":     row.get("idle_jobs_for_user"),
+				"outstanding_jobs_for_user": row.get("outstanding_jobs_for_user"),
 				"score": f"{row['score']:.1f}",
 				"age_days":               row["age_days"],
 			}
@@ -1128,7 +1159,8 @@ def main() -> int:
 			from condor_io.htcondor_utils import get_owner_batches
 
 			condor_batches = get_owner_batches(args.condor_owner)
-			running_jobs_by_user = compute_running_jobs_by_user(pool_node_rows, condor_batches)
+			running_jobs_by_user = compute_condor_jobs_by_user(pool_node_rows, condor_batches)
+			idle_jobs_by_user = compute_condor_jobs_by_user(pool_node_rows, condor_batches, state="IDLE")
 			running_jobs_source = "live HTCondor"
 		except ModuleNotFoundError as exc:
 			if exc.name != "htcondor2":
@@ -1151,14 +1183,15 @@ def main() -> int:
 					)
 				)
 
-			running_jobs_by_user = compute_running_jobs_from_snapshot(snapshot, database_name)
+			running_jobs_by_user = compute_condor_jobs_from_snapshot(snapshot, database_name)
+			idle_jobs_by_user = compute_condor_jobs_from_snapshot(snapshot, database_name, state="IDLE")
 			running_jobs_source = "stored snapshot {0} from {1}".format(
 				snapshot.get("snapshot_id", "unknown"),
 				snapshot.get("update_time", "unknown time"),
 			)
 		print(
-			f"DEBUG {running_jobs_source} RUN jobs for {len(running_jobs_by_user)} portal user(s): "
-			f"{sum(running_jobs_by_user.values())}"
+			f"DEBUG {running_jobs_source} jobs for {len(running_jobs_by_user)} portal user(s): "
+			f"RUN={sum(running_jobs_by_user.values())}, IDLE={sum(idle_jobs_by_user.values())}"
 		)
 
 		(
@@ -1176,6 +1209,7 @@ def main() -> int:
 			burst_per_user=args.burst_per_user,
 			no_queue_penalty=args.no_queue_penalty,
 			running_jobs_by_user=running_jobs_by_user,
+			idle_jobs_by_user=idle_jobs_by_user,
 		)
 
 		print_table(rows_with_priority)
@@ -1184,6 +1218,7 @@ def main() -> int:
 			submitted_load_by_user=submitted_load_by_user,
 			pending_load_by_user=pending_load_by_user,
 			running_jobs_by_user=running_jobs_by_user,
+			idle_jobs_by_user=idle_jobs_by_user,
 			days_considered=args.days,
 			time_format=args.time_format,
 			no_queue_penalty=args.no_queue_penalty,
@@ -1200,6 +1235,7 @@ def main() -> int:
 			submitted_load_by_user=submitted_load_by_user,
 			pending_load_by_user=pending_load_by_user,
 			running_jobs_by_user=running_jobs_by_user,
+			idle_jobs_by_user=idle_jobs_by_user,
 			no_queue_penalty=args.no_queue_penalty,
 		)
 

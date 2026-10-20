@@ -173,24 +173,31 @@ compacted to `1..N`. The periodic fair-share calculation can subsequently reorde
 
 ### 2. Calculate the MySQL queue: `db_io/priority_submissions.py`
 
+Upcoming in the next release: pending priorities count running plus idle HTCondor jobs and
+preserve every waiting user's round allowance across recalculations.
+
 This script calculates only `submissions.priority`; it never writes HTCondor `JobPrio`. It:
 
 1. Reads submission users, IDs, timestamps, and statuses from MySQL.
 2. Queries the live HTCondor batches owned by `gemc`.
 3. Maps each `ClusterId` to a portal user through `submissions.pool_node` and sums that user's
-   jobs in the HTCondor `RUN` state.
-4. Orders users first by ascending running-job count. A user already occupying more cores yields
-   to a user occupying fewer cores.
-5. Applies the selected history/aging algorithm among users with equal runtime load.
+   jobs in the HTCondor `RUN` and `IDLE` states separately.
+4. Orders eligible users by ascending running-plus-idle job count. Work already waiting in Condor
+   counts toward load even when none of it has started running.
+5. Applies the selected history/aging algorithm among users with equal outstanding load. For
+   `aging_interleaved`, users who have consumed their round allowance wait until the other
+   waiting users have received their turns, including across recalculations.
 6. Assigns each `Not Submitted` row a unique sequential priority from 1 through N.
 7. Writes `submission_priorities.json` in the working directory.
 8. With `--write-to-db`, uses one locked operation to clear non-pending priority values, write the
    calculated pending queue, and compact it to `1..N`.
 
-On the submit node, the live running-job counts come directly from the `htcondor2` Python bindings.
+On the submit node, the live running and idle counts come directly from the `htcondor2` Python bindings.
 On the web server, where HTCondor is not installed, the calculation uses the latest
 `owner_submission_snapshots` row written by `condor_io/list_owner_submission.py --store-db`. The
 calculation stops with an error if neither source is available.
+The console summary and JSON output include `running_jobs`, `idle_jobs`, and their sum,
+`outstanding_jobs`, so the load used for ordering is visible.
 
 The current production wrapper is equivalent to:
 
@@ -216,8 +223,12 @@ These settings have the following effects:
 - `--burst-per-user 2` allows at most two rows from one user in each interleaving round.
 
 For non-pending history, `server_time` is preferred because it records when `osg_submit.py`
-served the row; `client_time` is the fallback. On recalculation, the recent `server_time` sequence
-also prevents a user's burst allowance from restarting.
+served the row; `client_time` is the fallback. On recalculation, the `server_time` sequence also
+reconstructs each waiting user's consumed round allowance. Services before that user's oldest
+remaining pending submission was created do not consume the current allowance. Missing or invalid
+service timestamps are ignored for round reconstruction. Allowances reset once all waiting users
+have received their turns; users without pending work do not block the next round. No additional
+database table or persistent state file is required.
 
 ### 3. Consume the MySQL queue: `osg_submit.py`
 
