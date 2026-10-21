@@ -15,7 +15,8 @@
 
 **1. Capacity check**
 Queries HTCondor for the number of running + idle jobs owned by `gemc`.
-If the count is above `--max-submitted-jobs` (default 80 000), submission is aborted.
+If the count is above `--max-submitted-jobs` (default 80,000 in both production and `--devel`),
+submission is aborted.
 Requires the `htcondor2` Python package (available on the submit node); use `--test` to skip.
 
 **2. Fetch job from the database**
