@@ -17,6 +17,9 @@ from statuses import COMPLETED, SUBMITTED
 
 
 CANDIDATE_LIMIT = 100
+# How many recent snapshots to scan for a candidate's last observed 'done' count.
+# Snapshots are pruned to the last 100, so this covers the full retained history.
+SNAPSHOT_LOOKBACK = 100
 DEFAULT_DATABASE = "CLAS12OCR"
 DEFAULT_OWNER = "gemc"
 
@@ -62,6 +65,43 @@ def _submission_id(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _done_count(value: Any) -> int | None:
+    """Return a 'done' job count as an integer, or None for an unusable value."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_last_done_map(snapshots: list[dict[str, Any]], database_name: str) -> dict[int, int | None]:
+    """Map submission ID to its most recent observed 'done' count across snapshots.
+
+    Snapshots are expected newest-first, so the first occurrence of each submission
+    is its last observed 'done' value before it left the main-page snapshot.
+    """
+    last_done: dict[int, int | None] = {}
+    for snapshot in snapshots:
+        payload = snapshot.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        database_payload = payload.get(database_name)
+        if not isinstance(database_payload, dict):
+            continue
+        results = database_payload.get("results")
+        if not isinstance(results, list):
+            continue
+        for row in results:
+            if not isinstance(row, dict):
+                continue
+            submission_id = _submission_id(row.get("user_submission_id", row.get("submission id")))
+            if submission_id is None or submission_id in last_done:
+                continue
+            last_done[submission_id] = _done_count(row.get("done"))
+    return last_done
 
 
 def extract_visible_submission_ids(payload: dict[str, Any], database_name: str) -> set[int]:
@@ -112,25 +152,29 @@ def find_completion_candidates(
 
 
 def mark_completed(db: Database, candidates: list[dict[str, Any]]) -> int:
-    """Mark candidates Completed if they are still Submitted to OSG."""
-    submission_ids = [
-        submission_id
-        for row in candidates
-        if (submission_id := _submission_id(row.get("user_submission_id"))) is not None
-    ]
-    if not submission_ids:
-        return 0
+    """Mark candidates Completed, recording their last 'done' count and completion time.
 
-    placeholders = ", ".join(["%s"] * len(submission_ids))
-    return db.execute(
-        f"""
-        UPDATE submissions
-        SET run_status = %s
-        WHERE run_status = %s
-          AND user_submission_id IN ({placeholders})
-        """,
-        [COMPLETED, SUBMITTED, *submission_ids],
-    )
+    Each candidate carries its own last observed 'done' value (attached in run()), so
+    rows are updated one at a time. Every update stays guarded by the current
+    Submitted status so a concurrent status change is not clobbered.
+    """
+    updated = 0
+    for row in candidates:
+        submission_id = _submission_id(row.get("user_submission_id"))
+        if submission_id is None:
+            continue
+        updated += db.execute(
+            """
+            UPDATE submissions
+            SET run_status = %s,
+                done = %s,
+                completion_time = NOW()
+            WHERE run_status = %s
+              AND user_submission_id = %s
+            """,
+            [COMPLETED, _done_count(row.get("done")), SUBMITTED, submission_id],
+        )
+    return updated
 
 
 def run(args: argparse.Namespace) -> int:
@@ -139,27 +183,34 @@ def run(args: argparse.Namespace) -> int:
         credentials_file=args.credentials,
         database_name=args.database,
     ) as db:
-        snapshot = db.get_latest_owner_submission_snapshot(args.database, args.owner)
-        if snapshot is None:
+        snapshots = db.get_owner_submission_snapshots(
+            args.database, args.owner, limit=SNAPSHOT_LOOKBACK
+        )
+        if not snapshots:
             raise RuntimeError(
                 f"No main-page snapshot found for database={args.database}, owner={args.owner}"
             )
 
-        visible_ids = extract_visible_submission_ids(snapshot["payload"], args.database)
+        latest = snapshots[0]
+        visible_ids = extract_visible_submission_ids(latest["payload"], args.database)
+        last_done = build_last_done_map(snapshots, args.database)
         submitted_rows = get_recent_submitted_rows(db)
         candidates = find_completion_candidates(submitted_rows, visible_ids)
+        for row in candidates:
+            row["done"] = last_done.get(_submission_id(row.get("user_submission_id")))
 
         print(
-            f"Snapshot {snapshot['snapshot_id']} from {snapshot['update_time']}: "
+            f"Snapshot {latest['snapshot_id']} from {latest['update_time']}: "
             f"{len(visible_ids)} visible submission(s)"
         )
         print(f"Checked {len(submitted_rows)} recent {SUBMITTED!r} row(s).")
         for row in candidates:
             print(
-                "Candidate {0}: user={1}, pool_node={2}".format(
+                "Candidate {0}: user={1}, pool_node={2}, done={3}".format(
                     row.get("user_submission_id"),
                     row.get("user"),
                     row.get("pool_node"),
+                    row.get("done"),
                 )
             )
 

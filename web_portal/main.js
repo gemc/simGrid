@@ -3,6 +3,8 @@
 // setup.json show up), while all fetches within one load share one cached copy.
 var ASSET_VERSION = Date.now();
 var ESTIMATED_JOBS_PER_SUBMISSION = 10000;
+// Events generated per completed job, used to convert daily completions into events.
+var EVENTS_PER_JOB = 5000;
 
 //Multiplication (https://stackoverflow.com/questions/21223164/multiplying-two-inputs-with-javascript-displaying-in-text-box)
 function calculate() {
@@ -213,6 +215,39 @@ function renderEstimateNote(
 		"<tr><th>Queue to OSG Rate (10,000 jobs / submission)</th><td>" +
 		escapeHtml(submissionsRateText) + " submissions / day</td></tr>" +
 		"</tbody></table></div>";
+}
+
+function formatDayLabel(isoDate) {
+	// isoDate is "YYYY-MM-DD"; parse parts manually to avoid timezone shifts.
+	var parts = String(isoDate).split("-");
+	if (parts.length !== 3) return String(isoDate);
+	var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+	var monthIndex = Number(parts[1]) - 1;
+	var monthName = months[monthIndex] || parts[1];
+	return monthName + " " + Number(parts[2]);
+}
+
+function renderWeeklyCompletedEvents(completionsPerDay) {
+	if (!Array.isArray(completionsPerDay) || !completionsPerDay.length) return "";
+
+	var header = "<tr>";
+	var values = "<tr>";
+	for (var d = 0; d < completionsPerDay.length; d++) {
+		var day = completionsPerDay[d] || {};
+		var completedJobs = Number(day.completed_jobs || 0);
+		var eventsInMillions = completedJobs * EVENTS_PER_JOB / 1000000;
+		header += "<th>" + escapeHtml(formatDayLabel(day.date)) + "</th>";
+		values += "<td>" + escapeHtml(formatNumberWithCommas(eventsInMillions, 1)) + "</td>";
+	}
+	header += "</tr>";
+	values += "</tr>";
+
+	return "<div class=\"weekly-completed-events\">" +
+		"<div class=\"weekly-completed-events__title\">" +
+		"Completed events (millions) per day &mdash; previous week</div>" +
+		"<table align=\"center\" style=\"width:50%;text-align:center\"><thead>" +
+		header + "</thead><tbody>" + values + "</tbody></table></div>";
 }
 
 function _padEnd(str, len) {
@@ -952,6 +987,7 @@ function osgLogtoTable(mode) {
 				"idle": []
 			};
 			var averageCompletionsPerDay = selectedBlock.average_completions_per_day;
+			var completionsPerDay = selectedBlock.completions_per_day;
 			var firstPendingPriorities = [];
 			var highestPendingPriorities = [];
 
@@ -1119,6 +1155,7 @@ function osgLogtoTable(mode) {
 			txt_summary += renderEstimateNote(
 				concurrentJobsPerSubmission, averageCompletionsPerDay, currentSubmissionsRate
 			);
+			txt_summary += renderWeeklyCompletedEvents(completionsPerDay);
 
 			document.getElementById("osgLog").innerHTML = txt;
 			document.getElementById("osgLog_summary").innerHTML = txt_summary;

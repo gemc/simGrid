@@ -139,6 +139,16 @@ tbody tr:hover td {
 	text-align: left;
 }
 
+.weekly-completed-events {
+	margin: 1rem auto 0;
+	text-align: center;
+}
+
+.weekly-completed-events__title {
+	margin-bottom: 0.35rem;
+	font-weight: bold;
+}
+
 /* =========================
    Forms
    ========================= */

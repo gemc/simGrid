@@ -4,6 +4,7 @@ import unittest
 
 from db_io.mark_completed_submissions import (
     CANDIDATE_LIMIT,
+    build_last_done_map,
     extract_visible_submission_ids,
     find_completion_candidates,
     get_recent_submitted_rows,
@@ -26,7 +27,7 @@ class FakeDatabase:
 
     def execute(self, sql, params):
         self.updates.append((sql, params))
-        return len(params) - 2
+        return 1
 
 
 class CompletedSubmissionTests(unittest.TestCase):
@@ -68,20 +69,40 @@ class CompletedSubmissionTests(unittest.TestCase):
         self.assertEqual(params, [SUBMITTED, CANDIDATE_LIMIT])
         self.assertEqual(CANDIDATE_LIMIT, 100)
 
-    def test_update_is_guarded_by_current_submitted_status(self):
+    def test_update_records_done_and_is_guarded_by_submitted_status(self):
         db = FakeDatabase()
-        candidates = [{"user_submission_id": 102}, {"user_submission_id": "104"}]
+        candidates = [
+            {"user_submission_id": 102, "done": 9500},
+            {"user_submission_id": "104", "done": None},
+        ]
 
         self.assertEqual(mark_completed(db, candidates), 2)
+        self.assertEqual(len(db.updates), 2)
         sql, params = db.updates[0]
         self.assertIn("WHERE run_status = %s", sql)
-        self.assertEqual(params, [COMPLETED, SUBMITTED, 102, 104])
+        self.assertIn("completion_time = NOW()", sql)
+        self.assertEqual(params, [COMPLETED, 9500, SUBMITTED, 102])
+        self.assertEqual(db.updates[1][1], [COMPLETED, None, SUBMITTED, 104])
 
     def test_no_candidates_skips_update(self):
         db = FakeDatabase()
 
         self.assertEqual(mark_completed(db, []), 0)
         self.assertEqual(db.updates, [])
+
+    def test_build_last_done_map_takes_most_recent_done(self):
+        snapshots = [
+            {"payload": {"CLAS12OCR": {"results": [{"user_submission_id": 201, "done": 500}]}}},
+            {"payload": {"CLAS12OCR": {"results": [
+                {"user_submission_id": 201, "done": 300},
+                {"submission id": "202", "done": 42},
+            ]}}},
+        ]
+
+        self.assertEqual(
+            build_last_done_map(snapshots, "CLAS12OCR"),
+            {201: 500, 202: 42},
+        )
 
 
 if __name__ == "__main__":

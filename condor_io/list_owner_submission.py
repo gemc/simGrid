@@ -23,7 +23,7 @@ import os
 import sys
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -33,13 +33,55 @@ if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE, print_job
-from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
+from statuses import COMPLETED, FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
 QUEUE_HISTORY_DAYS = 30
 COMPLETION_WINDOW_HOURS = 24
+# Days in a calendar week, used to report the previous week's completions per day.
+WEEK_DAYS = 7
+
+
+def collect_completions_per_day(db):
+	# type: (Database) -> List[Dict[str, Any]]
+	"""Per-day completed-job counts for the previous calendar week (Mon-Sun).
+
+	Sums the stored 'done' job count of submissions whose completion_time falls on
+	each day. Returns 7 entries, oldest first:
+	{"date": "YYYY-MM-DD", "completed_jobs": N}.
+	"""
+	today = datetime.now().date()
+	this_monday = today - timedelta(days=today.weekday())
+	prev_monday = this_monday - timedelta(days=WEEK_DAYS)
+
+	day_dates = [prev_monday + timedelta(days=offset) for offset in range(WEEK_DAYS)]
+
+	rows = db.query(
+		"""
+		SELECT DATE(completion_time) AS day, COALESCE(SUM(done), 0) AS completed_jobs
+		FROM submissions
+		WHERE run_status = %s
+		  AND completion_time IS NOT NULL
+		  AND completion_time >= %s
+		  AND completion_time < %s
+		GROUP BY DATE(completion_time)
+		""",
+		[COMPLETED, prev_monday.isoformat(), this_monday.isoformat()],
+	)
+
+	counts = {day.isoformat(): 0 for day in day_dates}
+	for row in rows:
+		day = row.get("day")
+		day_key = day.isoformat() if hasattr(day, "isoformat") else str(day)
+		if day_key in counts:
+			counts[day_key] = int(row.get("completed_jobs") or 0)
+
+	return [
+		{"date": day.isoformat(), "completed_jobs": counts[day.isoformat()]}
+		for day in day_dates
+	]
 
 
 def build_parser():
@@ -191,6 +233,7 @@ def empty_db_payload(database_name, owner, timestamp):
 		"count":            0,
 		"average_queue_to_osg_hours": None,
 		"average_completions_per_day": None,
+		"completions_per_day": [],
 		"results":          [],
 	}
 
@@ -224,6 +267,7 @@ def collect_for_database(owner, credentials, database_name):
 			],
 		)
 		average_queue_to_osg_hours = calculate_average_queue_to_osg_hours(queue_history_rows)
+		completions_per_day = collect_completions_per_day(db)
 
 		for cluster_id in sorted(batches):
 			batch = batches[cluster_id]
@@ -319,6 +363,7 @@ def collect_for_database(owner, credentials, database_name):
 		"count":    len(results),
 		"average_queue_to_osg_hours": average_queue_to_osg_hours,
 		"average_completions_per_day": average_completions_per_day,
+		"completions_per_day": completions_per_day,
 		"results":  results,
 	}
 
@@ -395,6 +440,7 @@ def main():
 					"average_completions_per_day": selected_payload[
 						"average_completions_per_day"
 					],
+					"completions_per_day": selected_payload["completions_per_day"],
 					"results":          selected_payload["results"],
 				}
 
