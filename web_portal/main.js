@@ -350,6 +350,14 @@ function configurationSelected() {
 }
 
 
+function runBeam(entry) {
+	return entry.beam || [entry.beam_current, entry.beam_energy].filter(Boolean).join("_");
+}
+
+function runMagnets(entry) {
+	return entry.magnets || "tor" + entry.torus + "_sol" + entry.solenoid;
+}
+
 function fieldSelected() {
 	var selected_experiment = document.getElementById("configuration").value;
 
@@ -396,17 +404,14 @@ function fieldSelected() {
 				}
 
 				// Pass 1: compute column widths for monospace alignment
-				var wRn = 0, wTitle = 0, wTarget = 0, wCurrent = 0, wEnergy = 0, wTor = 0, wSol = 0, wLw = 0;
+				var wRn = 0, wTitle = 0, wTarget = 0, wBeam = 0, wMagnets = 0;
 				for (var i = 0; i < metaKeys.length; i++) {
 					var ri = runs[metaKeys[i]];
 					wRn      = Math.max(wRn,      String(metaKeys[i]).length);
 					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
 					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
-					wCurrent = Math.max(wCurrent, String(ri.beam_current || "").length);
-					wEnergy  = Math.max(wEnergy,  String(ri.beam_energy  || "").length);
-					wTor     = Math.max(wTor,     String(ri.torus        || "").length);
-					wSol     = Math.max(wSol,     String(ri.solenoid     || "").length);
-					wLw      = Math.max(wLw,      Number(ri.lumi_weight  ||  0).toFixed(2).length);
+					wBeam    = Math.max(wBeam,    runBeam(ri).length);
+					wMagnets = Math.max(wMagnets, runMagnets(ri).length);
 				}
 				for (var i = 0; i < listKeys.length; i++) {
 					wRn = Math.max(wRn, String(listKeys[i]).length);
@@ -423,10 +428,8 @@ function fieldSelected() {
 					var label = "Run "   + _padEnd(rn,                   wRn)
 						+ "  " + _padEnd(r.title        || "", wTitle)
 						+ "  " + _padEnd(r.target       || "", wTarget)
-						+ "  " + _padEnd(r.beam_current || "", wCurrent)
-						+ "  " + _padEnd(r.beam_energy  || "", wEnergy)
-						+ "  tor" + _padEnd(r.torus     || "", wTor)
-						+ "  sol" + _padEnd(r.solenoid  || "", wSol)
+						+ "  " + _padEnd(runBeam(r), wBeam)
+						+ "  " + _padEnd(runMagnets(r), wMagnets)
 						+ "  lw=" + lw;
 					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
 				}
@@ -514,7 +517,7 @@ function runSelected() {
 					}
 					setFieldsRunByRun();
 				} else {
-					var fieldKey = "tor" + entry.torus + "_sol" + entry.solenoid;
+					var fieldKey = runMagnets(entry);
 					document.getElementById("fields").innerHTML =
 						"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
 				}
@@ -554,6 +557,7 @@ function userRunsInput(el) {
 			"<option value=\"\" selected hidden></option>";
 	}
 	bkmergingSelected();
+	vertexSelected();
 }
 
 
@@ -619,18 +623,20 @@ function vertexSelected() {
 
 				// Experiment-level z-position default (may be absent).
 				var zvalue = (zpos && zpos.length) ? zpos[0] : "";
+				var rvalue = (rast && rast.length) ? rast[0] : "";
+				var bvalue = (bspot && bspot.length) ? bspot[0] : "";
 
-				// A run selected from the runs map may carry its own
-				// "z-position", which overrides the experiment-level entry
-				// one level up.
+				// Per-run vertex settings override configuration defaults.
 				var run_number = document.getElementById("run_number").value;
 				var runs = myObj[selected_experiment].runs;
 				if (run_number && runs && typeof runs === "object" &&
 					run_number in runs && runs[run_number] &&
 					typeof runs[run_number] === "object" &&
-					!Array.isArray(runs[run_number]) &&
-					"z-position" in runs[run_number]) {
-					zvalue = runs[run_number]["z-position"];
+					!Array.isArray(runs[run_number])) {
+					var run = runs[run_number];
+					if ("z-position" in run) zvalue = run["z-position"];
+					if ("raster" in run) rvalue = run.raster;
+					if ("beam_spot" in run) bvalue = run.beam_spot;
 				}
 
 				if (document.getElementById("zposition-check").checked) {
@@ -639,12 +645,12 @@ function vertexSelected() {
 					textz = "";
 				}
 				if (document.getElementById("raster-check").checked) {
-					textr = rast[0];
+					textr = rvalue;
 				} else {
 					textr = "";
 				}
 				if (document.getElementById("beamspot-check").checked) {
-					texts = bspot[0];
+					texts = bvalue;
 				} else {
 					texts = "";
 				}
@@ -730,6 +736,12 @@ function bkmergingSelected() {
 			var myObj = JSON.parse(this.responseText);
 			if (experiments in myObj) {
 				var vals = myObj[experiments][fields];
+				var run_number = document.getElementById("run_number").value;
+				var runs = myObj[experiments].runs;
+				var run = runs && runs[run_number];
+				if (run && !Array.isArray(run) && run.beam && fields === runMagnets(run)) {
+					vals = [run.beam];
+				}
 				text = "<option selected  value=\"no\"> No </option>";
 				for (val in vals) {
 					text += "<option value=\"" + vals[val] + "\">" + vals[val] + "</option>";
