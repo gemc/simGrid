@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Mark recent submissions that have disappeared from the main-page snapshot as completed."""
 
-from __future__ import annotations
-
 import argparse
 import os
 import sys
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -24,7 +22,8 @@ DEFAULT_DATABASE = "CLAS12OCR"
 DEFAULT_OWNER = "gemc"
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser():
+    # type: () -> argparse.ArgumentParser
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(
         description=(
@@ -57,7 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _submission_id(value: Any) -> int | None:
+def _submission_id(value):
+    # type: (Any) -> Optional[int]
     """Return a submission ID as an integer, or None for an unusable value."""
     if value is None:
         return None
@@ -67,7 +67,8 @@ def _submission_id(value: Any) -> int | None:
         return None
 
 
-def _done_count(value: Any) -> int | None:
+def _done_count(value):
+    # type: (Any) -> Optional[int]
     """Return a 'done' job count as an integer, or None for an unusable value."""
     if value is None:
         return None
@@ -77,13 +78,14 @@ def _done_count(value: Any) -> int | None:
         return None
 
 
-def build_last_done_map(snapshots: list[dict[str, Any]], database_name: str) -> dict[int, int | None]:
+def build_last_done_map(snapshots, database_name):
+    # type: (List[Dict[str, Any]], str) -> Dict[int, Optional[int]]
     """Map submission ID to its most recent observed 'done' count across snapshots.
 
     Snapshots are expected newest-first, so the first occurrence of each submission
     is its last observed 'done' value before it left the main-page snapshot.
     """
-    last_done: dict[int, int | None] = {}
+    last_done = {}  # type: Dict[int, Optional[int]]
     for snapshot in snapshots:
         payload = snapshot.get("payload")
         if not isinstance(payload, dict):
@@ -104,15 +106,16 @@ def build_last_done_map(snapshots: list[dict[str, Any]], database_name: str) -> 
     return last_done
 
 
-def extract_visible_submission_ids(payload: dict[str, Any], database_name: str) -> set[int]:
+def extract_visible_submission_ids(payload, database_name):
+    # type: (Dict[str, Any], str) -> Set[int]
     """Return submission IDs in one database block of a main-page payload."""
     database_payload = payload.get(database_name)
     if not isinstance(database_payload, dict):
-        raise ValueError(f"Snapshot has no valid {database_name!r} database block")
+        raise ValueError("Snapshot has no valid {0!r} database block".format(database_name))
 
     results = database_payload.get("results")
     if not isinstance(results, list):
-        raise ValueError(f"Snapshot {database_name!r} block has no valid results list")
+        raise ValueError("Snapshot {0!r} block has no valid results list".format(database_name))
 
     visible_ids = set()
     for row in results:
@@ -124,7 +127,8 @@ def extract_visible_submission_ids(payload: dict[str, Any], database_name: str) 
     return visible_ids
 
 
-def get_recent_submitted_rows(db: Database) -> list[dict[str, Any]]:
+def get_recent_submitted_rows(db):
+    # type: (Database) -> List[Dict[str, Any]]
     """Return the newest 100 rows that are still marked Submitted to OSG."""
     return db.query(
         """
@@ -138,10 +142,8 @@ def get_recent_submitted_rows(db: Database) -> list[dict[str, Any]]:
     )
 
 
-def find_completion_candidates(
-    submitted_rows: list[dict[str, Any]],
-    visible_submission_ids: set[int],
-) -> list[dict[str, Any]]:
+def find_completion_candidates(submitted_rows, visible_submission_ids):
+    # type: (List[Dict[str, Any]], Set[int]) -> List[Dict[str, Any]]
     """Return submitted rows whose IDs are absent from the main-page snapshot."""
     candidates = []
     for row in submitted_rows:
@@ -151,7 +153,8 @@ def find_completion_candidates(
     return candidates
 
 
-def mark_completed(db: Database, candidates: list[dict[str, Any]]) -> int:
+def mark_completed(db, candidates):
+    # type: (Database, List[Dict[str, Any]]) -> int
     """Mark candidates Completed, recording their last 'done' count and completion time.
 
     Each candidate carries its own last observed 'done' value (attached in run()), so
@@ -177,7 +180,8 @@ def mark_completed(db: Database, candidates: list[dict[str, Any]]) -> int:
     return updated
 
 
-def run(args: argparse.Namespace) -> int:
+def run(args):
+    # type: (argparse.Namespace) -> int
     """Find completion candidates and optionally update them."""
     with Database(
         credentials_file=args.credentials,
@@ -188,7 +192,9 @@ def run(args: argparse.Namespace) -> int:
         )
         if not snapshots:
             raise RuntimeError(
-                f"No main-page snapshot found for database={args.database}, owner={args.owner}"
+                "No main-page snapshot found for database={0}, owner={1}".format(
+                    args.database, args.owner
+                )
             )
 
         latest = snapshots[0]
@@ -200,10 +206,11 @@ def run(args: argparse.Namespace) -> int:
             row["done"] = last_done.get(_submission_id(row.get("user_submission_id")))
 
         print(
-            f"Snapshot {latest['snapshot_id']} from {latest['update_time']}: "
-            f"{len(visible_ids)} visible submission(s)"
+            "Snapshot {0} from {1}: {2} visible submission(s)".format(
+                latest["snapshot_id"], latest["update_time"], len(visible_ids)
+            )
         )
-        print(f"Checked {len(submitted_rows)} recent {SUBMITTED!r} row(s).")
+        print("Checked {0} recent {1!r} row(s).".format(len(submitted_rows), SUBMITTED))
         for row in candidates:
             print(
                 "Candidate {0}: user={1}, pool_node={2}, done={3}".format(
@@ -215,21 +222,22 @@ def run(args: argparse.Namespace) -> int:
             )
 
         if not args.write_to_db:
-            print(f"Dry run: {len(candidates)} candidate(s); no rows updated.")
+            print("Dry run: {0} candidate(s); no rows updated.".format(len(candidates)))
             return 0
 
         updated = mark_completed(db, candidates)
-        print(f"Marked {updated} submission(s) as {COMPLETED!r}.")
+        print("Marked {0} submission(s) as {1!r}.".format(updated, COMPLETED))
         return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv=None):
+    # type: (Optional[List[str]]) -> int
     """Command-line entry point."""
     args = build_parser().parse_args(argv)
     try:
         return run(args)
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print("Error: {0}".format(exc), file=sys.stderr)
         return 1
 
 
