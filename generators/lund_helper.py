@@ -25,6 +25,12 @@ _ALLOWED_EXTENSIONS = {".dat", ".txt", ".lund"}
 
 LUND_FILES = "lund_files"
 
+# Maximum number of lund files a single type-2 submission may use. One HTCondor
+# subjob is created per lund file, so this bounds the subjobs from one
+# submission. Directories with more files are truncated to the first
+# MAX_LUND_FILES entries (see write_lund_files).
+MAX_LUND_FILES = 10000
+
 _MOCK_FILENAMES = ["lund1.dat", "lund2.dat", "lund3.dat"]
 
 _PELICAN_LS_ATTEMPTS = 5
@@ -57,8 +63,8 @@ def _pelican_env():
     return env
 
 
-def _test_mode_warning(lines):
-    """Print an emphasized block for test-mode fallback notices."""
+def _warning_block(lines):
+    """Print an emphasized bordered block of notice lines."""
     border = "=" * 64
     print(border)
     for line in lines:
@@ -118,7 +124,7 @@ def _list_lund_files(lund_location, test=False):
             raise RuntimeError(
                 "pelican not found. Use --test to run with a lund-file mockup."
             )
-        _test_mode_warning([
+        _warning_block([
             "TEST MODE: pelican not found.",
             "Using mockup lund files: {}".format(", ".join(_MOCK_FILENAMES)),
             "These are NOT real files — for pipeline testing only.",
@@ -137,19 +143,26 @@ def _list_lund_files(lund_location, test=False):
     return paths
 
 
-def write_lund_files(lund_location, output_file=LUND_FILES, test=False):
+def write_lund_files(lund_location, output_file=LUND_FILES, test=False,
+                     max_files=MAX_LUND_FILES):
     """Write one OSDF pelican URI per line to output_file and return the count.
 
     This generates the file that HTCondor reads with
     'queue lundFile from lund_files' — one subjob is created per line.
 
+    When the directory holds more than max_files lund files, only the first
+    max_files entries are written and a warning is printed; the extra files are
+    not submitted.
+
     Args:
         lund_location: str, /volatile/clas12/... path from scard.generator.
         output_file:   str, path to write. Defaults to 'lund_files'.
         test:          bool, if True use a 3-file mockup when pelican is absent.
+        max_files:     int, cap on the number of URIs written. Defaults to
+                       MAX_LUND_FILES.
 
     Returns:
-        int: number of lund file URIs written.
+        int: number of lund file URIs written (at most max_files).
 
     Raises:
         RuntimeError:  pelican not found and test=False.
@@ -157,6 +170,15 @@ def write_lund_files(lund_location, output_file=LUND_FILES, test=False):
         ValueError: if lund_location cannot be converted to a pelican URI.
     """
     paths = _list_lund_files(lund_location, test=test)
+    found = len(paths)
+    if found > max_files:
+        _warning_block([
+            "LUND FILE LIMIT: found {} lund files; cap is {}.".format(found, max_files),
+            "Submitting only the first {} — the remaining {} will NOT run.".format(
+                max_files, found - max_files),
+            "Split the directory into batches to submit the rest.",
+        ])
+        paths = paths[:max_files]
     with open(output_file, "w") as f:
         for path in paths:
             f.write(path + "\n")
