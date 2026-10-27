@@ -48,6 +48,15 @@ NODESCRIPT = "nodescript.sh"
 FUNCTIONS_SH = "functions.sh"
 DENOISE_VERSION = "4.2.3"
 
+# Some experiments share a single background-file directory even though they are
+# submitted under distinct configuration names (e.g. solenoid vs liquid target).
+# Map such a configuration to the directory that actually holds its background
+# files.  This affects only the background fetch path, not the gcard or config.
+BG_CONFIGURATION_OVERRIDES = {
+	"rge_spring2024_sol": "rge_spring2024",
+	"rge_spring2024_liq": "rge_spring2024",
+}
+
 
 def generate_nodescript(sconfiguration, user_submission_id, test=False,
                         output_file=NODESCRIPT):
@@ -142,7 +151,8 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 			'/{configuration}/{fields}/{bkmerging}/10k/ (random hipo file)"\n'
 			'run_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'
 		).format(
-			configuration=sconfiguration.configuration or "",
+			configuration=BG_CONFIGURATION_OVERRIDES.get(
+				sconfiguration.configuration, sconfiguration.configuration or ""),
 			fields=sconfiguration.fields or "",
 			bkmerging=sconfiguration.bkmerging or "",
 		) if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
