@@ -40,23 +40,23 @@ TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
 QUEUE_HISTORY_DAYS = 30
 COMPLETION_WINDOW_HOURS = 24
-# Days in a calendar week, used to report the previous week's completions per day.
-WEEK_DAYS = 7
+# Number of days in the rolling completions window: the previous 9 days plus today.
+COMPLETION_DISPLAY_DAYS = 10
 
 
 def collect_completions_per_day(db):
 	# type: (Database) -> List[Dict[str, Any]]
-	"""Per-day completed-job counts for the previous calendar week (Mon-Sun).
+	"""Per-day completed-job counts for the last 10 days (previous 9 days plus today).
 
 	Sums the stored 'done' job count of submissions whose completion_time falls on
-	each day. Returns 7 entries, oldest first:
+	each day. Returns 10 entries, oldest first:
 	{"date": "YYYY-MM-DD", "completed_jobs": N}.
 	"""
 	today = datetime.now().date()
-	this_monday = today - timedelta(days=today.weekday())
-	prev_monday = this_monday - timedelta(days=WEEK_DAYS)
+	start_day = today - timedelta(days=COMPLETION_DISPLAY_DAYS - 1)
+	end_exclusive = today + timedelta(days=1)
 
-	day_dates = [prev_monday + timedelta(days=offset) for offset in range(WEEK_DAYS)]
+	day_dates = [start_day + timedelta(days=offset) for offset in range(COMPLETION_DISPLAY_DAYS)]
 
 	rows = db.query(
 		"""
@@ -68,7 +68,7 @@ def collect_completions_per_day(db):
 		  AND completion_time < %s
 		GROUP BY DATE(completion_time)
 		""",
-		[COMPLETED, prev_monday.isoformat(), this_monday.isoformat()],
+		[COMPLETED, start_day.isoformat(), end_exclusive.isoformat()],
 	)
 
 	counts = {day.isoformat(): 0 for day in day_dates}

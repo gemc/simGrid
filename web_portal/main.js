@@ -245,7 +245,7 @@ function renderWeeklyCompletedEvents(completionsPerDay) {
 
 	return "<div class=\"weekly-completed-events\">" +
 		"<div class=\"weekly-completed-events__title\">" +
-		"Completed events (millions) per day &mdash; previous week</div>" +
+		"Completed events (millions) per day &mdash; last 10 days</div>" +
 		"<table align=\"center\" style=\"width:50%;text-align:center\"><thead>" +
 		header + "</thead><tbody>" + values + "</tbody></table></div>";
 }
