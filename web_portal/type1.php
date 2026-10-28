@@ -23,7 +23,7 @@
 				<td><a target="_blank" href="https://github.com/JeffersonLab/clas12-config#readme">Software Versions</a></td>
 				<td>
 					<select name="softwarev" id="softwarev" required
-							onchange="fieldSelected(); bkmergingSelected(); vertexSelected();">
+							onchange="vertexSelected();">
 					</select>
 				</td>
 			</tr>

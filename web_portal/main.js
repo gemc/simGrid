@@ -350,8 +350,15 @@ function configurationSelected() {
 }
 
 
-function runBeam(entry) {
-	return entry.beam || [entry.beam_current, entry.beam_energy].filter(Boolean).join("_");
+// Human-readable one-line summary of a run's beam and magnet settings for the
+// run dropdown label, e.g. "70nA, 1054MeV, Tor+1.0, Sol-1.0".
+function runSummary(entry) {
+	return [
+		entry.beam_current || "",
+		entry.beam_energy || "",
+		"Tor" + (entry.torus || ""),
+		"Sol" + (entry.solenoid || "")
+	].join(", ");
 }
 
 function runMagnets(entry) {
@@ -404,32 +411,30 @@ function fieldSelected() {
 				}
 
 				// Pass 1: compute column widths for monospace alignment
-				var wRn = 0, wTitle = 0, wTarget = 0, wBeam = 0, wMagnets = 0;
+				var wRn = 0, wTitle = 0, wTarget = 0, wSummary = 0;
 				for (var i = 0; i < metaKeys.length; i++) {
 					var ri = runs[metaKeys[i]];
 					wRn      = Math.max(wRn,      String(metaKeys[i]).length);
-					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
-					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
-					wBeam    = Math.max(wBeam,    runBeam(ri).length);
-					wMagnets = Math.max(wMagnets, runMagnets(ri).length);
+					wTitle   = Math.max(wTitle,   String(ri.title  || "").length);
+					wTarget  = Math.max(wTarget,  String(ri.target || "").length);
+					wSummary = Math.max(wSummary, runSummary(ri).length);
 				}
 				for (var i = 0; i < listKeys.length; i++) {
 					wRn = Math.max(wRn, String(listKeys[i]).length);
 				}
 
 				// Pass 2: build padded option labels. Per-run entries are
-				// prefixed "Run" with the full metadata columns; run-list
-				// entries are prefixed "List" with no tor/sol/lw columns.
+				// prefixed "Run" with the metadata columns; run-list entries
+				// are prefixed "List" with no summary/lw columns.
 				var runsText = "<option value=\"\" selected>— select a run —</option>";
 				for (var i = 0; i < metaKeys.length; i++) {
 					var rn = metaKeys[i];
 					var r  = runs[rn];
 					var lw = Number(r.lumi_weight || 0).toFixed(2);
-					var label = "Run "   + _padEnd(rn,                   wRn)
-						+ "  " + _padEnd(r.title        || "", wTitle)
-						+ "  " + _padEnd(r.target       || "", wTarget)
-						+ "  " + _padEnd(runBeam(r), wBeam)
-						+ "  " + _padEnd(runMagnets(r), wMagnets)
+					var label = "Run "   + _padEnd(rn,              wRn)
+						+ "  " + _padEnd(r.title  || "", wTitle)
+						+ "  " + _padEnd(r.target || "", wTarget)
+						+ "  " + _padEnd(runSummary(r), wSummary)
 						+ "  lw=" + lw;
 					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
 				}
@@ -489,6 +494,7 @@ function runSelected() {
 		if (userRuns) userRuns.disabled = false;
 		document.getElementById("fields").innerHTML =
 			"<option value=\"\" selected hidden></option>";
+		bkmergingSelected();
 		vertexSelected();
 		return;
 	}
@@ -735,16 +741,34 @@ function bkmergingSelected() {
 		if (this.readyState == 4 && this.status == 200) {
 			var myObj = JSON.parse(this.responseText);
 			if (experiments in myObj) {
-				var vals = myObj[experiments][fields];
 				var run_number = document.getElementById("run_number").value;
 				var runs = myObj[experiments].runs;
 				var run = runs && runs[run_number];
-				if (run && !Array.isArray(run) && run.beam && fields === runMagnets(run)) {
-					vals = [run.beam];
-				}
-				text = "<option selected  value=\"no\"> No </option>";
-				for (val in vals) {
-					text += "<option value=\"" + vals[val] + "\">" + vals[val] + "</option>";
+				var isRunMeta = run && !Array.isArray(run) && typeof run === "object";
+
+				if (isRunMeta) {
+					// Per-run background merging is driven solely by the run's
+					// background_path. When present, the directory segment pair
+					// <target>/<background_path> is appended on the worker node
+					// to backgroundfiles/<config>/<fields>/ with a trailing
+					// /10k, so the option value carries both segments while the
+					// label shows just the background_path; "No" stays available
+					// to skip merging. When background_path is empty, there is
+					// no background file for the run, so the choice is fixed at
+					// "No".
+					if (run.background_path) {
+						var bgValue = (run.target ? run.target + "/" : "") + run.background_path;
+						text = "<option selected value=\"" + bgValue + "\">" + run.background_path + "</option>"
+							+ "<option value=\"no\"> No </option>";
+					} else {
+						text = "<option selected value=\"no\"> No </option>";
+					}
+				} else {
+					var vals = myObj[experiments][fields];
+					text = "<option selected  value=\"no\"> No </option>";
+					for (var val in vals) {
+						text += "<option value=\"" + vals[val] + "\">" + vals[val] + "</option>";
+					}
 				}
 			}
 			document.getElementById("bkmerging").innerHTML = text;
