@@ -30,6 +30,8 @@ from statuses import (
 )
 
 DEFAULT_MAX_SUBMITTED_JOBS = 80000
+# The dev/test portal (--devel, CLAS12TEST) is allowed a higher ceiling.
+DEFAULT_MAX_SUBMITTED_JOBS_DEVEL = 90000
 DEFAULT_OWNER = "gemc"
 
 _REPO_ROOT   = os.path.dirname(os.path.abspath(__file__))
@@ -94,10 +96,11 @@ def build_parser():
     parser.add_argument(
         "--max-submitted-jobs",
         type=int,
-        default=DEFAULT_MAX_SUBMITTED_JOBS,
-        help="Maximum running+idle jobs allowed before submission is blocked (default: {}).".format(
-            DEFAULT_MAX_SUBMITTED_JOBS
-        ),
+        default=None,
+        help="Maximum running+idle jobs allowed before submission is blocked "
+             "(default: {} production, {} with --devel).".format(
+                 DEFAULT_MAX_SUBMITTED_JOBS, DEFAULT_MAX_SUBMITTED_JOBS_DEVEL
+             ),
     )
     parser.add_argument(
         "-b", "--user-submission-id",
@@ -147,6 +150,14 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     args = build_parser().parse_args(argv)
+
+    # Resolve the job ceiling: an explicit --max-submitted-jobs always wins;
+    # otherwise the dev portal (--devel) gets the higher devel default.
+    if args.max_submitted_jobs is None:
+        args.max_submitted_jobs = (
+            DEFAULT_MAX_SUBMITTED_JOBS_DEVEL if args.devel
+            else DEFAULT_MAX_SUBMITTED_JOBS
+        )
 
     print("\nStep 1: Capacity check")
     # requires htcondor2, only available on the submit node.
