@@ -112,6 +112,7 @@
 						<option value="onepigen"> onepigen</option>
 						<option value="TCSGen"> TCSGen</option>
 						<option value="twopeg"> twopeg</option>
+						<option value="EAVM_RGD"> twopeg</option>
 					</select>
 				</td>
 			</tr>
