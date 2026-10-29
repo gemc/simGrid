@@ -325,8 +325,11 @@ function genSelected(val) {
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://jeffersonlab.github.io/clas-stringspinner/';
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML = '<br/> → clas-stringspinner generator options';
 
-	} else if (generator == "gemc") {
-		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://gemc.jlab.org/gemc/html/documentation/generator/internal.html';
+	} else if (generator == "EAVM_RGD") {
+		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://code.jlab.org/marianat/EAVM_RGD';
+		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML = '<br/> → clas-stringspinner generator options';
+
+	} else if (generator == "gemc") {		document.getElementById("generatorLink").getElementsByTagName('a')[0].href = 'https://gemc.jlab.org/gemc/html/documentation/generator/internal.html';
 		document.getElementById("generatorLink").getElementsByTagName('a')[0].innerHTML = '<br/> → gemc generator options';
 	}
 
@@ -698,7 +701,7 @@ function vertexSelected() {
 
 
 function update_mcgen_versions() {
-	var default_val = "3.20";
+	var default_val = "3.21";
 	var text = "<option selected  value=\" " + default_val + "\">" + default_val + "</option>";
 	var xmlhttp = new XMLHttpRequest();
 
