@@ -197,9 +197,11 @@ function renderEstimateNote(
 	var concurrentJobsText = isFinite(concurrentJobsPerSubmission) &&
 		Number(concurrentJobsPerSubmission) >= 0 ?
 		formatNumberWithCommas(concurrentJobsPerSubmission, 0) : "N/A";
-	var completionRateText = isFinite(currentCompletionRate) && Number(currentCompletionRate) >= 0 ?
+	var completionRateText = currentCompletionRate != null &&
+		isFinite(currentCompletionRate) && Number(currentCompletionRate) >= 0 ?
 		formatNumberWithCommas(currentCompletionRate, 1) : "N/A";
-	var submissionsRateText = isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
+	var submissionsRateText = currentSubmissionsRate != null &&
+		isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
 		formatNumberWithCommas(currentSubmissionsRate, 1) : "N/A";
 
 	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and " +
@@ -210,7 +212,7 @@ function renderEstimateNote(
         "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per OSG submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
-		"<tr><th>Completion Rate (last 24 hours)</th><td>" +
+		"<tr><th>Completion Rate (latest 24-hour interval)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
 		"<tr><th>Queue to OSG Rate (10,000 jobs / submission)</th><td>" +
 		escapeHtml(submissionsRateText) + " submissions / day</td></tr>" +
@@ -235,17 +237,21 @@ function renderWeeklyCompletedEvents(completionsPerDay) {
 	var values = "<tr>";
 	for (var d = 0; d < completionsPerDay.length; d++) {
 		var day = completionsPerDay[d] || {};
-		var completedJobs = Number(day.completed_jobs || 0);
+		var completedJobs = Number(day.completed_jobs);
 		var eventsInMillions = completedJobs * EVENTS_PER_JOB / 1000000;
-		header += "<th>" + escapeHtml(formatDayLabel(day.date)) + "</th>";
-		values += "<td>" + escapeHtml(formatNumberWithCommas(eventsInMillions, 1)) + "</td>";
+		var interval = day.start && day.end ? day.start + " to " + day.end + " (24 hours)" : day.date;
+		header += "<th title=\"" + escapeHtml(interval) + "\">" +
+			escapeHtml(formatDayLabel(day.date)) + "</th>";
+		var eventsText = day.completed_jobs == null ? "N/A" : formatNumberWithCommas(eventsInMillions, 1);
+		values += "<td>" + escapeHtml(eventsText) + "</td>";
 	}
 	header += "</tr>";
 	values += "</tr>";
 
 	return "<div class=\"weekly-completed-events\">" +
 		"<div class=\"weekly-completed-events__title\">" +
-		"Completed events (millions) per day &mdash; last 10 days</div>" +
+		"Completed events (millions) per 24 hours &mdash; last 10 days" +
+		"<br/>Dates mark interval ends (UTC); hover for exact times.</div>" +
 		"<table align=\"center\" style=\"width:50%;text-align:center\"><thead>" +
 		header + "</thead><tbody>" + values + "</tbody></table></div>";
 }
@@ -1138,8 +1144,8 @@ function osgLogtoTable(mode) {
 				return Number(a) + Number(b);
 			}, 0);
 			var concurrentJobsPerSubmission = totalSubmitted > 0 ? totalRun / totalSubmitted : null;
-			var currentSubmissionsRate = isFinite(averageCompletionsPerDay) &&
-				Number(averageCompletionsPerDay) >= 0 ?
+			var currentSubmissionsRate = averageCompletionsPerDay != null &&
+				isFinite(averageCompletionsPerDay) && Number(averageCompletionsPerDay) >= 0 ?
 				Number(averageCompletionsPerDay) / ESTIMATED_JOBS_PER_SUBMISSION : null;
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";

@@ -23,7 +23,7 @@ import os
 import sys
 import argparse
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -33,55 +33,59 @@ if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE, print_job
-from statuses import COMPLETED, FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
+from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
 TERMINAL_PRE_SUBMIT_STATUSES = {FAILED_TO_READ_DIRECTORY}
 QUEUE_HISTORY_DAYS = 30
-COMPLETION_WINDOW_HOURS = 24
-# Number of days in the rolling completions window: the previous 9 days plus today.
 COMPLETION_DISPLAY_DAYS = 10
+DEFAULT_TIMELINE_FILE = Path(PROJECT_ROOT) / "timeline.json"
+if not DEFAULT_TIMELINE_FILE.exists():
+	DEFAULT_TIMELINE_FILE = Path.home() / "timeline.json"
 
 
-def collect_completions_per_day(db):
-	# type: (Database) -> List[Dict[str, Any]]
-	"""Per-day completed-job counts for the last 10 days (previous 9 days plus today).
+def collect_completions_per_day(timeline_file=DEFAULT_TIMELINE_FILE):
+	# type: (Path) -> List[Dict[str, Any]]
+	"""Sum hourly global.done counts into ten 24-hour intervals, oldest first.
 
-	Sums the stored 'done' job count of submissions whose completion_time falls on
-	each day. Returns 10 entries, oldest first:
-	{"date": "YYYY-MM-DD", "completed_jobs": N}.
+	The latest sample anchors the hourly slots. Round sample ages to the nearest
+	hour so scheduling jitter cannot move a boundary sample into the wrong day.
+	Keep the newest sample per slot; missing slots remain unknown, not zero.
 	"""
-	today = datetime.now().date()
-	start_day = today - timedelta(days=COMPLETION_DISPLAY_DAYS - 1)
-	end_exclusive = today + timedelta(days=1)
+	try:
+		with Path(timeline_file).expanduser().open() as fh:
+			rows = json.load(fh)
+	except (OSError, json.JSONDecodeError) as exc:
+		print("Warning: cannot read completions timeline: {0}".format(exc), file=sys.stderr)
+		return []
+	if not rows:
+		return []
 
-	day_dates = [start_day + timedelta(days=offset) for offset in range(COMPLETION_DISPLAY_DAYS)]
-
-	rows = db.query(
-		"""
-		SELECT DATE(completion_time) AS day, COALESCE(SUM(done), 0) AS completed_jobs
-		FROM submissions
-		WHERE run_status = %s
-		  AND completion_time IS NOT NULL
-		  AND completion_time >= %s
-		  AND completion_time < %s
-		GROUP BY DATE(completion_time)
-		""",
-		[COMPLETED, start_day.isoformat(), end_exclusive.isoformat()],
-	)
-
-	counts = {day.isoformat(): 0 for day in day_dates}
+	latest = max(row["update_ts"] for row in rows)
+	hourly = {}
 	for row in rows:
-		day = row.get("day")
-		day_key = day.isoformat() if hasattr(day, "isoformat") else str(day)
-		if day_key in counts:
-			counts[day_key] = int(row.get("completed_jobs") or 0)
+		age_hours = int((latest - row["update_ts"]) / 3600.0 + 0.5)
+		if not 0 <= age_hours < COMPLETION_DISPLAY_DAYS * 24:
+			continue
+		previous = hourly.get(age_hours)
+		if previous is None or row["update_ts"] > previous["update_ts"]:
+			hourly[age_hours] = row
 
-	return [
-		{"date": day.isoformat(), "completed_jobs": counts[day.isoformat()]}
-		for day in day_dates
-	]
+	days = []
+	for age_days in reversed(range(COMPLETION_DISPLAY_DAYS)):
+		end = latest - age_days * 86400
+		samples = [hourly.get(age_days * 24 + hour, {}) for hour in range(24)]
+		counts = [sample.get("global", {}).get("done") for sample in samples]
+		complete = all(isinstance(count, (int, float)) and count >= 0 for count in counts)
+		end_time = datetime.fromtimestamp(end, timezone.utc)
+		days.append({
+			"date": end_time.date().isoformat(),
+			"start": datetime.fromtimestamp(end - 86400, timezone.utc).isoformat(),
+			"end": end_time.isoformat(),
+			"completed_jobs": sum(counts) if complete else None,
+		})
+	return days
 
 
 def build_parser():
@@ -116,6 +120,12 @@ def build_parser():
 		"-dev",
 		action="store_true",
 		help="Use test database CLAS12TEST instead of production CLAS12OCR.",
+	)
+	parser.add_argument(
+		"--timeline-file",
+		type=Path,
+		default=DEFAULT_TIMELINE_FILE,
+		help="Hourly global completions timeline. Default: %(default)s",
 	)
 	parser.add_argument(
 		"--store-db",
@@ -238,12 +248,12 @@ def empty_db_payload(database_name, owner, timestamp):
 	}
 
 
-## type: (str, str, str) -> Dict[str, Any]
-def collect_for_database(owner, credentials, database_name):
-	from htcondor_utils import get_completed_job_count, get_owner_batches
+# type: (str, str, str, Path) -> Dict[str, Any]
+def collect_for_database(owner, credentials, database_name, timeline_file=DEFAULT_TIMELINE_FILE):
+	from htcondor_utils import get_owner_batches
 	batches = get_owner_batches(owner)
-	completed_jobs = get_completed_job_count(owner, hours=COMPLETION_WINDOW_HOURS)
-	average_completions_per_day = completed_jobs * 24.0 / COMPLETION_WINDOW_HOURS
+	completions_per_day = collect_completions_per_day(timeline_file)
+	average_completions_per_day = completions_per_day[-1]["completed_jobs"] if completions_per_day else None
 
 	results = []  # type: List[Dict[str, Any]]
 	seen_submission_ids = set()  # type: Set[int]
@@ -267,7 +277,6 @@ def collect_for_database(owner, credentials, database_name):
 			],
 		)
 		average_queue_to_osg_hours = calculate_average_queue_to_osg_hours(queue_history_rows)
-		completions_per_day = collect_completions_per_day(db)
 
 		for cluster_id in sorted(batches):
 			batch = batches[cluster_id]
@@ -416,6 +425,7 @@ def main():
 					owner=args.owner,
 					credentials=args.credentials,
 					database_name=selected_database,
+					timeline_file=args.timeline_file,
 				)
 
 				final_payload = {
