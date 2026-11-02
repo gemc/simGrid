@@ -197,9 +197,11 @@ function renderEstimateNote(
 	var concurrentJobsText = isFinite(concurrentJobsPerSubmission) &&
 		Number(concurrentJobsPerSubmission) >= 0 ?
 		formatNumberWithCommas(concurrentJobsPerSubmission, 0) : "N/A";
-	var completionRateText = isFinite(currentCompletionRate) && Number(currentCompletionRate) >= 0 ?
+	var completionRateText = currentCompletionRate != null &&
+		isFinite(currentCompletionRate) && Number(currentCompletionRate) >= 0 ?
 		formatNumberWithCommas(currentCompletionRate, 1) : "N/A";
-	var submissionsRateText = isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
+	var submissionsRateText = currentSubmissionsRate != null &&
+		isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
 		formatNumberWithCommas(currentSubmissionsRate, 1) : "N/A";
 
 	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and " +
@@ -210,7 +212,7 @@ function renderEstimateNote(
         "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per OSG submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
-		"<tr><th>Completion Rate (last 24 hours)</th><td>" +
+		"<tr><th>Completion Rate (latest 24-hour interval)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
 		"<tr><th>Queue to OSG Rate (10,000 jobs / submission)</th><td>" +
 		escapeHtml(submissionsRateText) + " submissions / day</td></tr>" +
@@ -235,17 +237,21 @@ function renderWeeklyCompletedEvents(completionsPerDay) {
 	var values = "<tr>";
 	for (var d = 0; d < completionsPerDay.length; d++) {
 		var day = completionsPerDay[d] || {};
-		var completedJobs = Number(day.completed_jobs || 0);
+		var completedJobs = Number(day.completed_jobs);
 		var eventsInMillions = completedJobs * EVENTS_PER_JOB / 1000000;
-		header += "<th>" + escapeHtml(formatDayLabel(day.date)) + "</th>";
-		values += "<td>" + escapeHtml(formatNumberWithCommas(eventsInMillions, 1)) + "</td>";
+		var interval = day.start && day.end ? day.start + " to " + day.end + " (24 hours)" : day.date;
+		header += "<th title=\"" + escapeHtml(interval) + "\">" +
+			escapeHtml(formatDayLabel(day.date)) + "</th>";
+		var eventsText = day.completed_jobs == null ? "N/A" : formatNumberWithCommas(eventsInMillions, 1);
+		values += "<td>" + escapeHtml(eventsText) + "</td>";
 	}
 	header += "</tr>";
 	values += "</tr>";
 
 	return "<div class=\"weekly-completed-events\">" +
 		"<div class=\"weekly-completed-events__title\">" +
-		"Completed events (millions) per day &mdash; last 10 days</div>" +
+		"Completed events (millions) per 24 hours &mdash; last 10 days" +
+		"<br/>Dates mark interval ends (UTC); hover for exact times.</div>" +
 		"<table align=\"center\" style=\"width:50%;text-align:center\"><thead>" +
 		header + "</thead><tbody>" + values + "</tbody></table></div>";
 }
@@ -353,6 +359,21 @@ function configurationSelected() {
 }
 
 
+// Human-readable one-line summary of a run's beam and magnet settings for the
+// run dropdown label, e.g. "70nA, 1054MeV, Tor+1.0, Sol-1.0".
+function runSummary(entry) {
+	return [
+		entry.beam_current || "",
+		entry.beam_energy || "",
+		"Tor" + (entry.torus || ""),
+		"Sol" + (entry.solenoid || "")
+	].join(", ");
+}
+
+function runMagnets(entry) {
+	return entry.magnets || "tor" + entry.torus + "_sol" + entry.solenoid;
+}
+
 function fieldSelected() {
 	var selected_experiment = document.getElementById("configuration").value;
 
@@ -399,37 +420,30 @@ function fieldSelected() {
 				}
 
 				// Pass 1: compute column widths for monospace alignment
-				var wRn = 0, wTitle = 0, wTarget = 0, wCurrent = 0, wEnergy = 0, wTor = 0, wSol = 0, wLw = 0;
+				var wRn = 0, wTitle = 0, wTarget = 0, wSummary = 0;
 				for (var i = 0; i < metaKeys.length; i++) {
 					var ri = runs[metaKeys[i]];
 					wRn      = Math.max(wRn,      String(metaKeys[i]).length);
-					wTitle   = Math.max(wTitle,   String(ri.title        || "").length);
-					wTarget  = Math.max(wTarget,  String(ri.target       || "").length);
-					wCurrent = Math.max(wCurrent, String(ri.beam_current || "").length);
-					wEnergy  = Math.max(wEnergy,  String(ri.beam_energy  || "").length);
-					wTor     = Math.max(wTor,     String(ri.torus        || "").length);
-					wSol     = Math.max(wSol,     String(ri.solenoid     || "").length);
-					wLw      = Math.max(wLw,      Number(ri.lumi_weight  ||  0).toFixed(2).length);
+					wTitle   = Math.max(wTitle,   String(ri.title  || "").length);
+					wTarget  = Math.max(wTarget,  String(ri.target || "").length);
+					wSummary = Math.max(wSummary, runSummary(ri).length);
 				}
 				for (var i = 0; i < listKeys.length; i++) {
 					wRn = Math.max(wRn, String(listKeys[i]).length);
 				}
 
 				// Pass 2: build padded option labels. Per-run entries are
-				// prefixed "Run" with the full metadata columns; run-list
-				// entries are prefixed "List" with no tor/sol/lw columns.
+				// prefixed "Run" with the metadata columns; run-list entries
+				// are prefixed "List" with no summary/lw columns.
 				var runsText = "<option value=\"\" selected>— select a run —</option>";
 				for (var i = 0; i < metaKeys.length; i++) {
 					var rn = metaKeys[i];
 					var r  = runs[rn];
 					var lw = Number(r.lumi_weight || 0).toFixed(2);
-					var label = "Run "   + _padEnd(rn,                   wRn)
-						+ "  " + _padEnd(r.title        || "", wTitle)
-						+ "  " + _padEnd(r.target       || "", wTarget)
-						+ "  " + _padEnd(r.beam_current || "", wCurrent)
-						+ "  " + _padEnd(r.beam_energy  || "", wEnergy)
-						+ "  tor" + _padEnd(r.torus     || "", wTor)
-						+ "  sol" + _padEnd(r.solenoid  || "", wSol)
+					var label = "Run "   + _padEnd(rn,              wRn)
+						+ "  " + _padEnd(r.title  || "", wTitle)
+						+ "  " + _padEnd(r.target || "", wTarget)
+						+ "  " + _padEnd(runSummary(r), wSummary)
 						+ "  lw=" + lw;
 					runsText += "<option value=\"" + rn + "\">" + label + "</option>";
 				}
@@ -489,6 +503,7 @@ function runSelected() {
 		if (userRuns) userRuns.disabled = false;
 		document.getElementById("fields").innerHTML =
 			"<option value=\"\" selected hidden></option>";
+		bkmergingSelected();
 		vertexSelected();
 		return;
 	}
@@ -517,7 +532,7 @@ function runSelected() {
 					}
 					setFieldsRunByRun();
 				} else {
-					var fieldKey = "tor" + entry.torus + "_sol" + entry.solenoid;
+					var fieldKey = runMagnets(entry);
 					document.getElementById("fields").innerHTML =
 						"<option value=\"" + fieldKey + "\" selected>" + fieldKey + "</option>";
 				}
@@ -557,6 +572,7 @@ function userRunsInput(el) {
 			"<option value=\"\" selected hidden></option>";
 	}
 	bkmergingSelected();
+	vertexSelected();
 }
 
 
@@ -622,18 +638,20 @@ function vertexSelected() {
 
 				// Experiment-level z-position default (may be absent).
 				var zvalue = (zpos && zpos.length) ? zpos[0] : "";
+				var rvalue = (rast && rast.length) ? rast[0] : "";
+				var bvalue = (bspot && bspot.length) ? bspot[0] : "";
 
-				// A run selected from the runs map may carry its own
-				// "z-position", which overrides the experiment-level entry
-				// one level up.
+				// Per-run vertex settings override configuration defaults.
 				var run_number = document.getElementById("run_number").value;
 				var runs = myObj[selected_experiment].runs;
 				if (run_number && runs && typeof runs === "object" &&
 					run_number in runs && runs[run_number] &&
 					typeof runs[run_number] === "object" &&
-					!Array.isArray(runs[run_number]) &&
-					"z-position" in runs[run_number]) {
-					zvalue = runs[run_number]["z-position"];
+					!Array.isArray(runs[run_number])) {
+					var run = runs[run_number];
+					if ("z-position" in run) zvalue = run["z-position"];
+					if ("raster" in run) rvalue = run.raster;
+					if ("beam_spot" in run) bvalue = run.beam_spot;
 				}
 
 				if (document.getElementById("zposition-check").checked) {
@@ -642,12 +660,12 @@ function vertexSelected() {
 					textz = "";
 				}
 				if (document.getElementById("raster-check").checked) {
-					textr = rast[0];
+					textr = rvalue;
 				} else {
 					textr = "";
 				}
 				if (document.getElementById("beamspot-check").checked) {
-					texts = bspot[0];
+					texts = bvalue;
 				} else {
 					texts = "";
 				}
@@ -732,10 +750,34 @@ function bkmergingSelected() {
 		if (this.readyState == 4 && this.status == 200) {
 			var myObj = JSON.parse(this.responseText);
 			if (experiments in myObj) {
-				var vals = myObj[experiments][fields];
-				text = "<option selected  value=\"no\"> No </option>";
-				for (val in vals) {
-					text += "<option value=\"" + vals[val] + "\">" + vals[val] + "</option>";
+				var run_number = document.getElementById("run_number").value;
+				var runs = myObj[experiments].runs;
+				var run = runs && runs[run_number];
+				var isRunMeta = run && !Array.isArray(run) && typeof run === "object";
+
+				if (isRunMeta) {
+					// Per-run background merging is driven solely by the run's
+					// background_path. When present, the directory segment pair
+					// <target>/<background_path> is appended on the worker node
+					// to backgroundfiles/<config>/<fields>/ with a trailing
+					// /10k, so the option value carries both segments while the
+					// label shows just the background_path; "No" stays available
+					// to skip merging. When background_path is empty, there is
+					// no background file for the run, so the choice is fixed at
+					// "No".
+					if (run.background_path) {
+						var bgValue = (run.target ? run.target + "/" : "") + run.background_path;
+						text = "<option selected value=\"" + bgValue + "\">" + run.background_path + "</option>"
+							+ "<option value=\"no\"> No </option>";
+					} else {
+						text = "<option selected value=\"no\"> No </option>";
+					}
+				} else {
+					var vals = myObj[experiments][fields];
+					text = "<option selected  value=\"no\"> No </option>";
+					for (var val in vals) {
+						text += "<option value=\"" + vals[val] + "\">" + vals[val] + "</option>";
+					}
 				}
 			}
 			document.getElementById("bkmerging").innerHTML = text;
@@ -1102,8 +1144,8 @@ function osgLogtoTable(mode) {
 				return Number(a) + Number(b);
 			}, 0);
 			var concurrentJobsPerSubmission = totalSubmitted > 0 ? totalRun / totalSubmitted : null;
-			var currentSubmissionsRate = isFinite(averageCompletionsPerDay) &&
-				Number(averageCompletionsPerDay) >= 0 ?
+			var currentSubmissionsRate = averageCompletionsPerDay != null &&
+				isFinite(averageCompletionsPerDay) && Number(averageCompletionsPerDay) >= 0 ?
 				Number(averageCompletionsPerDay) / ESTIMATED_JOBS_PER_SUBMISSION : null;
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";

@@ -283,6 +283,21 @@ This script produces the combined data used by the portal submissions table. It:
 4. Prints the result with `-q`, writes JSON with `-j FILE`, stores a database snapshot with
    `--store-db`, or reads the latest stored snapshot with `--from-db`.
 
+The completed-events table sums hourly `global.done` counts from `timeline.json` in the repository root,
+falling back to `~/timeline.json`, where the monitoring producer writes it on the submit host. Use
+`--timeline-file /path/to/timeline.json` to select another location. The file is read directly on each refresh;
+no separate tail file or cron job is required. Ten consecutive 24-hour intervals end at the
+latest sample, with dates and exact interval endpoints in UTC. Sample ages are rounded to the nearest hour
+relative to that sample to tolerate scheduling jitter; duplicate hourly slots use the newest sample.
+Incomplete intervals display `N/A`, and an unreadable timeline omits the table with a warning. The timeline
+contains global monitoring counts, shared across database views, rather than per-submission completion dates.
+The portal converts jobs to events using 5,000 events per job. The completion rate used for time estimates
+comes from the latest complete 24-hour timeline interval, matching the last column of the completed-events
+table. If that interval is incomplete or the timeline is unavailable, the rate and dependent time estimates
+display `N/A`. The old live Condor history counter has been retired: retained history may cover less than
+24 hours and undercount completions. `--from-db` preserves stored rates and totals until a new snapshot
+is built.
+
 For a matched submission, the script initially reads Condor `JobPrio` but then replaces its
 displayed `priority` field with MySQL `submissions.priority`. Therefore the portal table does not
 show the runtime priority applied by `run_priority_map.py`; use that script's `-p` output to inspect
