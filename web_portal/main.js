@@ -233,15 +233,16 @@ function formatDayLabel(isoDate) {
 function renderWeeklyCompletedEvents(completionsPerDay) {
 	if (!Array.isArray(completionsPerDay) || !completionsPerDay.length) return "";
 
+	var latestDay = completionsPerDay[completionsPerDay.length - 1] || {};
+	var endTime = latestDay.end ? String(latestDay.end).slice(11, 19) : "";
+	var intervalNote = "Dates mark interval ends" + (endTime ? " at " + endTime + " UTC." : " (UTC).");
 	var header = "<tr>";
 	var values = "<tr>";
 	for (var d = 0; d < completionsPerDay.length; d++) {
 		var day = completionsPerDay[d] || {};
 		var completedJobs = Number(day.completed_jobs);
 		var eventsInMillions = completedJobs * EVENTS_PER_JOB / 1000000;
-		var interval = day.start && day.end ? day.start + " to " + day.end + " (24 hours)" : day.date;
-		header += "<th title=\"" + escapeHtml(interval) + "\">" +
-			escapeHtml(formatDayLabel(day.date)) + "</th>";
+		header += "<th>" + escapeHtml(formatDayLabel(day.date)) + "</th>";
 		var eventsText = day.completed_jobs == null ? "N/A" : formatNumberWithCommas(eventsInMillions, 1);
 		values += "<td>" + escapeHtml(eventsText) + "</td>";
 	}
@@ -251,7 +252,7 @@ function renderWeeklyCompletedEvents(completionsPerDay) {
 	return "<div class=\"weekly-completed-events\">" +
 		"<div class=\"weekly-completed-events__title\">" +
 		"Completed events (millions) per 24 hours &mdash; last 10 days" +
-		"<br/>Dates mark interval ends (UTC); hover for exact times.</div>" +
+		"<br/>" + escapeHtml(intervalNote) + "</div>" +
 		"<table align=\"center\" style=\"width:50%;text-align:center\"><thead>" +
 		header + "</thead><tbody>" + values + "</tbody></table></div>";
 }
