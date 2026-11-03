@@ -2,6 +2,41 @@
 
 [Documentation Home](https://docs.nersc.gov)
 
+## Permutter
+
+Perlmutter is the supercomputer at NERSC where we would run our simulations. It consists of thousands of
+connected Linux computers, called nodes.
+
+There are two kinds we would use:
+
+- Login nodes: where you connect through SSH, prepare files, and submit jobs.
+- Compute nodes: where Slurm schedules our GEMC instances to run.
+
+So ssh YOUR_USERNAME@perlmutter.nersc.gov connects you to a login node belonging to that system.
+
+NERSC is the facility; Perlmutter is the computing system.
+
+<br/>
+
+
+## Scrontab
+
+Before 
+
+| Short option                | Equivalent long option    | Purpose                                   |
+|-----------------------------|---------------------------|-------------------------------------------|
+| -q cron                     | --qos=cron                | Select the cron service                   |
+| -C cron                     | --constraint=cron         | Select nodes for cron tasks               |
+| -A YOUR_PROJECT             | --account=YOUR_PROJECT    | Specify your project                      |
+| -t 00:05:00                 | --time=00:05:00           | Set the maximum runtime                   |
+| --open-mode=append          | Same                      | Append to the output log                  |
+| -J simgrid-update           | --job-name=simgrid-update | Optional readable name in squeue          |
+| -o /path/log-%j.out         | --output=/path/log-%j.out | Optional output location; %j means job ID |
+| --mail-user=ungaro@jlab.org | Same                      | Email recipient                           |
+| --mail-type=FAIL            | Same                      | Send email when a run fails               |
+
+
+
 ### 1. Log into a login node
 
    From your Mac:
@@ -26,6 +61,7 @@ echo "$SCRATCH"
 An interactive compute-node shell is also possible through a Slurm allocation. Initially, a short batch
 job gives us a reproducible test and a saved log.
 
+<br/>
 
 ### 2. Check the exact JLab CVMFS paths
 
@@ -43,29 +79,34 @@ job gives us a reproducible test and a saved log.
    > configuration files, and Geant4 modules. Could this repository be enabled on Perlmutter login and
    > compute nodes, including access inside supported containers?
 
+<br/>
+
+
 ### 3. Submit a small compute-node probe
 
    A successful login-node check needs a corresponding compute-node check.
 
    On NERSC:
 
+```
    mkdir -p "$SCRATCH/nersc-pilot"
    cd "$SCRATCH/nersc-pilot"
+```
+   Create `nersc-probe.sbatch`  replacing YOUR_PROJECT:
 
-   Create nersc-probe.sbatch there with this content, replacing YOUR_PROJECT:
+```
+#!/bin/zsh
 
-   #!/bin/bash
-   #SBATCH --job-name=nersc-probe
-   #SBATCH --account=YOUR_PROJECT
-   #SBATCH --constraint=cpu
-   #SBATCH --qos=shared
-   #SBATCH --nodes=1
-   #SBATCH --ntasks=1
-   #SBATCH --cpus-per-task=2
-   #SBATCH --mem=2G
-   #SBATCH --time=00:05:00
-   #SBATCH --licenses=cvmfs
-   #SBATCH --output=nersc-probe-%j.out
+#SBATCH --account=m5464
+#SBATCH --job-name=nersc-probe
+#SBATCH --constraint=cpu
+#SBATCH --qos=shared
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=2G
+#SBATCH --time=00:05:00
+#SBATCH --output=nersc-probe-%j.out
 
 set -u
 
@@ -75,42 +116,55 @@ printf 'Job ID: %s\n' "$SLURM_JOB_ID"
 printf 'Working directory: %s\n' "$PWD"
 
 status=0
-for path in \
-/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/modulefiles \
-/cvmfs/jlab.opensciencegrid.org/geant4/modules \
-/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/clas12-config/prod
-do
-if ls -ld "$path"; then
-ls "$path" | head -n 5
-else
-status=1
-fi
-done
 
 exit "$status"
+```
 
 Submit and inspect it:
 
+```
 job_id=$(sbatch --parsable nersc-probe.sbatch)
 echo "$job_id"
 squeue -j "$job_id"
+```
+
+Explanation: 
+
+- `sbatch` submits the script to Slurm.
+- `--parsable` returns the job ID without the usual descriptive message.
+- `squeue`": check the jobs status
+
+Status:
+
+
+
+- `PD`: waiting for resources.
+- `R`: running.
+- `No job row`: it has left the queue; check the final outcome:
 
 After it finishes:
 
+```
 cat "nersc-probe-${job_id}.out"
 sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,AllocCPUS
+```
+
 
 Expected result: the required directories are readable and the main job reports COMPLETED with
 ExitCode=0:0. A queued job or a failed path check gives us a specific issue to investigate.
 
+
 This requests a small shared allocation. On Perlmutter, Slurm counts hardware threads as CPUs;
 two requested CPUs ordinarily correspond to one physical core, with memory also affecting allocation.
+
 The CVMFS license lets scheduling account for service availability.
 Shared jobs (https://docs.nersc.gov/jobs/examples/#shared),
 CVMFS jobs (https://docs.nersc.gov/services/cvmfs/#cvmfs-batch-jobs),
 job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 
-4. Validate the container, then the physics workflow
+<br/>
+
+### 4. Validate the container, then the physics workflow
 
    After CVMFS works, pull our production image on the login node:
 
