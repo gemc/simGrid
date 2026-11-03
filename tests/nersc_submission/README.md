@@ -6,7 +6,7 @@ runs them inside the GEMC image.
 To submit from this directory:
 
 ```
-sbatch --parsable nersc-test_environment.sbatch
+sbatch nersc-test_environment.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```
@@ -14,7 +14,6 @@ squeue -j <job_id>
 Explanation: 
 
 - `sbatch` submits the script to Slurm.
-- `--parsable` returns the job ID without the usual descriptive message.
 - `squeue`: check job status.
 
 Status:

@@ -1,6 +1,5 @@
 #!/bin/bash
 # nodescript.sh — CLAS12 simulation script executed on the OSG worker node.
-# Submission ID: 915
 #
 # Invoked directly by HTCondor:
 #   ./nodescript.sh <sjob> <lundFile>
@@ -37,7 +36,7 @@ export CLAS12_CONFIG="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/cla
 echo "CLAS12_CONFIG: $CLAS12_CONFIG"
 export OSRELEASE="almalinux9-gcc11"
 echo "OSRELEASE: $OSRELEASE"
-run_timed clean_and_check_environment "pierrec" \
+run_timed clean_and_check_environment "ungaro" \
     "gemc/dev" \
     "sqlite/dev" \
     "jdk/21.0.2" \
@@ -107,14 +106,14 @@ cmd=(hipo-utils -test recon.hipo)
 echo "Running HIPO Integrity Test: ${cmd[@]}"
 run_timed test_hipo_file "${cmd[@]}"
 
-echo "input: recon.hipo, output: inelastic-$lund_base-915-$sjob.hipo"
+echo "input: recon.hipo, output: inelastic-$lund_base-test-$sjob.hipo"
 DST_BANKS='RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,REC::*,RECFT::*,MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,MC::Lund,MC::Event,RICH::Particle,RICH::Ring'
 cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
 echo "Running DST Filter: ${cmd[@]}"
-run_timed create_dst "inelastic" "915" "$sjob" "${cmd[@]}"
+run_timed create_dst "inelastic" "test" "$sjob" "${cmd[@]}"
 
-echo "input: inelastic-$lund_base-915-$sjob.hipo, output: osdf:///jlab-osdf/clas12/volatile/osg/pierrec/915/inelastic-$lund_base-915-$sjob.hipo"
-run_timed write_to_jlab "pierrec" "inelastic" "915" "$sjob"
+echo "input: inelastic-$lund_base-test-$sjob.hipo, output: osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/inelastic-$lund_base-test-$sjob.hipo"
+run_timed write_to_jlab "ungaro" "inelastic" "test" "$sjob"
 
 
 print_timing_summary

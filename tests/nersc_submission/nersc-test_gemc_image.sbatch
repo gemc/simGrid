@@ -21,6 +21,7 @@ if [[ ! -r "$functions_file" ]]; then
 fi
 
 image=docker.io/jeffersonlab/gemc:dev-almalinux94
+image=docker.io/jeffersonlab/clas12software:production
 printf 'Compute node: %s\n' "$(hostname)"
 printf 'Container image: %s\n' "$image"
 

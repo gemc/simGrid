@@ -70,6 +70,7 @@ Our batch script will ask Slurm for resources, then use Podman-HPC to run the si
 
 ```
 podman-hpc pull docker.io/jeffersonlab/clas12software:production
+podman-hpc pull docker.io/jeffersonlab/gemc:dev-almalinux94
 podman-hpc images
 ```
 
