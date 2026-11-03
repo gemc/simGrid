@@ -1,0 +1,67 @@
+# SimGrid HTCondor Submission Script
+# --------------------------------------------------
+
+# vanilla is the only universe supported for OSG pilot-based jobs.
+Universe = vanilla
+
++SingularityImage     = "/cvmfs/singularity.opensciencegrid.org/jeffersonlab/clas12software:devel"
++SingularityBindCVMFS = True
+
+# Site ranking (higher = more preferred).
+Rank = (GLIDEIN_SITE=?='SGridGLA') ? 300 : ( (GLIDEIN_SITE=?='CNAF') ? 200 : ( (GLIDEIN_SITE=?='SU-ITS') ? 0 : 100 ) )
+
+# Retry policy
+# Jobs exit cleanly (no signal, code 0) are removed from queue.
+# Jobs that fail are held; periodic_release retries known transient failures.
+on_exit_remove   = (ExitBySignal == False) && (ExitCode == 0)
+on_exit_hold     = (ExitBySignal == True) || (ExitCode != 0)
+periodic_release = (NumJobCompletions < 5) && ((CurrentTime - EnteredCurrentStatus) > (60*60)) && ((ExitCode == 202) || (ExitCode == 204) || (ExitCode == 205) || (ExitCode == 206) || (ExitCode == 207) || (ExitCode == 208) || (ExitCode == 210) || (ExitCode == 211) || (ExitCode == 212) || (ExitCode == 213))
+
+
+
+# OSG slot requirements.
+Requirements = ((HAS_SINGULARITY =?= true) && \
+               (HAS_CVMFS_jlab_opensciencegrid_org =?= true) && \
+               (OSG_HOST_KERNEL_VERSION >= 21700) && \
+               (OSG_GLIDEIN_VERSION >= 534)) && \
+               (TARGET.Arch == "X86_64") && \
+               (TARGET.OpSys == "LINUX") && \
+               (TARGET.Disk >= RequestDisk) && \
+               (TARGET.Memory >= RequestMemory) && \
+               (TARGET.HasFileTransfer) && \
+               (GLIDEIN_Site == "CNAF")
+
+
+# Comma-separated, no spaces between entries.
++UNDESIRED_Sites = "NMSU_DISCOVERY,Clemson-Palmetto"
+
+# Pelican / OSDF authentication token.
+use_oauth_services = jlab_clas12
+
+
+# Hardware resource requests per job slot.
+request_cpus   = 1
+request_memory = 2.256 GB
+request_disk   = 2 GB
+
+# Executable: simulation script staged to the worker node.
+Executable = nodescript.sh
+
+# Per-job log files ($(Cluster).$(Process) gives unique names per subjob).
+Error  = log/job.$(Cluster).$(Process).err
+Output = log/job.$(Cluster).$(Process).out
+Log    = log/job.$(Cluster).$(Process).log
+
+# OSG/XSEDE project for fair-share accounting.
++ProjectName = "CLAS12"
+
+# File transfer: stage scripts in, retrieve output/ directory out.
+transfer_input_files    = nodescript.sh, functions.sh
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files   = output
+
+# One subjob per lund file — HTCondor expands lund_files line by line.
+Arguments = $(Process) $(lundFile)
+queue lundFile from lund_files
+
