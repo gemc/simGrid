@@ -122,6 +122,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 			'export OSRELEASE="almalinux9-gcc11"\n'
 			'echo "OSRELEASE: $OSRELEASE"\n'
 			'{clean_and_check}'
+			'report_environment osg\n'
 			'export RCDB_CONNECTION=mysql://null\n'
 			'echo "SQLITE Version: {gemcv}"\n'
 		).format(
