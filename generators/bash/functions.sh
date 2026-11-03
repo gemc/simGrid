@@ -1,5 +1,5 @@
 #!/bin/bash
-# functions.sh — bash functions sourced by nodescript.sh on OSG worker nodes.
+# functions.sh — shared worker functions and read-only environment diagnostics.
 
 # ── Exit codes ────────────────────────────────────────────────────────────────
 # Defined at top level so every function in this file can reference them
@@ -124,6 +124,86 @@ print_timing_summary() {
     done
     echo '  ]'
     echo "}"
+}
+
+# -- environment reports --
+# Read-only diagnostics, callable under bash or zsh with set -eu enabled.
+# report_environment [osg|nersc] prints common details plus optional backend metadata.
+# Missing optional tools and unavailable diagnostic services do not fail the job.
+report_environment() {
+    local backend="${1:-}"
+    local tool
+    case "$backend" in
+        ""|osg|nersc) ;;
+        *) printf 'Usage: report_environment [osg|nersc]\n' >&2; return 2 ;;
+    esac
+
+    echo "=== System ==="
+    hostname || true
+    date || true
+    uname -srm || true
+    printf 'Directory: %s\n' "$PWD"
+    if [[ -n "${BASH_VERSION:-}" ]]; then
+        printf 'Bash: %s\n' "$BASH_VERSION"
+    elif [[ -n "${ZSH_VERSION:-}" ]]; then
+        printf 'Zsh: %s\n' "$ZSH_VERSION"
+    fi
+
+    case "$backend" in
+        osg) report_osg_environment ;;
+        nersc) report_nersc_environment ;;
+    esac
+
+    echo "=== Storage ==="
+    printf 'TMPDIR: %s\n' "${TMPDIR:-unset}"
+    df -h . || echo "Unable to report working-directory storage."
+
+    echo "=== Available commands ==="
+    for tool in podman-hpc shifter pelican gemc java python3; do
+        if ! command -v "$tool"; then
+            printf '%s: unavailable in this environment\n' "$tool"
+        fi
+    done
+
+    echo "=== Loaded modules ==="
+    if type module >/dev/null 2>&1; then
+        (set +u; module -t list) || echo "Unable to list loaded modules."
+    else
+        echo "Module command is not initialized."
+    fi
+}
+
+report_nersc_environment() {
+    echo "=== Slurm allocation ==="
+    printf 'Job: %s\n' "${SLURM_JOB_ID:-none}"
+    printf 'Account: %s\n' "${SLURM_JOB_ACCOUNT:-unset}"
+    printf 'Partition: %s\n' "${SLURM_JOB_PARTITION:-unset}"
+    printf 'Nodes: %s\n' "${SLURM_JOB_NODELIST:-unset}"
+    printf 'CPUs per task: %s\n' "${SLURM_CPUS_PER_TASK:-unset}"
+    printf 'Memory per node (MB): %s\n' "${SLURM_MEM_PER_NODE:-unset}"
+    printf 'SCRATCH: %s\n' "${SCRATCH:-unset}"
+}
+
+report_osg_environment() {
+    local job_ad="${_CONDOR_JOB_AD:-}"
+    local ad_file
+    echo "=== OSG / HTCondor ==="
+    printf 'Scratch directory: %s\n' "${_CONDOR_SCRATCH_DIR:-unset}"
+    printf 'Job ClassAd: %s\n' "${job_ad:-unset}"
+    printf 'Machine ClassAd: %s\n' "${_CONDOR_MACHINE_AD:-unset}"
+    # Select only scheduling metadata; never dump credentials or the entire environment/ClassAd.
+    for ad_file in "$job_ad" "${_CONDOR_MACHINE_AD:-}"; do
+        if [[ -n "$ad_file" && -r "$ad_file" ]]; then
+            printf 'Scheduling metadata (%s):\n' "$ad_file"
+            awk '
+                BEGIN {
+                    fields = "ClusterId|ProcId|RequestCpus|RequestMemory|RequestDisk"
+                    fields = fields "|GLIDEIN_Site|GLIDEIN_ResourceName"
+                }
+                $0 ~ "^[[:space:]]*(" fields ")[[:space:]]*=" { print }
+            ' "$ad_file" || echo "Unable to read scheduling metadata."
+        fi
+    done
 }
 
 # -- clean_and_check_environment --
