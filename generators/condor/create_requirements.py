@@ -46,8 +46,6 @@ Requirements = ((HAS_SINGULARITY =?= true) && \\
                (OSG_GLIDEIN_VERSION >= 534)) && \\
                (TARGET.Arch == "X86_64") && \\
                (TARGET.OpSys == "LINUX") && \\
-               (TARGET.Disk >= RequestDisk) && \\
-               (TARGET.Memory >= RequestMemory) && \\
                (TARGET.HasFileTransfer){0}
 
 """.format(site_clause)
