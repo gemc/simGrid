@@ -13,30 +13,26 @@
 
 set -eu
 
-# Global home is available on compute nodes, independently of the submission directory.
-functions_file="$HOME/software/simgrid/main/generators/bash/functions.sh"
-if [[ ! -r "$functions_file" ]]; then
-    printf 'Shared functions are not readable: %s\n' "$functions_file" >&2
+# Global home is available regardless of the submission directory.
+repo_dir="$HOME/software/simgrid/main"
+source "$repo_dir/nersc_io/container.sh"
+
+# Usage: sbatch nersc-test_gemc_image.sbatch [gcard] [nevents] [image]
+if [[ $# -gt 3 ]]; then
+    printf 'Usage: sbatch nersc-test_gemc_image.sbatch [gcard] [nevents] [image]\n' >&2
     exit 2
 fi
+# An empty argument lets the nodescript select its default gcard.
+gcard="${1:-}"
+if [[ -n "$gcard" ]]; then
+    gcard="${gcard:A}"
+fi
+nevents="${2:-100}"
+image="${3:-docker.io/jeffersonlab/gemc:dev-almalinux94}"
 
-image=docker.io/jeffersonlab/gemc:dev-almalinux94
-image=docker.io/jeffersonlab/clas12software:production
-printf 'Compute node: %s\n' "$(hostname)"
-printf 'Container image: %s\n' "$image"
-
-# Keep the report on stdin and use the image already pulled on the login node.
-# Forward allocation metadata explicitly; the container has its own environment.
-podman-hpc run --rm -i --pull=never \
-    --volume "$PWD:$PWD" \
-    --volume "$functions_file:/opt/simgrid/functions.sh:ro" \
-    --workdir "$PWD" \
-    --env 'SLURM_*' \
-    --env SCRATCH \
-    --entrypoint /bin/bash \
-    "$image" -l -s <<'CONTAINER'
-set -eu
-
-source /opt/simgrid/functions.sh
-report_environment nersc
-CONTAINER
+# Expose project CFS at the same absolute path; the launcher mounts this directory read-only.
+export SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464
+work_dir="$SCRATCH/simgrid/gemc-tests"
+mkdir -p "$work_dir"
+cd "$work_dir"
+run_nersc_container "$image" "$repo_dir/tests/nersc_submission/nodescript.sh" "$gcard" "$nevents"
