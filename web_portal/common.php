@@ -12,3 +12,8 @@ $submit_script = '../db_io/upload_submission.py';
 $portalTitle = $IS_DEVEL_MODE
 	? 'CLAS12 Monte-Carlo TEST OSG Portal'
 	: 'CLAS12 Monte-Carlo OSG Portal';
+
+function usesLegacyGemcRun($softwarev) {
+	return preg_match('/(?:^|\s)gemc\/(\d+(?:\.\d+)*)/', $softwarev, $matches)
+		&& version_compare($matches[1], '6.1', '<');
+}

@@ -32,6 +32,10 @@ if (!is_string($lundFiles) || strpos($lundFiles, '/volatile/clas12/') !== 0) {
 	$output_type   = $_POST['output_type'];
 	$run_number    = isset($_POST['run_number']) ? trim($_POST['run_number']) : '';
 	$user_runs     = isset($_POST['user_runs'])  ? trim($_POST['user_runs'])  : '';
+	if (usesLegacyGemcRun($softwarev)) {
+		$run_number = '11';
+		$user_runs = '';
+	}
 	$uri		   = $_SERVER['REQUEST_URI'];
 	$timestamp     = date('Y-m-d_H-i-s');
 	$scard_file    = '/var/www/gemc-runtime/scard_type2_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $username) . '_' . $timestamp . '.txt';

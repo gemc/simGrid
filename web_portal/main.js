@@ -470,6 +470,16 @@ function fieldSelected() {
 				if (runsRow)      runsRow.style.display      = "none";
 				if (userRunsRow)  userRunsRow.style.display  = "none";
 
+				// Hidden controls still submit values unless they are disabled.
+				var runDropdown = document.getElementById("run_number");
+				runDropdown.innerHTML = "";
+				runDropdown.disabled = true;
+				var userRuns = document.getElementById("user_runs");
+				if (userRuns) {
+					userRuns.value = "";
+					userRuns.disabled = true;
+				}
+
 				var fieldsEl = document.getElementById("fields");
 				if (fieldsEl) {
 					fieldsEl.style.pointerEvents   = "";
