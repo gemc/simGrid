@@ -1,6 +1,7 @@
 # SConfiguration class definition
 
 import os.path
+import re
 
 from statuses import NOTSUBMITTED, PROCESSING, SUBMITTED, SCRIPTS_GENERATED
 
@@ -96,7 +97,15 @@ class SConfiguration():
 
 		self._resolve_type()
 		self._resolve_software_versions()
+		self._resolve_runs()
 		print('SConfiguration: parsed {} successfully (type {})'.format(label, self.type))
+
+	def _resolve_runs(self):
+		"""Use run 11 for GEMC versions before run-by-run support in 6.1."""
+		version = re.match(r'^(\d+)(?:\.(\d+))?', self.gemcv or '')
+		if version and tuple(int(part or 0) for part in version.groups()) < (6, 1):
+			self.runs = '11'
+			self.run_list = None
 
 	def _resolve_software_versions(self):
 		"""Populate gemcv, coatjavav, mcgenv from softwarev; torus/solenoid from fields."""
