@@ -21,8 +21,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ matrix.variant }}
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.variant }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -34,6 +34,12 @@ jobs:
           - test
           # - devel
           # - production
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -54,16 +60,100 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
-          tags: type=raw,value=${{ matrix.variant }}
+          tags: type=raw,value=${{ matrix.variant }}-${{ matrix.arch }}
 
       - name: Build and publish
         uses: docker/build-push-action@v7
         with:
           context: ./docker
           file: ./docker/Dockerfile-almalinux94-${{ matrix.variant }}
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           pull: true
           no-cache: true
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  manifest:
+    name: Publish ${{ matrix.variant }} manifest
+    if: github.event_name != 'pull_request'
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep these variants in sync with the build matrix.
+        variant:
+          - test
+          # - devel
+          # - production
+    steps:
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=raw,value=${{ matrix.variant }}
+
+      - name: Create multi-arch manifest
+        shell: bash
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              docker buildx imagetools create --tag "$tag" "${tag}-amd64" "${tag}-arm64"
+            fi
+          done <<< "$IMAGE_TAGS"
+
+      - name: Summarize published images
+        shell: bash
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          registry="${IMAGE_TAGS%%:*}"
+          package_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pkgs/container/${registry##*/}"
+          {
+            echo '## simGrid images'
+            echo ''
+            printf 'Registry: [`%s`](%s)\n\n' "$registry" "$package_url"
+            echo 'The combined tag supports x86_64 (`linux/amd64`) and ARM64 (`linux/arm64`).'
+            echo 'Docker selects the native architecture, including on Intel and Apple Silicon Macs.'
+            echo ''
+            echo '### Published images'
+            echo ''
+            echo '| Image | Architecture |'
+            echo '| --- | --- |'
+            while IFS= read -r tag; do
+              if [[ -n "$tag" ]]; then
+                printf '| `%s` | x86_64 and ARM64 |\n' "$tag"
+                printf '| `%s-amd64` | x86_64 |\n' "$tag"
+                printf '| `%s-arm64` | ARM64 |\n' "$tag"
+              fi
+            done <<< "$IMAGE_TAGS"
+            echo ''
+            echo '### Run with Docker'
+            echo ''
+            echo 'No `--platform` flag is needed for the combined tag.'
+            echo ''
+            echo '```bash'
+            while IFS= read -r tag; do
+              if [[ -n "$tag" ]]; then
+                printf 'docker run --rm -it %s bash\n' "$tag"
+              fi
+            done <<< "$IMAGE_TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
