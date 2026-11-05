@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 #SBATCH --account=m5464
-#SBATCH --job-name=nersc-gemc-image
+#SBATCH --job-name=nersc-workflow
 #SBATCH --constraint=cpu
 #SBATCH --qos=shared
 #SBATCH --nodes=1
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
-#SBATCH --output=nersc-gemc-image-%j.out
+#SBATCH --output=nersc-workflow-%j.out
 
 set -eu
 
@@ -17,9 +17,9 @@ set -eu
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
 
-# Usage: sbatch nersc-test_gemc_image.sbatch [gcard] [nevents] [image]
+# Usage: sbatch nersc-test-workflow.sbatch [gcard] [nevents] [image]
 if [[ $# -gt 3 ]]; then
-    printf 'Usage: sbatch nersc-test_gemc_image.sbatch [gcard] [nevents] [image]\n' >&2
+    printf 'Usage: sbatch nersc-test-workflow.sbatch [gcard] [nevents] [image]\n' >&2
     exit 2
 fi
 # An empty argument lets the nodescript select its default gcard.

@@ -1,0 +1,56 @@
+FROM almalinux:9.4 
+LABEL maintainer="Maurizio Ungaro <ungaro@jlab.org>"
+
+# run shell instead of sh
+SHELL ["/bin/bash", "-c"]
+ENV AUTOBUILD=1
+
+COPY bg_merge_bk_file.sh /bin/bg_merge_bk_file.sh
+COPY localSetupBase.sh /etc/profile.d/localSetup.sh
+
+# JLab certificate
+ADD https://pki.jlab.org/JLabCA.crt /etc/pki/ca-trust/source/anchors/JLabCA.crt
+RUN update-ca-trust 
+
+# alma specific:
+# crb: for mysql-devel
+# synergy: root, scons, vnc
+RUN    dnf install -y  'dnf-command(config-manager)' \
+    && dnf config-manager --set-enabled crb \
+    && dnf install -y almalinux-release-synergy 
+
+
+# pelican RPM repository
+RUN rpm -i https://repo.osg-htc.org/osg/24-main/osg-24-main-el9-release-latest.rpm 
+
+RUN echo "module use /cvmfs/jlab.opensciencegrid.org/geant4/modules" >> /etc/profile.d/localSetup.sh
+
+
+
+
+RUN dnf install -y --allowerasing  gcc-gfortran pcre-devel mesa-libGL-devel mesa-libGLU-devel glew-devel ftgl-devel mariadb-devel sqlite-devel fftw-devel cfitsio-devel graphviz-devel libuuid-devel avahi-compat-libdns_sd-devel openldap-devel python-devel python3-numpy libxml2-devel gsl-devel readline-devel qt5-qtwebengine-devel R-devel R-Rcpp-devel R-RInside-devel xxhash-devel tbb-devel gcc binutils xrootd-client lsof liburing flexiblas-devel  bzip2 wget curl nano bash tcsh zsh hostname gedit environment-modules rsync patch which  pelican pelican-osdf-compat pelican-server htgettoken openssh-clients  \
+ && dnf -y update \
+ && dnf -y check-update \
+ && dnf clean packages \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf 
+
+
+# meson installation using tarball
+RUN cd /usr/local \
+    && curl -S --location-trusted --progress-bar --retry 4 --cacert /etc/pki/ca-trust/source/anchors/JLabCA.crt {'https://github.com/mesonbuild/meson/releases/download/1.9.0/meson-1.9.0.tar.gz'} -k -O  \
+    && tar -xzvf meson-1.9.0.tar.gz \
+    && rm meson-1.9.0.tar.gz \
+    && ln -s /usr/local/meson-1.9.0/meson.py /usr/bin/meson
+
+
+# Setup demo environment variables
+ENV HOME=/root LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8  LC_ALL=C.UTF-8  DISPLAY=:0.0 DISPLAY_WIDTH=1400 DISPLAY_HEIGHT=1000 RUN_XTERM=yes RUN_FLUXBOX=yes
+
+COPY fluxbox/conf.d /app/conf.d
+COPY fluxbox/supervisord.conf fluxbox/entrypoint.sh  /app/
+
+CMD ["/app/entrypoint.sh"]
+EXPOSE 8080
+
+

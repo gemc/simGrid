@@ -44,6 +44,19 @@ showquota m5464
 
 <br/>
 
+## Pelican Token
+
+The ssh elliptical key id_ed25519 from the gemc account in the scosg2022 submit node is copied to the permutter login node.
+The .ssh directory is then mounted in the container with `-v $HOME/.ssh:/sshkeys:ro`
+
+The script `token-renew` in nerc_io, copied into the local .ssh dir in permutter,  is used to copy the jlab key in place, create missing dirs if necessary, and get a new token.
+
+### Other utilities
+
+- show tokens: `httokendecode -H`
+
+<br/>
+
 ## Container Images
 
 Podman runs containers, much like Docker.

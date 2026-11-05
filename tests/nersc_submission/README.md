@@ -1,12 +1,14 @@
 Both probes load the read-only report from `$HOME/software/simgrid/main/generators/bash/functions.sh`.
 They can run from any submission directory. Keep the repository available at that path on NERSC;
-Slurm copies the batch script alone. The container probe also uses `nersc_io/container.sh` and
-`tests/nersc_submission/nodescript.sh` from the repository.
+Slurm copies the batch script alone. Both jobs use `nersc_io/container.sh`.
+`nersc-test-transfer.sbatch` currently runs `environment.sh` inside
+`docker.io/jeffersonlab/clas12software:production`; file-transfer checks will be added here.
+`nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
 
 To submit from this directory:
 
 ```
-sbatch nersc-test_environment.sbatch
+sbatch nersc-test-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```
@@ -27,7 +29,7 @@ Status:
 After it finishes:
 
 ```
-cat "nersc-probe-${job_id}.out"
+cat "nersc-transfer-${job_id}.out"
 sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,AllocCPUS
 ```
 
@@ -47,16 +49,16 @@ The GEMC trial defaults to `docker.io/jeffersonlab/gemc:dev-almalinux94`, alread
 and the detector gcard `/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard`.
 
 ```shell
-job_id=$(sbatch --parsable nersc-test_gemc_image.sbatch)
+job_id=$(sbatch --parsable nersc-test-workflow.sbatch)
 # After completion:
-cat "nersc-gemc-image-${job_id}.out"
+cat "nersc-workflow-${job_id}.out"
 ```
 
 The optional arguments are `[gcard] [nevents] [image]`. The default event count is 100.
 An empty gcard argument preserves the default. To select another image:
 
 ```shell
-sbatch nersc-test_gemc_image.sbatch "" 100 docker.io/jeffersonlab/clas12software:production
+sbatch nersc-test-workflow.sbatch "" 100 docker.io/jeffersonlab/clas12software:production
 ```
 
 The batch script defines resources and selects the image. `nodescript.sh` follows the command-array
@@ -95,8 +97,26 @@ run_nersc_container docker.io/jeffersonlab/gemc:dev-almalinux94 \
 The launcher mounts the current directory read-write and the node script and shared functions read-only.
 It exposes `SIMGRID_FUNCTIONS_FILE` and `SIMGRID_BACKEND` to the container. A caller can set
 `SIMGRID_FUNCTIONS_FILE` before launching to use a different host copy of the shared functions.
-Use Slurm for simulation execution; a standalone invocation runs on the calling node. Login-node
-container tests should use a separate diagnostic script containing only environment checks.
+Use Slurm for simulation execution; a standalone invocation runs on the calling node. To run only the
+environment report directly on a login node, use:
+
+```shell
+repo_dir="$HOME/software/simgrid/main"
+source "$repo_dir/nersc_io/container.sh"
+run_nersc_container docker.io/jeffersonlab/clas12software:production \
+    "$repo_dir/tests/nersc_submission/environment.sh"
+```
+
+To open an interactive container shell on a login node:
+
+```shell
+podman-hpc run --rm -it --pull=never \
+    --entrypoint /bin/bash \
+    docker.io/jeffersonlab/clas12software:production -l
+```
+
+Replace the image reference to use another image already pulled with `podman-hpc pull`. Type `exit`
+to return to the login-node shell. Add explicit volume mounts when host files are needed in the container.
 
 The shared reporting API is:
 
