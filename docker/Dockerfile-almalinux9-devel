@@ -5,7 +5,6 @@ LABEL maintainer="Maurizio Ungaro <ungaro@jlab.org>"
 SHELL ["/bin/bash", "-c"]
 ENV AUTOBUILD=1
 
-COPY bg_merge_bk_file.sh /bin/bg_merge_bk_file.sh
 COPY localSetupBase.sh /etc/profile.d/localSetup.sh
 
 # JLab certificate
@@ -20,11 +19,11 @@ RUN sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
            /etc/yum.repos.d/almalinux*.repo
 
 # alma specific:
-# crb: for mysql-devel
+# crb: for mysql-devel; epel: provides voms (libvomsapi.so.1) for the OSG xrootd/pelican stack
 # synergy: root, scons, vnc
 RUN    dnf install -y 'dnf-command(config-manager)' \
     && dnf config-manager --set-enabled crb \
-    && dnf install -y almalinux-release-synergy \
+    && dnf install -y almalinux-release-synergy epel-release \
     && sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
               -e 's|^#* *baseurl=https://repo.almalinux.org/almalinux/[^/]*/|baseurl=https://repo.almalinux.org/almalinux/9/|g' \
               /etc/yum.repos.d/almalinux*.repo

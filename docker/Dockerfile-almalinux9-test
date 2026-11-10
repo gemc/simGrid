@@ -3,7 +3,6 @@ LABEL maintainer="Maurizio Ungaro <ungaro@jlab.org>"
 
 # run shell instead of sh
 SHELL ["/bin/bash", "-c"]
-
 ENV AUTOBUILD=1
 
 COPY localSetupBase.sh /etc/profile.d/localSetup.sh
@@ -20,9 +19,14 @@ RUN sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
            /etc/yum.repos.d/almalinux*.repo
 
 # alma specific:
-# crb: for mariadb-devel
+# crb: for mariadb-devel; epel: provides voms (libvomsapi.so.1) for the OSG xrootd/pelican stack
 RUN    dnf install -y 'dnf-command(config-manager)' \
-    && dnf config-manager --set-enabled crb
+    && dnf config-manager --set-enabled crb \
+    && dnf install -y epel-release
+
+
+
+
 
 
 # pelican RPM repository
