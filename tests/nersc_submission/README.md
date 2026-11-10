@@ -1,14 +1,18 @@
-Both probes load the read-only report from `$HOME/software/simgrid/main/generators/bash/functions.sh`.
+# Test Submissions
+
+The jobs load the read-only report from `$HOME/software/simgrid/main/generators/bash/functions.sh`.
 They can run from any submission directory. Keep the repository available at that path on NERSC;
 Slurm copies the batch script alone. Both jobs use `nersc_io/container.sh`.
-`nersc-test-transfer.sbatch` currently runs `environment.sh` inside
-`docker.io/jeffersonlab/clas12software:production`; file-transfer checks will be added here.
+`nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
+`docker.io/jeffersonlab/clas12software:production`: it lists the test area, fetches the template
+`dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It needs a valid
+`osdf://jlab-osdf` bearer token (see `nersc_io/token-renew.zsh`).
 `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
 
 To submit from this directory:
 
 ```
-sbatch nersc-test-transfer.sbatch
+sbatch nersc-test-pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```

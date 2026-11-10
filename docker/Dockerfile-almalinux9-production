@@ -1,4 +1,4 @@
-FROM almalinux:9.4 
+FROM almalinux:9
 LABEL maintainer="Maurizio Ungaro <ungaro@jlab.org>"
 
 # run shell instead of sh
@@ -12,12 +12,22 @@ COPY localSetupBase.sh /etc/profile.d/localSetup.sh
 ADD https://pki.jlab.org/JLabCA.crt /etc/pki/ca-trust/source/anchors/JLabCA.crt
 RUN update-ca-trust 
 
+# Pin the AlmaLinux repos to the authoritative origin (rolling 9): when a point release is retired,
+# third-party mirrors purge its metadata and mirrorlist-based builds fail with 404s. The origin
+# always serves the current release.
+RUN sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
+           -e 's|^#* *baseurl=https://repo.almalinux.org/almalinux/[^/]*/|baseurl=https://repo.almalinux.org/almalinux/9/|g' \
+           /etc/yum.repos.d/almalinux*.repo
+
 # alma specific:
 # crb: for mysql-devel
 # synergy: root, scons, vnc
-RUN    dnf install -y  'dnf-command(config-manager)' \
+RUN    dnf install -y 'dnf-command(config-manager)' \
     && dnf config-manager --set-enabled crb \
-    && dnf install -y almalinux-release-synergy 
+    && dnf install -y almalinux-release-synergy \
+    && sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
+              -e 's|^#* *baseurl=https://repo.almalinux.org/almalinux/[^/]*/|baseurl=https://repo.almalinux.org/almalinux/9/|g' \
+              /etc/yum.repos.d/almalinux*.repo
 
 
 # pelican RPM repository
