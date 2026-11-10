@@ -1,15 +1,21 @@
 # Test Submissions
 
-The jobs load the read-only report from `$HOME/software/simgrid/main/generators/bash/functions.sh`.
-They can run from any submission directory. Keep the repository available at that path on NERSC;
-Slurm copies the batch script alone. Both jobs use `nersc_io/container.sh`.
-`nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
-`docker.io/jeffersonlab/clas12software:production`: it lists the test area, fetches the template
+All jobs use `nersc_io/container.sh`. The available tests are:
+
+
+- `nersc-test-environment.sbatch` runs `environment.sh` inside
+`docker.io/jeffersonlab/clas12software:production`: a read-only probe that reports the system,
+storage, available commands, and loaded modules (`report_environment nersc`).
+- `nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
+`ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
 `dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It needs a valid
 `osdf://jlab-osdf` bearer token (see `nersc_io/token-renew.zsh`).
-`nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
+- `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
+- `nersc-test-lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
+in `lund_files`: each task fetches its Lund file from OSDF and runs GEMC on it. It needs a valid
+`osdf://jlab-osdf` bearer token (see `nersc_io/token-renew.zsh`).
 
-To submit from this directory:
+To submit:
 
 ```
 sbatch nersc-test-pelican-transfer.sbatch
@@ -23,8 +29,6 @@ Explanation:
 - `squeue`: check job status.
 
 Status:
-
-
 
 - `PD`: waiting for resources.
 - `R`: running.
@@ -83,6 +87,32 @@ directory read-only at the same absolute path, including related configuration f
 is added. The batch job runs from `$SCRATCH/simgrid/gemc-tests`.
 Each run creates a separate `output-<jobid>-<suffix>` directory there and retains `gemc.hipo` inside it.
 The full output path is printed in the log. Slurm's log remains in the submission directory.
+
+## Lund workflow
+
+`nersc-test-lund-workflow.sbatch` runs the GEMC trial on staged Lund input instead of the internal
+generator. It is a Slurm job array: each task reads one row of `lund_files` by its array index
+(`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
+matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
+GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are `nersc-lund-workflow-<arrayID>_<taskID>.out`.
+
+The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
+with that default, or size the array to the file's line count:
+
+```shell
+sbatch nersc-test-lund-workflow.sbatch
+sbatch --array=1-$(grep -c . lund_files) nersc-test-lund-workflow.sbatch
+```
+
+`#SBATCH --array` cannot size itself, so `nersc_io/submit-lund-workflow.sh` counts the rows and submits
+the array in one step — the NERSC analog of the OSG `queue lundFile from lund_files` fan-out:
+
+```shell
+nersc_io/submit-lund-workflow.sh [gcard] [nevents] [image]
+```
+
+Each task fetches from OSDF, so a valid `osdf://jlab-osdf` bearer token is required
+(see `nersc_io/token-renew.zsh`).
 
 The shared host launcher handles mounts, metadata forwarding, and container startup. Additional
 arguments are passed unchanged to the node script, and its exit code is returned to the caller.
