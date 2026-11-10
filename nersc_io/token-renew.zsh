@@ -14,4 +14,8 @@ chmod 600 /root/.ssh/id_ed25519
 eval $(ssh-agent -s)
 ssh-add
 htgettoken --nooidc -v -a htvault.jlab.org -i jlab -r clas12 --credkey gemc@jlab.org
+rc=$?
+
+# Always stop the agent, then report htgettoken's status so callers can detect a failed renewal.
 ssh-agent -k
+exit $rc

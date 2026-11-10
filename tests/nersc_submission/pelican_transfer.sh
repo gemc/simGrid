@@ -2,8 +2,7 @@
 # Pelican transfer trial executed inside the NERSC container: list the test area, fetch the
 # template dis.dat, then upload a copy under the first unused dis<N>.dat slot.
 #
-# Requires a valid bearer token for osdf://jlab-osdf (e.g. obtained with nersc_io/token-renew.zsh);
-# without it the get and put operations fail authorization.
+# It renews an osdf://jlab-osdf bearer token in-container with token-renew.zsh before transferring.
 set -euo pipefail
 
 source "${SIMGRID_FUNCTIONS_FILE:-functions.sh}"
@@ -12,6 +11,18 @@ define_exit_codes
 base="osdf://jlab-osdf/clas12/volatile/osg/ungaro/test"
 
 run_timed require_executable pelican
+
+# Obtain an OSDF bearer token before any transfer; token-renew.zsh (mounted from the host .ssh at
+# /sshkeys) writes it to $BEARER_TOKEN_FILE using the gemc ssh key.
+uid=$(id -u)
+export XDG_RUNTIME_DIR="/run/user/$uid"
+export BEARER_TOKEN_FILE="/var/run/user/$uid/bt_u$uid"
+echo "Running token-renew: zsh /sshkeys/token-renew.zsh"
+run_timed zsh /sshkeys/token-renew.zsh
+if [[ ! -s "$BEARER_TOKEN_FILE" ]]; then
+    echo "token-renew did not produce a bearer token at $BEARER_TOKEN_FILE" >&2
+    exit "$EC_INFRASTRUCTURE"
+fi
 
 # input: remote test directory, output: listing captured for slot selection
 cmd=(pelican object ls "$base")

@@ -19,6 +19,20 @@ output_dir=$(mktemp -d "$PWD/output-${SLURM_JOB_ID:-manual}-XXXXXX")
 cd "$output_dir"
 printf 'Output directory: %s\n' "$output_dir"
 
+run_timed require_executable pelican
+
+# Obtain an OSDF bearer token before fetching the Lund file; token-renew.zsh (mounted from the host
+# .ssh at /sshkeys) writes it to $BEARER_TOKEN_FILE using the gemc ssh key.
+uid=$(id -u)
+export XDG_RUNTIME_DIR="/run/user/$uid"
+export BEARER_TOKEN_FILE="/var/run/user/$uid/bt_u$uid"
+echo "Running token-renew: zsh /sshkeys/token-renew.zsh"
+run_timed zsh /sshkeys/token-renew.zsh
+if [[ ! -s "$BEARER_TOKEN_FILE" ]]; then
+    echo "token-renew did not produce a bearer token at $BEARER_TOKEN_FILE" >&2
+    exit "$EC_INFRASTRUCTURE"
+fi
+
 # input: Lund event file on OSDF, output: ./lund.dat consumed by GEMC
 cmd=(pelican object get "$lund_url" lund.dat)
 echo "Running pelican get: ${cmd[@]}"

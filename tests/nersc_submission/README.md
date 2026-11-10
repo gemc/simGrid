@@ -8,12 +8,12 @@ All jobs use `nersc_io/container.sh`. The available tests are:
 storage, available commands, and loaded modules (`report_environment nersc`).
 - `nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
 `ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
-`dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It needs a valid
-`osdf://jlab-osdf` bearer token (see `nersc_io/token-renew.zsh`).
+`dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
+`osdf://jlab-osdf` token in-container with `token-renew.zsh`.
 - `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
 - `nersc-test-lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
-in `lund_files`: each task fetches its Lund file from OSDF and runs GEMC on it. It needs a valid
-`osdf://jlab-osdf` bearer token (see `nersc_io/token-renew.zsh`).
+in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
+Lund file from OSDF, and runs GEMC on it.
 
 To submit:
 
@@ -111,8 +111,10 @@ the array in one step — the NERSC analog of the OSG `queue lundFile from lund_
 nersc_io/submit-lund-workflow.sh [gcard] [nevents] [image]
 ```
 
-Each task fetches from OSDF, so a valid `osdf://jlab-osdf` bearer token is required
-(see `nersc_io/token-renew.zsh`).
+Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer token by running
+`/sshkeys/token-renew.zsh` in-container. The launcher mounts the host `$HOME/.ssh` (holding both
+`id_ed25519` and `token-renew.zsh`) read-only at `/sshkeys`, and the token is written to
+`$BEARER_TOKEN_FILE`. The job fails fast if no token is produced.
 
 The shared host launcher handles mounts, metadata forwarding, and container startup. Additional
 arguments are passed unchanged to the node script, and its exit code is returned to the caller.

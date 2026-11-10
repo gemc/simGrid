@@ -49,5 +49,6 @@ work_dir="$SCRATCH/simgrid/gemc-tests"
 mkdir -p "$work_dir"
 cd "$work_dir"
 
-# The Lund fetch needs a valid osdf://jlab-osdf bearer token (see nersc_io/token-renew.zsh).
+# Each task renews an osdf://jlab-osdf token with token-renew.zsh; the launcher mounts the
+# host .ssh (key + script) at /sshkeys.
 run_nersc_container "$image" "$repo_dir/tests/nersc_submission/nodescript-lund.sh"  "$gcard" "$nevents" "$lund_file"

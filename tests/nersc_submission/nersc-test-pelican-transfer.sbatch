@@ -23,5 +23,6 @@ work_dir="$SCRATCH/simgrid/pelican-tests"
 mkdir -p "$work_dir"
 cd "$work_dir"
 
-# The transfer needs a valid osdf://jlab-osdf bearer token (see nersc_io/token-renew.zsh).
+# The node script renews an osdf://jlab-osdf token with token-renew.zsh; the launcher mounts the
+# host .ssh (key + script) at /sshkeys.
 run_nersc_container "$image" "$repo_dir/tests/nersc_submission/pelican_transfer.sh"
