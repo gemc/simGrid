@@ -112,14 +112,14 @@ scripting it — launch it interactively with `podman-hpc run`. Mount the `.ssh`
 `token-renew` can install the JLab key and request a token:
 
 ```shell
-podman-hpc run -it --rm -v "$HOME/.ssh:/sshkeys:ro" docker.io/jeffersonlab/clas12software:production bash
+podman-hpc run -it --rm -v "$HOME/.ssh:/sshkeys:ro" ghcr.io/gemc/simgrid:test bash
 ```
 
 Once inside the container:
 
 ```shell
 # install the JLab key, create missing dirs, and request a new token
-/sshkeys/token-renew
+/sshkeys/token-renew.zsh
 
 # show the tokens currently held
 httokendecode -H

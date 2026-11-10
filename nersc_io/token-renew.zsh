@@ -5,13 +5,11 @@ uid=$(id -u)
 export XDG_RUNTIME_DIR=/run/user/$uid
 export BEARER_TOKEN_FILE=/var/run/user/$uid/bt_u$uid
 
-# first time run
+mkdir -p /root/.ssh
+cp /sshkeys/id_ed25519 /root/.ssh
+[ -d /var/run/user/$uid ] || mkdir -p /var/run/user/$uid
+chmod 600 /root/.ssh/id_ed25519
 
-if [ -d /root/.ssh ]; then
-	cp /sshkeys/id_ed25519 /root/.ssh
-	[ -d /var/run/user/$uid ] || mkdir -p /var/run/user/$uid
-	chmod 600 /root/.ssh/id_ed25519
-fi
 
 eval $(ssh-agent -s)
 ssh-add
