@@ -11,6 +11,40 @@ from generators.bash.generate_nodescript import generate_nodescript
 
 
 class RunSelectionTests(unittest.TestCase):
+    def test_background_lookup_uses_base_configuration_and_preserves_geometry(self):
+        for configuration, background_configuration in (
+            ("rge_spring2024_sol", "rge_spring2024"),
+            ("rge_spring2024_liq", "rge_spring2024"),
+            ("rge_spring2024", "rge_spring2024"),
+            ("rgd_fall2023", "rgd_fall2023"),
+            ("example_sol_extra", "example_sol_extra"),
+        ):
+            with self.subTest(configuration=configuration):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    config = SConfiguration.from_string(
+                        "configuration: {}\nsoftwarev: gemc/6.1 coatjava/14.1.2\n"
+                        "generator: gemc\noutput_type: 1\nfields: tor+1.00_sol-1.00\n"
+                        "bkmerging: Pb_D2/70nA_10547MeV\n".format(configuration)
+                    )
+                    with tempfile.TemporaryDirectory() as directory:
+                        output = Path(directory) / "nodescript.sh"
+                        generate_nodescript(config, 12236, output_file=str(output))
+                        script = output.read_text()
+                self.assertIn(
+                    "/backgroundfiles/{}/tor+1.00_sol-1.00/Pb_D2/70nA_10547MeV/10k/".format(
+                        background_configuration,
+                    ), script,
+                )
+                self.assertIn(
+                    'run_timed fetch_background_file "{}" "tor+1.00_sol-1.00" '
+                    '"Pb_D2/70nA_10547MeV"'.format(background_configuration), script,
+                )
+                self.assertIn('/gemc/6.1/{}.gcard'.format(configuration), script)
+                self.assertIn(
+                    'run_timed setup_job_files "14.1.2" "6.1" "{}"'.format(configuration), script,
+                )
+                self.assertEqual(config.configuration, configuration)
+
     def configuration(self, version, runs="", generator="gemc"):
         with contextlib.redirect_stdout(io.StringIO()):
             return SConfiguration.from_string(

@@ -71,6 +71,10 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 	needs_coatjava = not gemc_only or (
 			sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
 	)
+	# Solid and liquid target variants share the base configuration's background files.
+	background_configuration = sconfiguration.configuration or ""
+	if background_configuration.endswith(("_sol", "_liq")):
+		background_configuration = background_configuration[:-4]
 	modules_to_load = [
 		'gemc/{gemcv}'.format(gemcv=sconfiguration.gemcv or "latest"),
 		'sqlite/{gemcv}'.format(gemcv=sconfiguration.gemcv or "latest"),
@@ -149,7 +153,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 			'/{configuration}/{fields}/{bkmerging}/10k/ (random hipo file)"\n'
 			'run_timed fetch_background_file "{configuration}" "{fields}" "{bkmerging}"\n'
 		).format(
-			configuration=sconfiguration.configuration or "",
+			configuration=background_configuration,
 			fields=sconfiguration.fields or "",
 			bkmerging=sconfiguration.bkmerging or "",
 		) if sconfiguration.bkmerging and sconfiguration.bkmerging != 'no'
