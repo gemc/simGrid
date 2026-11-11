@@ -1,0 +1,47 @@
+FROM almalinux:9
+LABEL maintainer="Maurizio Ungaro <ungaro@jlab.org>"
+
+# run shell instead of sh
+SHELL ["/bin/bash", "-c"]
+ENV AUTOBUILD=1
+
+COPY localSetupBase.sh /etc/profile.d/localSetup.sh
+
+# JLab certificate
+ADD https://pki.jlab.org/JLabCA.crt /etc/pki/ca-trust/source/anchors/JLabCA.crt
+RUN update-ca-trust 
+
+# Pin the AlmaLinux repos to the authoritative origin (rolling 9): when a point release is retired,
+# third-party mirrors purge its metadata and mirrorlist-based builds fail with 404s. The origin
+# always serves the current release.
+RUN sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \
+           -e 's|^#* *baseurl=https://repo.almalinux.org/almalinux/[^/]*/|baseurl=https://repo.almalinux.org/almalinux/9/|g' \
+           /etc/yum.repos.d/almalinux*.repo
+
+# alma specific:
+# crb: for mariadb-devel; epel: provides voms (libvomsapi.so.1) for the OSG xrootd/pelican stack
+RUN    dnf install -y 'dnf-command(config-manager)' \
+    && dnf config-manager --set-enabled crb \
+    && dnf install -y epel-release
+
+
+
+
+
+
+# pelican RPM repository
+RUN rpm -i https://repo.osg-htc.org/osg/24-main/osg-24-main-el9-release-latest.rpm 
+
+RUN echo "module use /cvmfs/jlab.opensciencegrid.org/geant4/modules" >> /etc/profile.d/localSetup.sh
+
+RUN dnf install -y --allowerasing \
+    mariadb-devel python3-numpy gcc binutils lsof bzip2 wget curl nano bash tcsh zsh hostname \
+    environment-modules rsync patch which pelican pelican-osdf-compat pelican-server htgettoken \
+    openssh-clients \
+ && dnf -y update \
+ && dnf clean packages \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+
+

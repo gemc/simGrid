@@ -7,7 +7,8 @@ from run_list.txt, validates that every requested run has a weight, normalizes
 the weights of the requested runs to sum to 1, and prints ONE run number chosen
 at random in proportion to those weights.
 
-Usage:  select_run.py <runs.json> <run_list.txt>
+Usage:  select_run.py <runs.json> <run_list.txt> [seed]
+An optional seed repeats the same weighted draw for retries with unchanged inputs.
 
 Only the chosen run number is written to stdout (so the caller can capture it).
 Any error — a run absent from runs.json, an empty list, or non-positive
@@ -46,8 +47,8 @@ def load_run_list(path):
 
 
 def main(argv):
-    if len(argv) != 3:
-        sys.stderr.write("usage: select_run.py <runs.json> <run_list.txt>\n")
+    if len(argv) not in (3, 4):
+        sys.stderr.write("usage: select_run.py <runs.json> <run_list.txt> [seed]\n")
         return 2
 
     runs_json, run_list_file = argv[1], argv[2]
@@ -78,7 +79,8 @@ def main(argv):
 
     # Normalize the requested runs' weights to sum to 1, then draw one run.
     normalized = [w / total for w in weights]
-    chosen = random.choices(runs, weights=normalized, k=1)[0]
+    picker = random.Random(argv[3]) if len(argv) == 4 else random
+    chosen = picker.choices(runs, weights=normalized, k=1)[0]
     sys.stdout.write(chosen + "\n")
     return 0
 

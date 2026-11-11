@@ -1,0 +1,212 @@
+"""Verify that only successful HIPO tests generate exact Condor process removals."""
+
+import io
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+from condor_io.validate_review_outputs import main
+
+
+SCRIPT = Path(__file__).parents[1] / "condor_io" / "validate_review_outputs.py"
+
+
+class ValidateReviewOutputsTests(unittest.TestCase):
+    def run_validation(self, names, *, existing_output=None, have_validator=True,
+                       remove_failed=False, expected_existing=None, job_ids=None, cluster_id=9624):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / "bin"
+            tools.mkdir()
+            calls = root / "calls.txt"
+            validator = tools / "hipo-utils"
+            if have_validator:
+                validator.write_text(
+                    '#!/bin/bash\n'
+                    '[[ $1 == -test ]] || exit 99\n'
+                    'printf "%s\\n" "$2" >> "$TEST_CALLS"\n'
+                    'case "$2" in\n'
+                    '  *bad*) echo "status check : OK"; exit 1 ;;\n'
+                    '  *) exit 0 ;;\n'
+                    'esac\n'
+                )
+                validator.chmod(0o700)
+            paths = [root / name for name in names]
+            for path in paths:
+                if "missing" not in path.name:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("test HIPO data")
+            listing = root / "files-to-review.txt"
+            rows = map(str, paths) if job_ids is None else (
+                "{}\t{}".format(job_id, path) for job_id, path in zip(job_ids, paths)
+            )
+            listing.write_text("\n".join(rows) + "\n")
+            output = root / "remove-verified-jobs.sh"
+            if existing_output is not None:
+                output.write_text(existing_output)
+            env = os.environ.copy()
+            env["PATH"] = str(tools) + os.pathsep + "/usr/bin:/bin"
+            env["TEST_CALLS"] = str(calls)
+            command = [sys.executable, str(SCRIPT), str(listing), "-o", str(output)]
+            if cluster_id is not None:
+                command.extend(["--cluster-id", str(cluster_id)])
+            if remove_failed:
+                command.append("--remove-failed")
+            result = subprocess.run(
+                command,
+                cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+            )
+            generated = output.read_text() if output.exists() else None
+            checked = calls.read_text().splitlines() if calls.exists() else []
+            for name, expected in (expected_existing or {}).items():
+                self.assertEqual((root / name).exists(), expected, name)
+            # A real condor_rm is never needed: validation must only write its commands.
+            return result, generated, checked
+
+    def test_only_good_files_generate_removals_using_the_supplied_cluster(self):
+        result, script, checked = self.run_validation([
+            "rgc-spring-12147-6973.hipo", "bad-12147-6974.hipo", "missing-12147-6975.hipo",
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(checked), 2)
+        self.assertEqual(script, "condor_rm 9624.6973\n")
+        self.assertNotIn("condor_rm 9624.6974", script)
+        self.assertNotIn("condor_rm 9624.6975", script)
+        self.assertNotIn("condor_rm 12147.", script)
+        self.assertIn("No Condor jobs were removed", result.stderr)
+        syntax = subprocess.run(
+            ["bash", "-n"], input=script, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+
+    def test_multiple_submissions_are_rejected_before_testing_files(self):
+        result, script, checked = self.run_validation(["good-12147-6973.hipo", "good-12148-6974.hipo"])
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("multiple portal submissions", result.stderr)
+        self.assertIsNone(script)
+        self.assertEqual(checked, [])
+
+    def test_annotated_list_validates_multiple_clusters_without_a_manual_cluster_id(self):
+        result, script, checked = self.run_validation(
+            ["good-12147-6973.hipo", "bad-12069-14.hipo", "good-12069-15.hipo"],
+            job_ids=["9624.6973", "9540.14", "9540.15"], cluster_id=None,
+            remove_failed=True, expected_existing={
+                "good-12147-6973.hipo": True, "bad-12069-14.hipo": False, "good-12069-15.hipo": True,
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "condor_rm 9540.15\ncondor_rm 9624.6973\n")
+        self.assertEqual(len(checked), 3)
+
+    def test_one_file_is_validated_once_for_multiple_matching_condor_jobs(self):
+        result, script, checked = self.run_validation(
+            ["good-12147-6973.hipo", "good-12147-6973.hipo"],
+            job_ids=["9624.6973", "9999.6973"], cluster_id=None,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "condor_rm 9624.6973\ncondor_rm 9999.6973\n")
+        self.assertEqual(len(checked), 1)
+
+    def test_mismatched_or_invalid_job_ids_are_rejected_before_validation_or_deletion(self):
+        for job_id in ("9624.1", "invalid-id"):
+            with self.subTest(job_id=job_id):
+                result, script, checked = self.run_validation(
+                    ["bad-12147-6973.hipo"], job_ids=[job_id], cluster_id=None, remove_failed=True,
+                    expected_existing={"bad-12147-6973.hipo": True},
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIsNone(script)
+                self.assertEqual(checked, [])
+
+    def test_explicit_cluster_id_cannot_override_a_different_recorded_job_id(self):
+        result, script, checked = self.run_validation(["good-12147-6973.hipo"], job_ids=["9540.6973"])
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("conflicts with --cluster-id", result.stderr)
+        self.assertIsNone(script)
+        self.assertEqual(checked, [])
+
+    def test_legacy_path_only_lists_still_require_a_cluster_id(self):
+        result, script, checked = self.run_validation(["good-12147-6973.hipo"], cluster_id=None)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Path-only lists require --cluster-id", result.stderr)
+        self.assertIsNone(script)
+        self.assertEqual(checked, [])
+
+    def test_unrecognized_filename_is_rejected(self):
+        result, script, checked = self.run_validation(["unrecognized.hipo"])
+        self.assertEqual(result.returncode, 1)
+        self.assertIsNone(script)
+        self.assertEqual(checked, [])
+
+    def test_duplicate_paths_and_processes_do_not_duplicate_removal_commands(self):
+        result, script, checked = self.run_validation([
+            "good-12147-0.hipo", "good-12147-0.hipo", "copy/good-12147-0.hipo",
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(checked), 2)
+        self.assertEqual(script, "condor_rm 9624.0\n")
+
+    def test_existing_output_script_is_preserved(self):
+        result, script, checked = self.run_validation(["good-12147-6973.hipo"], existing_output="keep me\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(script, "keep me\n")
+        self.assertEqual(checked, [])
+
+    def test_missing_validation_tool_cannot_generate_removals(self):
+        result, script, checked = self.run_validation(
+            ["bad-12147-6973.hipo"], have_validator=False, remove_failed=True,
+            expected_existing={"bad-12147-6973.hipo": True},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("hipo-utils was not found", result.stderr)
+        self.assertIsNone(script)
+        self.assertEqual(checked, [])
+
+    def test_remove_failed_deletes_only_failed_files_and_preserves_good_results(self):
+        names = ["good-12147-6973.hipo", "bad-12147-6974.hipo", "missing-12147-6975.hipo"]
+        result, script, checked = self.run_validation(
+            names, remove_failed=True, expected_existing=dict(zip(names, (True, False, False))),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "condor_rm 9624.6973\n")
+        self.assertEqual(len(checked), 2)
+        self.assertIn("Removed 1 failed HIPO files; 0 removal errors", result.stderr)
+
+    def test_failed_files_are_preserved_without_the_removal_flag(self):
+        result, script, checked = self.run_validation(
+            ["bad-12147-6973.hipo"], expected_existing={"bad-12147-6973.hipo": True},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "")
+        self.assertEqual(len(checked), 1)
+        self.assertIn("Removed 0 failed HIPO files", result.stderr)
+
+    def test_deletion_error_is_reported_without_losing_verified_job_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bad = root / "bad-12147-6974.hipo"
+            good = root / "good-12147-6973.hipo"
+            bad.write_text("bad data")
+            good.write_text("good data")
+            listing = root / "files.txt"
+            listing.write_text("{}\n{}\n".format(bad, good))
+            output = root / "commands.sh"
+            with mock.patch("condor_io.validate_review_outputs.shutil.which", return_value="hipo-utils"), \
+                    mock.patch("condor_io.validate_review_outputs.subprocess.run", side_effect=[
+                        subprocess.CompletedProcess([], 1), subprocess.CompletedProcess([], 0),
+                    ]), mock.patch.object(Path, "unlink", side_effect=PermissionError("denied")), \
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as errors:
+                result = main([str(listing), "--cluster-id", "9624", "--remove-failed", "-o", str(output)])
+            self.assertEqual(result, 1)
+            self.assertTrue(bad.exists())
+            self.assertTrue(good.exists())
+            self.assertEqual(output.read_text(), "condor_rm 9624.6973\n")
+            self.assertIn("Could not remove", errors.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

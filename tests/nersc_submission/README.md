@@ -1,12 +1,24 @@
-Both probes load the read-only report from `$HOME/software/simgrid/main/generators/bash/functions.sh`.
-They can run from any submission directory. Keep the repository available at that path on NERSC;
-Slurm copies the batch script alone. The container probe also uses `nersc_io/container.sh` and
-`tests/nersc_submission/nodescript.sh` from the repository.
+# Test Submissions
 
-To submit from this directory:
+All jobs use `nersc_io/container.sh`. The available tests are:
+
+
+- `nersc-test-environment.sbatch` runs `environment.sh` inside
+`docker.io/jeffersonlab/clas12software:production`: a read-only probe that reports the system,
+storage, available commands, and loaded modules (`report_environment nersc`).
+- `nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
+`ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
+`dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
+`osdf://jlab-osdf` token in-container with `token-renew.zsh`.
+- `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
+- `nersc-test-lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
+in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
+Lund file from OSDF, and runs GEMC on it.
+
+To submit:
 
 ```
-sbatch nersc-test_environment.sbatch
+sbatch nersc-test-pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```
@@ -18,8 +30,6 @@ Explanation:
 
 Status:
 
-
-
 - `PD`: waiting for resources.
 - `R`: running.
 - `No job row`: it has left the queue; check the final outcome:
@@ -27,7 +37,7 @@ Status:
 After it finishes:
 
 ```
-cat "nersc-probe-${job_id}.out"
+cat "nersc-transfer-${job_id}.out"
 sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,AllocCPUS
 ```
 
@@ -47,16 +57,16 @@ The GEMC trial defaults to `docker.io/jeffersonlab/gemc:dev-almalinux94`, alread
 and the detector gcard `/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard`.
 
 ```shell
-job_id=$(sbatch --parsable nersc-test_gemc_image.sbatch)
+job_id=$(sbatch --parsable nersc-test-workflow.sbatch)
 # After completion:
-cat "nersc-gemc-image-${job_id}.out"
+cat "nersc-workflow-${job_id}.out"
 ```
 
 The optional arguments are `[gcard] [nevents] [image]`. The default event count is 100.
 An empty gcard argument preserves the default. To select another image:
 
 ```shell
-sbatch nersc-test_gemc_image.sbatch "" 100 docker.io/jeffersonlab/clas12software:production
+sbatch nersc-test-workflow.sbatch "" 100 docker.io/jeffersonlab/clas12software:production
 ```
 
 The batch script defines resources and selects the image. `nodescript.sh` follows the command-array
@@ -78,6 +88,34 @@ is added. The batch job runs from `$SCRATCH/simgrid/gemc-tests`.
 Each run creates a separate `output-<jobid>-<suffix>` directory there and retains `gemc.hipo` inside it.
 The full output path is printed in the log. Slurm's log remains in the submission directory.
 
+## Lund workflow
+
+`nersc-test-lund-workflow.sbatch` runs the GEMC trial on staged Lund input instead of the internal
+generator. It is a Slurm job array: each task reads one row of `lund_files` by its array index
+(`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
+matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
+GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are `nersc-lund-workflow-<arrayID>_<taskID>.out`.
+
+The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
+with that default, or size the array to the file's line count:
+
+```shell
+sbatch nersc-test-lund-workflow.sbatch
+sbatch --array=1-$(grep -c . lund_files) nersc-test-lund-workflow.sbatch
+```
+
+`#SBATCH --array` cannot size itself, so `nersc_io/submit-lund-workflow.sh` counts the rows and submits
+the array in one step — the NERSC analog of the OSG `queue lundFile from lund_files` fan-out:
+
+```shell
+nersc_io/submit-lund-workflow.sh [gcard] [nevents] [image]
+```
+
+Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer token by running
+`/sshkeys/token-renew.zsh` in-container. The launcher mounts the host `$HOME/.ssh` (holding both
+`id_ed25519` and `token-renew.zsh`) read-only at `/sshkeys`, and the token is written to
+`$BEARER_TOKEN_FILE`. The job fails fast if no token is produced.
+
 The shared host launcher handles mounts, metadata forwarding, and container startup. Additional
 arguments are passed unchanged to the node script, and its exit code is returned to the caller.
 From an interactive compute allocation, the equivalent standalone call is:
@@ -95,8 +133,26 @@ run_nersc_container docker.io/jeffersonlab/gemc:dev-almalinux94 \
 The launcher mounts the current directory read-write and the node script and shared functions read-only.
 It exposes `SIMGRID_FUNCTIONS_FILE` and `SIMGRID_BACKEND` to the container. A caller can set
 `SIMGRID_FUNCTIONS_FILE` before launching to use a different host copy of the shared functions.
-Use Slurm for simulation execution; a standalone invocation runs on the calling node. Login-node
-container tests should use a separate diagnostic script containing only environment checks.
+Use Slurm for simulation execution; a standalone invocation runs on the calling node. To run only the
+environment report directly on a login node, use:
+
+```shell
+repo_dir="$HOME/software/simgrid/main"
+source "$repo_dir/nersc_io/container.sh"
+run_nersc_container docker.io/jeffersonlab/clas12software:production \
+    "$repo_dir/tests/nersc_submission/environment.sh"
+```
+
+To open an interactive container shell on a login node:
+
+```shell
+podman-hpc run --rm -it --pull=never \
+    --entrypoint /bin/bash \
+    docker.io/jeffersonlab/clas12software:production -l
+```
+
+Replace the image reference to use another image already pulled with `podman-hpc pull`. Type `exit`
+to return to the login-node shell. Add explicit volume mounts when host files are needed in the container.
 
 The shared reporting API is:
 

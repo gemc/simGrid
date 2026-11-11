@@ -43,6 +43,12 @@ run_nersc_container() {
         --env SIMGRID_BACKEND=nersc
         --entrypoint /bin/bash
     )
+
+    # Mount the host ssh keys so node scripts can renew an OSDF bearer token with token-renew.zsh.
+    if [[ -d "$HOME/.ssh" ]]; then
+        cmd+=(--volume "$HOME/.ssh:/sshkeys:ro")
+    fi
+
     if [[ -n "$config_dir" ]]; then
         [[ "$config_dir" == /* ]] || config_dir="$PWD/$config_dir"
         if [[ ! -d "$config_dir" || ! -r "$config_dir" || ! -x "$config_dir" ]]; then

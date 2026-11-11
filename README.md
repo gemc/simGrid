@@ -87,11 +87,20 @@ Every pipeline step in `nodescript.sh` follows the same pattern: a `# input/outp
 an explicit `cmd=(...)` array, a descriptive `echo "Running …: ${cmd[@]}"`, and
 `run_timed <fn> "${cmd[@]}"`.
 
+Upcoming in the next release: before downloading inputs or running the simulation, new jobs use
+`pelican object ls` to check their exact final output URI. If it exists, the job downloads a temporary
+copy and runs `hipo-utils -test`. Exit code zero completes the job successfully without rerunning
+the workflow. A failed integrity check holds the job for manual cleanup at JLab; a failed download
+returns a retryable infrastructure error. If the URI cannot be listed, the normal workflow continues.
+Weighted run selection uses the submission ID and subjob number as a seed, so retries with unchanged
+staged weights and run lists select the same run and check the same filename. No selection is stored.
+
 Full pipeline (default):
 
 ```
-preamble → environment variables → clean_and_check_environment → setup_job_files
+preamble → environment variables → clean_and_check_environment
   → Pelican environment setup
+  → [weighted run selection] → existing output check → setup_job_files
   → [fetch_background_file]            # only when bkmerging is set
   → lund_or_generator                  # pelican fetch (type-2) or run_generator cmd array
   → run_gemc                           # gemc.hipo
@@ -130,6 +139,56 @@ to `Not Submitted`. Every transition compacts the remaining pending priorities t
 | `--print-nodescript` | Print the generated `nodescript.sh` to stdout |
 | `--print-condor-card` | Print the generated HTCondor submit file to stdout |
 | `--target-site SITE` | Pin all jobs to one `GLIDEIN_Site` (e.g. `CNAF`) |
+
+## Recovering jobs with existing output files
+
+Upcoming in the next release: the scripts below identify output conflicts, validate the existing
+HIPO results, and generate commands to remove the corresponding jobs from HTCondor. Run the Python
+commands from a simGrid checkout. These recovery scripts support Python 3.6 and later and use only
+the standard library. PyMySQL is not required; the scanner also needs `condor_q` on the submit node.
+
+1. On the submit node, scan all submissions for ongoing Condor jobs:
+
+   ```shell
+   python3 condor_io/list_existing_outputs.py ~/osgOutput > files-to-review.txt
+   ```
+
+   The scanner queries the live queue for owner `gemc` (override with `--owner`). It reads logs only
+   for idle, running, held, transferring, or suspended jobs; completed, removed, and historical jobs
+   are excluded. If the query fails, scanning stops rather than including old submissions.
+   Each output row contains a Condor job ID and JLab filesystem path separated by a tab. The ID
+   comes from the `job.<cluster>.<process>.out` filename. Rows are unique per job and file pair.
+   A conflict does not imply corruption; the existing file may be a completed result from an
+   earlier attempt.
+
+2. Copy the list to a JLab host where those files are accessible and `hipo-utils` is in `PATH`.
+   Validate the files and generate a removal script:
+
+   ```shell
+   python3 condor_io/validate_review_outputs.py files-to-review.txt -o remove-verified-jobs.sh
+   ```
+
+   Job IDs are read directly from the list, so it can span portal submissions and Condor clusters.
+   Each unique file is tested once; a passing file generates commands for all its associated jobs.
+   A row with job ID `9624.6973` produces `condor_rm 9624.6973`. The process number must match the
+   output filename. Old path-only lists still require `--cluster-id` and one portal submission.
+   Only `hipo-utils -test` exit code zero qualifies. Missing files and failed tests produce no
+   Condor removal commands.
+   The output script must not already exist.
+
+   Add `--remove-failed` to delete local HIPO files whose integrity tests return nonzero. Good files
+   are preserved and still generate Condor removal commands. Without this flag, no HIPO files are
+   deleted. Missing files are always skipped; failed deletions are reported and give a nonzero exit.
+
+3. Review `remove-verified-jobs.sh`, copy it to the submit node, and execute it there:
+
+   ```shell
+   bash remove-verified-jobs.sh
+   ```
+
+Validation does not remove Condor jobs. It removes failed HIPO files only with `--remove-failed`.
+Executing the generated script removes the listed Condor jobs while preserving their verified HIPO
+results at JLab.
 
 ## Submission and priority workflow
 

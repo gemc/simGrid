@@ -8,14 +8,15 @@ at random, weighted by the per-run luminosity weights in runs.json. Both files â
 runs.json and run_list.txt â€” are staged to the worker node (see osg_submit.py);
 the draw itself is performed at runtime by select_weighted_run in functions.sh,
 which delegates to select_run.py. This generator only wires the call that
-captures the chosen run number into the `runno` bash variable.
+captures the chosen run number into the `runno` bash variable. The submission
+ID and subjob number seed the draw so retries keep the same output filename.
 """
 
 RUNS_JSON_FILE = "runs.json"
 RUN_LIST_FILE  = "run_list.txt"
 
 
-def create_run_selection(sconfiguration):
+def create_run_selection(sconfiguration, user_submission_id):
     """Return the bash block that sets `runno` from the weighted draw, or "".
 
     Returns "" when the submission has no run_list.
@@ -26,6 +27,7 @@ def create_run_selection(sconfiguration):
     return (
         '\n# Run-by-run selection: pick one run weighted by luminosity\n'
         '# (from {runs_json}) restricted to the submitted runs ({run_list}).\n'
-        'runno=$(select_weighted_run "{runs_json}" "{run_list}")\n'
+        '# Repeat the same draw on retries using the submission and subjob IDs.\n'
+        'runno=$(select_weighted_run "{runs_json}" "{run_list}" "{submission_id}:$sjob")\n'
         'echo "Run-by-run selection: runno=$runno"\n'
-    ).format(runs_json=RUNS_JSON_FILE, run_list=RUN_LIST_FILE)
+    ).format(runs_json=RUNS_JSON_FILE, run_list=RUN_LIST_FILE, submission_id=user_submission_id)

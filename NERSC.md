@@ -1,6 +1,10 @@
 # NERSC
 
+
 [Documentation Home](https://docs.nersc.gov)
+
+[Iris Login](https://iris.nersc.gov/login)
+
 
 ## Permutter
 
@@ -12,7 +16,13 @@ There are two kinds we would use:
 - Login nodes: where you connect through SSH, prepare files, and submit jobs.
 - Compute nodes: where Slurm schedules our GEMC instances to run.
 
-So `ssh mungaro@perlmutter.nersc.gov` connects you to a login node belonging to that system.
+To login:
+
+
+```
+ssh mungaro@perlmutter.nersc.gov
+```
+
 
 NERSC is the facility; Perlmutter is the computing system.
 
@@ -44,6 +54,21 @@ showquota m5464
 
 <br/>
 
+## Pelican Token 
+
+Inside the containers, pelican and htcondor are installed. 
+
+The ssh elliptical key id_ed25519 from the gemc account in the scosg2022 submit node is copied to the permutter login node.
+The .ssh directory is then mounted in the container with `-v $HOME/.ssh:/sshkeys:ro`
+
+The script `token-renew` in nerc_io, copied into the local .ssh dir in permutter,  is used to copy the jlab key in place, create missing dirs if necessary, and get a new token.
+
+### Other utilities
+
+- show tokens: `httokendecode -H`
+
+<br/>
+
 ## Container Images
 
 Podman runs containers, much like Docker.
@@ -70,12 +95,43 @@ Our batch script will ask Slurm for resources, then use Podman-HPC to run the si
 
 ```
 podman-hpc pull docker.io/jeffersonlab/clas12software:production
-podman-hpc pull docker.io/jeffersonlab/gemc:dev-almalinux94
+podman-hpc pull ghcr.io/gemc/simgrid:test
 podman-hpc images
 ```
 
 NERSC documents that pulled images are automatically prepared for execution in jobs.
 Podman-HPC instructions (https://docs.nersc.gov/development/containers/podman-hpc/overview/#pulling-images).
+
+## Running Container
+
+For batch jobs, `nersc_io/container.sh` provides `run_nersc_container <image> <nodescript> [args...]`, which
+mounts a worker script and runs it non-interactively.
+
+To work inside an image by hand — renewing a token, inspecting OSDF storage, or trying a command before
+scripting it — launch it interactively with `podman-hpc run`. Mount the `.ssh` directory at `/sshkeys` so that
+`token-renew` can install the JLab key and request a token:
+
+```shell
+podman-hpc run -it --rm -v "$HOME/.ssh:/sshkeys:ro" ghcr.io/gemc/simgrid:test bash
+```
+
+Once inside the container:
+
+```shell
+# install the JLab key, create missing dirs, and request a new token
+/sshkeys/token-renew.zsh
+
+# show the tokens currently held
+httokendecode -H
+
+# list the portal output area on OSDF
+pelican object ls osdf://jlab-osdf/clas12/volatile/osg/
+```
+
+The `.ssh` directory holds both `id_ed25519` (the key `token-renew` copies into place) and `token-renew.zsh`
+itself, so the script is reachable at `/sshkeys/token-renew.zsh` inside the container.
+
+<br/>
 
 ## Scrontab
 
