@@ -64,7 +64,9 @@ def create_merge_background(sconfiguration):
         return 'echo "Background merging not requested — skipping."\n'
     return (
         '\n# Background Merging\n'
-        'echo "input: gemc.hipo + $BG_FILE, output: gemc.merged.hipo"\n'
+        '# input: gemc.hipo + $BG_FILE_URI (original source), output: gemc.merged.hipo\n'
+        '# The merger reads the downloaded local file $BG_FILE.\n'
+        'echo "input: gemc.hipo + $BG_FILE_URI, output: gemc.merged.hipo"\n'
         'unload_module_if_loaded gemc\n'
         'run_timed load_module "jdk/21.0.2"\n'
         'run_timed load_module "coatjava/{coatjavav}"\n'

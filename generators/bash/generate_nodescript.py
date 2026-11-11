@@ -161,7 +161,7 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 
 		create_lund_or_generator(sconfiguration),
 
-		create_run_selection(sconfiguration),
+		create_run_selection(sconfiguration, user_submission_id),
 
 		create_run_gemc(sconfiguration),
 

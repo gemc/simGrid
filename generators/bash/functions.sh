@@ -417,6 +417,7 @@ run_generator() {
 # ── fetch_background_file ──────────────────────────────────────────────────
 # Fetch a random background hipo file from OSDF for background merging.
 # Reads globals: CONFIGURATION, FIELDS, BKMERGING (exported by setup_job_parameters).
+# Sets BG_FILE to the downloaded filename and BG_FILE_URI to its original OSDF source.
 # Exits with EC_BG_MISSING if ls fails or no files found, EC_BG_FETCH if download fails.
 fetch_background_file() {
     local configuration="$1"
@@ -450,6 +451,7 @@ fetch_background_file() {
         rm -f "$BG_FILE"
         return $EC_BG_FETCH
     fi
+    BG_FILE_URI="$bgfile"
     echo "Background file downloaded: ${BG_FILE}"
 }
 
