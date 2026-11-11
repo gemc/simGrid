@@ -1,18 +1,23 @@
 """Verify that only successful HIPO tests generate exact Condor process removals."""
 
+import io
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+
+from condor_io.validate_review_outputs import main
 
 
 SCRIPT = Path(__file__).parents[1] / "condor_io" / "validate_review_outputs.py"
 
 
 class ValidateReviewOutputsTests(unittest.TestCase):
-    def run_validation(self, names, *, existing_output=None, have_validator=True):
+    def run_validation(self, names, *, existing_output=None, have_validator=True,
+                       remove_failed=False, expected_existing=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tools = root / "bin"
@@ -43,12 +48,17 @@ class ValidateReviewOutputsTests(unittest.TestCase):
             env = os.environ.copy()
             env["PATH"] = str(tools) + os.pathsep + "/usr/bin:/bin"
             env["TEST_CALLS"] = str(calls)
+            command = [sys.executable, str(SCRIPT), str(listing), "--cluster-id", "9624", "-o", str(output)]
+            if remove_failed:
+                command.append("--remove-failed")
             result = subprocess.run(
-                [sys.executable, str(SCRIPT), str(listing), "--cluster-id", "9624", "-o", str(output)],
+                command,
                 cwd=root, env=env, capture_output=True, text=True,
             )
             generated = output.read_text() if output.exists() else None
             checked = calls.read_text().splitlines() if calls.exists() else []
+            for name, expected in (expected_existing or {}).items():
+                self.assertEqual((root / name).exists(), expected, name)
             # A real condor_rm is never needed: validation must only write its commands.
             return result, generated, checked
 
@@ -62,7 +72,7 @@ class ValidateReviewOutputsTests(unittest.TestCase):
         self.assertNotIn("condor_rm 9624.6974", script)
         self.assertNotIn("condor_rm 9624.6975", script)
         self.assertNotIn("condor_rm 12147.", script)
-        self.assertIn("Nothing was removed", result.stderr)
+        self.assertIn("No Condor jobs were removed", result.stderr)
         syntax = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
         self.assertEqual(syntax.returncode, 0, syntax.stderr)
 
@@ -94,11 +104,55 @@ class ValidateReviewOutputsTests(unittest.TestCase):
         self.assertEqual(checked, [])
 
     def test_missing_validation_tool_cannot_generate_removals(self):
-        result, script, checked = self.run_validation(["good-12147-6973.hipo"], have_validator=False)
+        result, script, checked = self.run_validation(
+            ["bad-12147-6973.hipo"], have_validator=False, remove_failed=True,
+            expected_existing={"bad-12147-6973.hipo": True},
+        )
         self.assertEqual(result.returncode, 1)
         self.assertIn("hipo-utils was not found", result.stderr)
         self.assertIsNone(script)
         self.assertEqual(checked, [])
+
+    def test_remove_failed_deletes_only_failed_files_and_preserves_good_results(self):
+        names = ["good-12147-6973.hipo", "bad-12147-6974.hipo", "missing-12147-6975.hipo"]
+        result, script, checked = self.run_validation(
+            names, remove_failed=True, expected_existing=dict(zip(names, (True, False, False))),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "condor_rm 9624.6973\n")
+        self.assertEqual(len(checked), 2)
+        self.assertIn("Removed 1 failed HIPO files; 0 removal errors", result.stderr)
+
+    def test_failed_files_are_preserved_without_the_removal_flag(self):
+        result, script, checked = self.run_validation(
+            ["bad-12147-6973.hipo"], expected_existing={"bad-12147-6973.hipo": True},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(script, "")
+        self.assertEqual(len(checked), 1)
+        self.assertIn("Removed 0 failed HIPO files", result.stderr)
+
+    def test_deletion_error_is_reported_without_losing_verified_job_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bad = root / "bad-12147-6974.hipo"
+            good = root / "good-12147-6973.hipo"
+            bad.write_text("bad data")
+            good.write_text("good data")
+            listing = root / "files.txt"
+            listing.write_text("{}\n{}\n".format(bad, good))
+            output = root / "commands.sh"
+            with mock.patch("condor_io.validate_review_outputs.shutil.which", return_value="hipo-utils"), \
+                    mock.patch("condor_io.validate_review_outputs.subprocess.run", side_effect=[
+                        subprocess.CompletedProcess([], 1), subprocess.CompletedProcess([], 0),
+                    ]), mock.patch.object(Path, "unlink", side_effect=PermissionError("denied")), \
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as errors:
+                result = main([str(listing), "--cluster-id", "9624", "--remove-failed", "-o", str(output)])
+            self.assertEqual(result, 1)
+            self.assertTrue(bad.exists())
+            self.assertTrue(good.exists())
+            self.assertEqual(output.read_text(), "condor_rm 9624.6973\n")
+            self.assertIn("Could not remove", errors.getvalue())
 
 
 if __name__ == "__main__":

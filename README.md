@@ -164,8 +164,13 @@ rm files-to-review.txt;  python3  software/simGrid/main/condor_io/list_existing_
 
    Supply the actual Condor cluster ID (`9624` here), not the portal submission ID (`12147`). The
    filename supplies the process number: a valid `*-12147-6973.hipo` produces `condor_rm 9624.6973`.
-   Only `hipo-utils -test` exit code zero qualifies. Missing files and failed tests are skipped.
+   Only `hipo-utils -test` exit code zero qualifies. Missing files and failed tests produce no
+   Condor removal commands.
    The list must contain one portal submission, and the output script must not already exist.
+
+   Add `--remove-failed` to delete local HIPO files whose integrity tests return nonzero. Good files
+   are preserved and still generate Condor removal commands. Without this flag, no HIPO files are
+   deleted. Missing files are always skipped; failed deletions are reported and give a nonzero exit.
 
 3. Review `remove-verified-jobs.sh`, copy it to the submit node, and execute it there:
 
@@ -173,8 +178,9 @@ rm files-to-review.txt;  python3  software/simGrid/main/condor_io/list_existing_
    bash remove-verified-jobs.sh
    ```
 
-Validation only generates the script; it does not remove jobs or HIPO files. Executing the generated
-script removes the listed Condor jobs while preserving their verified HIPO results at JLab.
+Validation does not remove Condor jobs. It removes failed HIPO files only with `--remove-failed`.
+Executing the generated script removes the listed Condor jobs while preserving their verified HIPO
+results at JLab.
 
 ## Submission and priority workflow
 
