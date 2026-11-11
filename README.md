@@ -144,8 +144,8 @@ to `Not Submitted`. Every transition compacts the remaining pending priorities t
 
 Upcoming in the next release: the scripts below identify output conflicts, validate the existing
 HIPO results, and generate commands to remove the corresponding jobs from HTCondor. Run the Python
-commands from a simGrid checkout. They use the standard library and do not require PyMySQL. The
-scanner also requires `condor_q` on the submit node.
+commands from a simGrid checkout. These recovery scripts support Python 3.6 and later and use only
+the standard library. PyMySQL is not required; the scanner also needs `condor_q` on the submit node.
 
 1. On the submit node, scan all submissions for ongoing Condor jobs:
 

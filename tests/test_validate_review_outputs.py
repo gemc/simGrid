@@ -58,7 +58,7 @@ class ValidateReviewOutputsTests(unittest.TestCase):
                 command.append("--remove-failed")
             result = subprocess.run(
                 command,
-                cwd=root, env=env, capture_output=True, text=True,
+                cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
             )
             generated = output.read_text() if output.exists() else None
             checked = calls.read_text().splitlines() if calls.exists() else []
@@ -78,7 +78,9 @@ class ValidateReviewOutputsTests(unittest.TestCase):
         self.assertNotIn("condor_rm 9624.6975", script)
         self.assertNotIn("condor_rm 12147.", script)
         self.assertIn("No Condor jobs were removed", result.stderr)
-        syntax = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
+        syntax = subprocess.run(
+            ["bash", "-n"], input=script, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
         self.assertEqual(syntax.returncode, 0, syntax.stderr)
 
     def test_multiple_submissions_are_rejected_before_testing_files(self):

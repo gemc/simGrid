@@ -34,7 +34,7 @@ def ongoing_job_ids(owner):
     try:
         result = subprocess.run(
             ["condor_q", owner, "-json", "-attributes", "ClusterId,ProcId,JobStatus"],
-            check=True, capture_output=True, text=True,
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
         )
     except subprocess.CalledProcessError as exc:
         raise ValueError("condor_q failed: {}".format((exc.stderr or str(exc)).strip())) from exc

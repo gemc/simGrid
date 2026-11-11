@@ -52,7 +52,7 @@ class ExistingOutputTests(unittest.TestCase):
             })
             result = subprocess.run(
                 [sys.executable, str(SCRIPT), *map(str, paths)],
-                env=env, capture_output=True, text=True,
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
             )
             if command_log.exists():
                 self.assertEqual(command_log.read_text(), "gemc -json -attributes ClusterId,ProcId,JobStatus\n")
@@ -184,6 +184,17 @@ class ExistingOutputTests(unittest.TestCase):
                 run_mock.return_value.stdout = json.dumps(payload)
                 with self.assertRaises(ValueError):
                     ongoing_job_ids("gemc")
+
+    def test_condor_query_uses_python36_compatible_subprocess_arguments(self):
+        def python36_run(command, check=False, stdout=None, stderr=None, universal_newlines=False):
+            self.assertTrue(check)
+            self.assertEqual(stdout, subprocess.PIPE)
+            self.assertEqual(stderr, subprocess.PIPE)
+            self.assertTrue(universal_newlines)
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+
+        with mock.patch("condor_io.list_existing_outputs.subprocess.run", side_effect=python36_run):
+            self.assertEqual(ongoing_job_ids("gemc"), set())
 
 
 if __name__ == "__main__":
