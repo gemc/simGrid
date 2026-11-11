@@ -144,29 +144,37 @@ to `Not Submitted`. Every transition compacts the remaining pending priorities t
 
 Upcoming in the next release: the scripts below identify output conflicts, validate the existing
 HIPO results, and generate commands to remove the corresponding jobs from HTCondor. Run the Python
-commands from a simGrid checkout. They use the standard library and do not require PyMySQL.
+commands from a simGrid checkout. They use the standard library and do not require PyMySQL. The
+scanner also requires `condor_q` on the submit node.
 
-1. On the submit node, collect the conflicting output paths for one portal submission:
+1. On the submit node, scan all submissions for ongoing Condor jobs:
 
-```shell 
-rm files-to-review.txt;  python3  software/simGrid/main/condor_io/list_existing_outputs.py ~/osgOutput/carman/job_12069/log > files-to-review.txt
-```
+   ```shell
+   python3 condor_io/list_existing_outputs.py ~/osgOutput > files-to-review.txt
+   ```
 
-   The list contains unique JLab filesystem paths from "already exists" upload failures. A conflict
-   does not imply corruption; the existing file may be a completed result from an earlier attempt.
+   The scanner queries the live queue for owner `gemc` (override with `--owner`). It reads logs only
+   for idle, running, held, transferring, or suspended jobs; completed, removed, and historical jobs
+   are excluded. If the query fails, scanning stops rather than including old submissions.
+   Each output row contains a Condor job ID and JLab filesystem path separated by a tab. The ID
+   comes from the `job.<cluster>.<process>.out` filename. Rows are unique per job and file pair.
+   A conflict does not imply corruption; the existing file may be a completed result from an
+   earlier attempt.
 
 2. Copy the list to a JLab host where those files are accessible and `hipo-utils` is in `PATH`.
    Validate the files and generate a removal script:
 
    ```shell
-   python3 condor_io/validate_review_outputs.py files-to-review.txt  --cluster-id 9540 -o remove-verified-jobs.sh
+   python3 condor_io/validate_review_outputs.py files-to-review.txt -o remove-verified-jobs.sh
    ```
 
-   Supply the actual Condor cluster ID (`9624` here), not the portal submission ID (`12147`). The
-   filename supplies the process number: a valid `*-12147-6973.hipo` produces `condor_rm 9624.6973`.
+   Job IDs are read directly from the list, so it can span portal submissions and Condor clusters.
+   Each unique file is tested once; a passing file generates commands for all its associated jobs.
+   A row with job ID `9624.6973` produces `condor_rm 9624.6973`. The process number must match the
+   output filename. Old path-only lists still require `--cluster-id` and one portal submission.
    Only `hipo-utils -test` exit code zero qualifies. Missing files and failed tests produce no
    Condor removal commands.
-   The list must contain one portal submission, and the output script must not already exist.
+   The output script must not already exist.
 
    Add `--remove-failed` to delete local HIPO files whose integrity tests return nonzero. Good files
    are preserved and still generate Condor removal commands. Without this flag, no HIPO files are
