@@ -87,11 +87,20 @@ Every pipeline step in `nodescript.sh` follows the same pattern: a `# input/outp
 an explicit `cmd=(...)` array, a descriptive `echo "Running …: ${cmd[@]}"`, and
 `run_timed <fn> "${cmd[@]}"`.
 
+Upcoming in the next release: before downloading inputs or running the simulation, new jobs use
+`pelican object ls` to check their exact final output URI. If it exists, the job downloads a temporary
+copy and runs `hipo-utils -test`. Exit code zero completes the job successfully without rerunning
+the workflow. A failed integrity check holds the job for manual cleanup at JLab; a failed download
+returns a retryable infrastructure error. If the URI cannot be listed, the normal workflow continues.
+Weighted run selection uses the submission ID and subjob number as a seed, so retries with unchanged
+staged weights and run lists select the same run and check the same filename. No selection is stored.
+
 Full pipeline (default):
 
 ```
-preamble → environment variables → clean_and_check_environment → setup_job_files
+preamble → environment variables → clean_and_check_environment
   → Pelican environment setup
+  → [weighted run selection] → existing output check → setup_job_files
   → [fetch_background_file]            # only when bkmerging is set
   → lund_or_generator                  # pelican fetch (type-2) or run_generator cmd array
   → run_gemc                           # gemc.hipo

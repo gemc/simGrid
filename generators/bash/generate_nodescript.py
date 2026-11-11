@@ -7,8 +7,9 @@ worker node — by calling each section generator in order.
 Full pipeline (output_type != 1):
   1.  preamble                  — shebang, args, source functions.sh, define_exit_codes
   2.  clean_and_check_environment
-  3.  setup_job_files
-  4.  Pelican environment
+  3.  Pelican environment, run selection, existing-output check
+      (exit successfully if an earlier result passes hipo-utils -test)
+  4.  setup_job_files
   5.  fetch_background_file  (only when bkmerging is set)
   6.  lund_or_generator         — pelican fetch (type-2), gemc announcement, or run_generator
   7.  run_gemc
@@ -29,6 +30,7 @@ GEMC-only pipeline (output_type == 1):
 import os
 
 from generators.bash.create_preamble import create_preamble
+from generators.bash.create_existing_output_check import create_existing_output_check
 from generators.bash.create_lund_or_generator import create_lund_or_generator
 from generators.bash.create_run_selection import create_run_selection
 from generators.bash.create_run_gemc import create_run_gemc
@@ -122,13 +124,6 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 			submission_type=submission_type,
 		),
 
-		'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}" "{yaml_stem}"\n'.format(
-			coatjavav=sconfiguration.coatjavav or "latest",
-			gemcv=sconfiguration.gemcv or "latest",
-			configuration=sconfiguration.configuration or "default",
-			yaml_stem=reconstruction_yaml_stem(sconfiguration),
-		),
-
 		(
 			'\n# Pelican environment setup\n'
 			'echo "Setting Pelican env variables"\n'
@@ -136,6 +131,17 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 			'export BEARER_TOKEN_FILE="$_CONDOR_CREDS/jlab_clas12.use"\n'
 			'echo "BEARER_TOKEN_FILE: $BEARER_TOKEN_FILE"\n'
 			'echo "pelican: $(which pelican)"\n'
+		),
+
+		create_run_selection(sconfiguration, user_submission_id),
+
+		create_existing_output_check(sconfiguration, user_submission_id),
+
+		'run_timed setup_job_files "{coatjavav}" "{gemcv}" "{configuration}" "{yaml_stem}"\n'.format(
+			coatjavav=sconfiguration.coatjavav or "latest",
+			gemcv=sconfiguration.gemcv or "latest",
+			configuration=sconfiguration.configuration or "default",
+			yaml_stem=reconstruction_yaml_stem(sconfiguration),
 		),
 
 		(
@@ -150,8 +156,6 @@ def generate_nodescript(sconfiguration, user_submission_id, test=False,
 		else 'echo "Background merging not requested — skipping fetch."\n',
 
 		create_lund_or_generator(sconfiguration),
-
-		create_run_selection(sconfiguration),
 
 		create_run_gemc(sconfiguration),
 

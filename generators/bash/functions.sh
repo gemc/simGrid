@@ -358,7 +358,7 @@ require_executable() {
 # capture it:  runno=$(select_weighted_run runs.json run_list.txt)
 # Diagnostics go to stderr; returns non-zero (failing the job) when a requested
 # run is missing from runs.json or the inputs are invalid.
-# Args: <runs_json> <run_list_file>
+# Args: <runs_json> <run_list_file> [seed]
 select_weighted_run() {
     local runs_json="$1"
     local run_list_file="$2"
@@ -370,7 +370,7 @@ select_weighted_run() {
         echo "select_weighted_run: ${run_list_file} not found" >&2
         return $EC_FILE_DOES_NOT_EXIST
     fi
-    python3 select_run.py "$runs_json" "$run_list_file"
+    python3 select_run.py "$@"
 }
 
 unload_module_if_loaded() {
@@ -601,6 +601,23 @@ test_hipo_file() {
         return $EC_HIPO_SIZE
     fi
     echo "recon.hipo integrity OK, size ${fsize} bytes"
+}
+
+# Startup recovery: download and validate a previous execution's final result.
+# Commands are constructed in create_existing_output_check.py.
+fetch_existing_output() {
+    "$@" || { echo "Existing output download failed."; return $EC_INFRASTRUCTURE; }
+    [[ -f existing-output.hipo ]] || {
+        echo "Existing output download did not produce a file."
+        return $EC_INFRASTRUCTURE
+    }
+}
+
+test_existing_output() {
+    "$@" || {
+        echo "Existing output failed HIPO validation; manual cleanup at JLab is required."
+        return $EC_HIPO_INTEGRITY
+    }
 }
 
 # ── get_output_filename ───────────────────────────────────────────────────────
