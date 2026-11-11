@@ -140,6 +140,42 @@ to `Not Submitted`. Every transition compacts the remaining pending priorities t
 | `--print-condor-card` | Print the generated HTCondor submit file to stdout |
 | `--target-site SITE` | Pin all jobs to one `GLIDEIN_Site` (e.g. `CNAF`) |
 
+## Recovering jobs with existing output files
+
+Upcoming in the next release: the scripts below identify output conflicts, validate the existing
+HIPO results, and generate commands to remove the corresponding jobs from HTCondor. Run the Python
+commands from a simGrid checkout. They use the standard library and do not require PyMySQL.
+
+1. On the submit node, collect the conflicting output paths for one portal submission:
+
+```shell 
+rm files-to-review.txt;  python3  software/simGrid/main/condor_io/list_existing_outputs.py ~/osgOutput/carman/job_12069/log > files-to-review.txt
+```
+
+   The list contains unique JLab filesystem paths from "already exists" upload failures. A conflict
+   does not imply corruption; the existing file may be a completed result from an earlier attempt.
+
+2. Copy the list to a JLab host where those files are accessible and `hipo-utils` is in `PATH`.
+   Validate the files and generate a removal script:
+
+   ```shell
+   python3 condor_io/validate_review_outputs.py files-to-review.txt  --cluster-id 9540 -o remove-verified-jobs.sh
+   ```
+
+   Supply the actual Condor cluster ID (`9624` here), not the portal submission ID (`12147`). The
+   filename supplies the process number: a valid `*-12147-6973.hipo` produces `condor_rm 9624.6973`.
+   Only `hipo-utils -test` exit code zero qualifies. Missing files and failed tests are skipped.
+   The list must contain one portal submission, and the output script must not already exist.
+
+3. Review `remove-verified-jobs.sh`, copy it to the submit node, and execute it there:
+
+   ```shell
+   bash remove-verified-jobs.sh
+   ```
+
+Validation only generates the script; it does not remove jobs or HIPO files. Executing the generated
+script removes the listed Condor jobs while preserving their verified HIPO results at JLab.
+
 ## Submission and priority workflow
 
 The portal has two priority values with different scopes. Current HTCondor occupancy is an input

@@ -58,7 +58,7 @@ class ValidateReviewOutputsTests(unittest.TestCase):
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(checked), 2)
-        self.assertIn("condor_rm 9624.6973 || status=1\n", script)
+        self.assertEqual(script, "condor_rm 9624.6973\n")
         self.assertNotIn("condor_rm 9624.6974", script)
         self.assertNotIn("condor_rm 9624.6975", script)
         self.assertNotIn("condor_rm 12147.", script)
@@ -85,7 +85,7 @@ class ValidateReviewOutputsTests(unittest.TestCase):
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(checked), 2)
-        self.assertEqual(script.count("condor_rm 9624.0 || status=1\n"), 1)
+        self.assertEqual(script, "condor_rm 9624.0\n")
 
     def test_existing_output_script_is_preserved(self):
         result, script, checked = self.run_validation(["good-12147-6973.hipo"], existing_output="keep me\n")

@@ -6,7 +6,8 @@ Run where the files in the input list are accessible and hipo-utils is available
 
 The list must belong to one portal submission. Supply its actual Condor cluster
 ID; the portal submission ID in a filename is not a Condor cluster ID. Validation
-uses the hipo-utils exit code. The generated script is never executed here.
+uses the hipo-utils exit code. The output contains only one condor_rm command
+per line and is never executed here.
 """
 
 import argparse
@@ -38,7 +39,7 @@ def read_candidates(list_path):
         raise ValueError(
             "The list contains multiple portal submissions; use a separate list and cluster for each."
         )
-    return candidates, next(iter(submissions), None)
+    return candidates
 
 
 def main(argv=None):
@@ -53,14 +54,14 @@ def main(argv=None):
     try:
         if output.exists():
             raise ValueError("Output already exists: {}. Choose a new output filename.".format(output))
-        candidates, submission = read_candidates(args.list_file.expanduser())
+        candidates = read_candidates(args.list_file.expanduser())
         validator = shutil.which("hipo-utils")
         if validator is None:
             raise ValueError(
                 "hipo-utils was not found in PATH; load its environment before running this script."
             )
 
-        good_jobs = {}
+        good_jobs = set()
         good_files = 0
         for path, process in candidates.items():
             print("Checking: {}".format(path), file=sys.stderr, flush=True)
@@ -70,7 +71,7 @@ def main(argv=None):
             result = subprocess.run([validator, "-test", str(path)], stdout=sys.stderr, stderr=sys.stderr)
             if result.returncode == 0:
                 good_files += 1
-                good_jobs.setdefault(process, path)
+                good_jobs.add(process)
             else:
                 print(
                     "Skipping failed HIPO test (exit {}): {}".format(result.returncode, path), file=sys.stderr,
@@ -78,18 +79,8 @@ def main(argv=None):
 
         # Exclusive creation protects an existing script or input file from being overwritten.
         with output.open("x", encoding="utf-8") as stream:
-            stream.write("#!/bin/bash\nset -uo pipefail\nstatus=0\n\n")
-            stream.write("# Generated after successful hipo-utils -test checks; review before running.\n")
-            stream.write(
-                "# Portal submission: {}; HTCondor cluster: {}\n\n".format(submission, args.cluster_id)
-            )
-            for process, path in sorted(good_jobs.items()):
-                stream.write(
-                    "# Verified output: {}\ncondor_rm {}.{} || status=1\n".format(
-                        path, args.cluster_id, process,
-                    )
-                )
-            stream.write('\nexit "$status"\n')
+            for process in sorted(good_jobs):
+                stream.write("condor_rm {}.{}\n".format(args.cluster_id, process))
     except (OSError, ValueError) as exc:
         parser.exit(1, "Error: {}\n".format(exc))
 
