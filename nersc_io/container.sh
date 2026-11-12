@@ -11,7 +11,11 @@ run_nersc_container() {
     local image="$1"
     local nodescript="$2"
     shift 2
-    local functions_file="${SIMGRID_FUNCTIONS_FILE:-$HOME/software/simgrid/main/generators/bash/functions.sh}"
+    # Locate functions.sh in the same checkout as this container.sh, so a job launched from a dev
+    # checkout uses that checkout's functions rather than a hard-coded install path.
+    local self_dir
+    self_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+    local functions_file="${SIMGRID_FUNCTIONS_FILE:-$self_dir/generators/bash/functions.sh}"
     local file
 
     # Resolve sources to absolute paths, including standalone calls with ./nodescript.sh.

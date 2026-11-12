@@ -10,15 +10,15 @@ The available tests are:
 - `pelican-transfer.sbatch` runs `pelican_transfer.sh` it lists the test area, fetches the template
    `dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
    `osdf://jlab-osdf` token in-container with `token-renew.zsh`.
-- `lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
+- `lund.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
    in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
    Lund file from OSDF, and runs GEMC on it.
-- `generators-workflow.sbatch` runs `nodescript-generators.sh` as a Slurm job array, one task per
+- `generators.sbatch` runs `nodescript-generators.sh` as a Slurm job array, one task per
    row in `generators_list`: each task loads the `mcgen` module and runs that generator with
    `--trig 100 --docker`, confirming it produces output.
 
 Each test writes its Slurm logs and job output into a directory named for the submission file
-(`environment.sbatch` → `environment/`, `lund-workflow.sbatch` → `lund-workflow/`). Slurm does not
+(`environment.sbatch` → `environment/`, `lund.sbatch` → `lund/`). Slurm does not
 create it, so make the directory in the submission directory before submitting:
 
 ```
@@ -74,7 +74,7 @@ log, and the Slurm log stays in `<test-name>/` in the submission directory.
 
 ## Shared environment setup
 
-The GEMC-based tests (clasdis, lund-workflow) and the OSG test node script all call
+The GEMC-based tests (clasdis, lund) and the OSG test node script all call
 `setup_test_environment` in `generators/bash/functions.sh`. It exports
 `CLAS12_CONFIG`/`OSRELEASE`/`RCDB_CONNECTION`, runs `clean_and_check_environment` and
 `setup_job_files`, and takes every software version from the `CLAS12_*` defaults at the top of
@@ -84,27 +84,27 @@ any default in the environment before submitting.
 
 ## Lund workflow
 
-`lund-workflow.sbatch` runs the GEMC trial on staged Lund input instead of the internal
+`lund.sbatch` runs the GEMC trial on staged Lund input instead of the internal
 generator. It is a Slurm job array: each task reads one row of `lund_files` by its array index
 (`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
 matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
 GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are
-`lund-workflow/lund-workflow-<arrayID>_<taskID>.out`.
+`lund/lund-<arrayID>_<taskID>.out`.
 
 The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
 with that default, or size the array to the file's line count:
 
 ```shell
-mkdir -p lund-workflow
-sbatch lund-workflow.sbatch
-sbatch --array=1-$(grep -c . lund_files) lund-workflow.sbatch
+mkdir -p lund
+sbatch lund.sbatch
+sbatch --array=1-$(grep -c . lund_files) lund.sbatch
 ```
 
-`#SBATCH --array` cannot size itself, so `nersc_io/submit-lund-workflow.sh` counts the rows and submits
+`#SBATCH --array` cannot size itself, so `nersc_io/submit-lund.sh` counts the rows and submits
 the array in one step — the NERSC analog of the OSG `queue lundFile from lund_files` fan-out:
 
 ```shell
-nersc_io/submit-lund-workflow.sh [nevents] [image]
+nersc_io/submit-lund.sh [nevents] [image]
 ```
 
 Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer token by running
@@ -114,15 +114,15 @@ Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer tok
 
 ## Generators workflow
 
-`generators-workflow.sbatch` is a smoke test for the mcgen event generators. It is a Slurm job array
+`generators.sbatch` is a smoke test for the mcgen event generators. It is a Slurm job array
 over `generators_list` (one generator per row); each task loads the `mcgen` module and runs
 `<generator> --trig <ntrig> --docker` (default `ntrig` 100), then checks a nonempty `.dat` was
-produced. Per-task logs are `generators-workflow/generators-workflow-<arrayID>_<taskID>.out`.
+produced. Per-task logs are `generators/generators-<arrayID>_<taskID>.out`.
 
 ```shell
-mkdir -p generators-workflow
-sbatch generators-workflow.sbatch
-sbatch --array=1-$(grep -c . generators_list) generators-workflow.sbatch
+mkdir -p generators
+sbatch generators.sbatch
+sbatch --array=1-$(grep -c . generators_list) generators.sbatch
 ```
 
 `generators_list` holds the generators from https://code.jlab.org/hallb/clas12/mcgen; edit it (and the

@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 #SBATCH --account=m5464
-#SBATCH --job-name=generators-workflow
+#SBATCH --job-name=generators
 #SBATCH --constraint=cpu
 #SBATCH --qos=shared
 #SBATCH --nodes=1
@@ -9,24 +9,25 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=2G
 #SBATCH --time=00:10:00
-#SBATCH --output=generators-workflow/generators-workflow-%A_%a.out
+#SBATCH --output=generators/generators-%A_%a.out
 #SBATCH --array=1-17
 
-# Logs are written under generators-workflow/ (named for this test); create it before submitting:
-#   mkdir -p generators-workflow
+# Logs are written under generators/ (named for this test); create it before submitting:
+#   mkdir -p generators
 set -eu
 
-# Global home is available regardless of the submission directory.
-repo_dir="$HOME/software/simgrid/main"
+# Resolve the checkout the job was submitted from; fall back to the installed main checkout.
+repo_dir="${SIMGRID_REPO_DIR:-$(cd "${SLURM_SUBMIT_DIR:-$PWD}/../.." 2>/dev/null && pwd)}"
+[[ -n "$repo_dir" && -f "$repo_dir/nersc_io/container.sh" ]] || repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
 
 # One array task runs per row in generators_list: the array index is the row number. The default
 # --array above matches the rows currently in generators_list; override it to match the file's line
 # count, for example:
-#   sbatch --array=1-$(grep -c . generators_list) generators-workflow.sbatch
-# Usage: sbatch generators-workflow.sbatch [ntrig] [image]
+#   sbatch --array=1-$(grep -c . generators_list) generators.sbatch
+# Usage: sbatch generators.sbatch [ntrig] [image]
 if [[ $# -gt 2 ]]; then
-    printf 'Usage: sbatch generators-workflow.sbatch [ntrig] [image]\n' >&2
+    printf 'Usage: sbatch generators.sbatch [ntrig] [image]\n' >&2
     exit 2
 fi
 
@@ -43,7 +44,7 @@ if [[ -z "$generator" ]]; then
 fi
 printf 'Array task %s -> %s\n' "$task_id" "$generator"
 
-work_dir="$SCRATCH/simgrid/generators-workflow"
+work_dir="$SCRATCH/simgrid/generators"
 mkdir -p "$work_dir"
 cd "$work_dir"
 
