@@ -10,7 +10,8 @@ storage, available commands, and loaded modules (`report_environment nersc`).
 `ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
 `dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
 `osdf://jlab-osdf` token in-container with `token-renew.zsh`.
-- `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
+- `nodescript-clasdis.sh` is the GEMC-only trial (internal generator). It has no batch wrapper yet;
+run it with the standalone `run_nersc_container` launcher (shown below). Reconstruction added later.
 - `lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
 in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
 Lund file from OSDF, and runs GEMC on it.
@@ -61,20 +62,11 @@ job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 The GEMC trial defaults to `docker.io/jeffersonlab/gemc:dev-almalinux94`, already pulled with Podman-HPC,
 and the detector gcard `/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard`.
 
-```shell
-job_id=$(sbatch --parsable nersc-test-workflow.sbatch)
-# After completion:
-cat "nersc-workflow-${job_id}.out"
-```
+It has no batch wrapper yet; run `nodescript-clasdis.sh` with the standalone `run_nersc_container`
+launcher (see the standalone call below). The node script's optional arguments are `[gcard] [nevents]`;
+the default event count is 100, and an empty gcard argument preserves the default.
 
-The optional arguments are `[gcard] [nevents] [image]`. The default event count is 100.
-An empty gcard argument preserves the default. To select another image:
-
-```shell
-sbatch nersc-test-workflow.sbatch "" 100 docker.io/jeffersonlab/clas12software:production
-```
-
-The batch script defines resources and selects the image. `nodescript.sh` follows the command-array
+`nodescript-clasdis.sh` follows the command-array
 and timing structure of the OSG worker, using GEMC's internal electron generator:
 
 ```shell
@@ -132,10 +124,10 @@ From an interactive compute allocation, the equivalent standalone call is:
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
 export SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464
-mkdir -p "$SCRATCH/simgrid/gemc-tests"
-cd "$SCRATCH/simgrid/gemc-tests"
+mkdir -p "$SCRATCH/simgrid/clasdis"
+cd "$SCRATCH/simgrid/clasdis"
 run_nersc_container docker.io/jeffersonlab/gemc:dev-almalinux94 \
-    "$repo_dir/tests/nersc_submission/nodescript.sh"
+    "$repo_dir/tests/nersc_submission/nodescript-clasdis.sh"
 ```
 
 The launcher mounts the current directory read-write and the node script and shared functions read-only.
