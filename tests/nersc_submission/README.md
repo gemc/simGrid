@@ -3,22 +3,25 @@
 All jobs use `nersc_io/container.sh`. The available tests are:
 
 
-- `nersc-test-environment.sbatch` runs `environment.sh` inside
+- `environment.sbatch` runs `environment.sh` inside
 `docker.io/jeffersonlab/clas12software:production`: a read-only probe that reports the system,
 storage, available commands, and loaded modules (`report_environment nersc`).
-- `nersc-test-pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
+- `pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
 `ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
 `dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
 `osdf://jlab-osdf` token in-container with `token-renew.zsh`.
 - `nersc-test-workflow.sbatch` runs the GEMC-only `nodescript.sh`; reconstruction will be added later.
-- `nersc-test-lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
+- `lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
 in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
 Lund file from OSDF, and runs GEMC on it.
 
-To submit:
+Each test writes its Slurm logs and job output into a directory named for the submission file
+(`environment.sbatch` → `environment/`, `lund-workflow.sbatch` → `lund-workflow/`). Slurm does not
+create it, so make the directory in the submission directory before submitting:
 
 ```
-sbatch nersc-test-pelican-transfer.sbatch
+mkdir -p pelican-transfer
+sbatch pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```
@@ -37,7 +40,7 @@ Status:
 After it finishes:
 
 ```
-cat "nersc-transfer-${job_id}.out"
+cat "pelican-transfer/pelican-transfer-${job_id}.out"
 sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,AllocCPUS
 ```
 
@@ -48,7 +51,9 @@ requires a readable detector gcard, a working `gemc` command, and nonempty outpu
 This requests a small shared allocation. On Perlmutter, Slurm counts hardware threads as CPUs;
 two requested CPUs ordinarily correspond to one physical core, with memory also affecting allocation.
 
-These probes do not yet check CVMFS access.
+The launcher mounts `/cvmfs` read-only at the same path when `/cvmfs/jlab.opensciencegrid.org` is
+available on the node, so GEMC resolves its config, geometry, fields, and modules from CVMFS; it
+prints a warning and skips the mount when the repository is absent.
 Shared jobs (https://docs.nersc.gov/jobs/examples/#shared),
 CVMFS jobs (https://docs.nersc.gov/services/cvmfs/#cvmfs-batch-jobs),
 job monitoring (https://docs.nersc.gov/jobs/monitoring/).
@@ -83,25 +88,28 @@ DST creation, and Pelican uploads. The gcard must reference geometry and other d
 the image or mounted configuration tree.
 
 The batch job sets `SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464`. The launcher mounts that project
-directory read-only at the same absolute path, including related configuration files. No CVMFS mount
-is added. The batch job runs from `$SCRATCH/simgrid/gemc-tests`.
+directory read-only at the same absolute path, including related configuration files, and mounts
+`/cvmfs` read-only at `/cvmfs` when the JLab repository is present. The batch job runs from
+`$SCRATCH/simgrid/<test-name>`.
 Each run creates a separate `output-<jobid>-<suffix>` directory there and retains `gemc.hipo` inside it.
 The full output path is printed in the log. Slurm's log remains in the submission directory.
 
 ## Lund workflow
 
-`nersc-test-lund-workflow.sbatch` runs the GEMC trial on staged Lund input instead of the internal
+`lund-workflow.sbatch` runs the GEMC trial on staged Lund input instead of the internal
 generator. It is a Slurm job array: each task reads one row of `lund_files` by its array index
 (`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
 matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
-GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are `nersc-lund-workflow-<arrayID>_<taskID>.out`.
+GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are
+`lund-workflow/lund-workflow-<arrayID>_<taskID>.out`.
 
 The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
 with that default, or size the array to the file's line count:
 
 ```shell
-sbatch nersc-test-lund-workflow.sbatch
-sbatch --array=1-$(grep -c . lund_files) nersc-test-lund-workflow.sbatch
+mkdir -p lund-workflow
+sbatch lund-workflow.sbatch
+sbatch --array=1-$(grep -c . lund_files) lund-workflow.sbatch
 ```
 
 `#SBATCH --array` cannot size itself, so `nersc_io/submit-lund-workflow.sh` counts the rows and submits

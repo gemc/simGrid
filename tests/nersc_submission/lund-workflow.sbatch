@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 #SBATCH --account=m5464
-#SBATCH --job-name=nersc-lund-workflow
+#SBATCH --job-name=lund-workflow
 #SBATCH --constraint=cpu
 #SBATCH --qos=shared
 #SBATCH --nodes=1
@@ -9,9 +9,11 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
-#SBATCH --output=nersc-lund-workflow-%A_%a.out
+#SBATCH --output=lund-workflow/lund-workflow-%A_%a.out
 #SBATCH --array=1-4
 
+# Logs are written under lund-workflow/ (named for this test); create it before submitting:
+#   mkdir -p lund-workflow
 set -eu
 
 # Global home is available regardless of the submission directory.
@@ -21,10 +23,10 @@ source "$repo_dir/nersc_io/container.sh"
 # One array task runs per row in lund_files: the array index is the row number. The default
 # --array above matches the four rows currently in lund_files; override it to match the file's
 # line count, for example:
-#   sbatch --array=1-$(grep -c . lund_files) nersc-test-lund-workflow.sbatch
-# Usage: sbatch nersc-test-lund-workflow.sbatch [gcard] [nevents] [image]
+#   sbatch --array=1-$(grep -c . lund_files) lund-workflow.sbatch
+# Usage: sbatch lund-workflow.sbatch [gcard] [nevents] [image]
 if [[ $# -gt 3 ]]; then
-    printf 'Usage: sbatch nersc-test-lund-workflow.sbatch [gcard] [nevents] [image]\n' >&2
+    printf 'Usage: sbatch lund-workflow.sbatch [gcard] [nevents] [image]\n' >&2
     exit 2
 fi
 
@@ -45,7 +47,7 @@ printf 'Array task %s -> %s\n' "$task_id" "$lund_file"
 
 # Expose project CFS at the same absolute path; the launcher mounts this directory read-only.
 export SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464
-work_dir="$SCRATCH/simgrid/gemc-tests"
+work_dir="$SCRATCH/simgrid/lund-workflow"
 mkdir -p "$work_dir"
 cd "$work_dir"
 

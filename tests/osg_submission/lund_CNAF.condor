@@ -45,19 +45,22 @@ request_disk   = 2 GB
 # Executable: simulation script staged to the worker node.
 Executable = nodescript.sh
 
-# Per-job log files ($(Cluster).$(Process) gives unique names per subjob).
-Error  = log/job.$(Cluster).$(Process).err
-Output = log/job.$(Cluster).$(Process).out
-Log    = log/job.$(Cluster).$(Process).log
+# Per-job log files under a directory named for this test (lund_CNAF); create it before submitting:
+#   mkdir -p lund_CNAF
+# ($(Cluster).$(Process) gives unique names per subjob.)
+Error  = lund_CNAF/job.$(Cluster).$(Process).err
+Output = lund_CNAF/job.$(Cluster).$(Process).out
+Log    = lund_CNAF/job.$(Cluster).$(Process).log
 
 # OSG/XSEDE project for fair-share accounting.
 +ProjectName = "CLAS12"
 
-# File transfer: stage scripts in, retrieve output/ directory out.
+# File transfer: stage scripts in, retrieve output/ directory out into the test's lund_CNAF/ directory.
 transfer_input_files    = nodescript.sh, functions.sh
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 transfer_output_files   = output
+transfer_output_remaps  = "output=lund_CNAF/output"
 
 # One subjob per lund file — HTCondor expands lund_files line by line.
 Arguments = $(Process) $(lundFile)

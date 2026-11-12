@@ -49,6 +49,15 @@ run_nersc_container() {
         cmd+=(--volume "$HOME/.ssh:/sshkeys:ro")
     fi
 
+    # Mount CVMFS at the same path when the JLab repository is available on the host, so the
+    # container resolves /cvmfs/jlab.opensciencegrid.org (gemc config, geometry, fields, modules).
+    if [[ -d /cvmfs/jlab.opensciencegrid.org ]]; then
+        cmd+=(--volume /cvmfs:/cvmfs:ro)
+    else
+        printf 'Warning: /cvmfs/jlab.opensciencegrid.org not found on %s; /cvmfs not mounted\n' \
+            "$(hostname)" >&2
+    fi
+
     if [[ -n "$config_dir" ]]; then
         [[ "$config_dir" == /* ]] || config_dir="$PWD/$config_dir"
         if [[ ! -d "$config_dir" || ! -r "$config_dir" || ! -x "$config_dir" ]]; then
