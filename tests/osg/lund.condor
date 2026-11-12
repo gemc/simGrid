@@ -55,7 +55,7 @@ Log    = lund/job.$(Cluster).$(Process).log
 +ProjectName = "CLAS12"
 
 # File transfer: stage scripts in, retrieve output/ directory out into the test's lund/ directory.
-transfer_input_files    = nodescript.sh, functions.sh
+transfer_input_files    = nodescript.sh, ../../generators/bash/functions.sh
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 transfer_output_files   = output

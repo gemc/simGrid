@@ -196,7 +196,7 @@ If those commands fail, send NERSC a help ticket with the hostname and exact err
 
 ### 3. Submit a small compute-node probe
 
-See `tests/nersc_submission`
+See `tests/nersc`
 
 
 <br/>

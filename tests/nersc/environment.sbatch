@@ -18,6 +18,11 @@ set -eu
 # Global home is available on compute nodes, independently of the submission directory.
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
-image="docker.io/jeffersonlab/clas12software:production"
+image="ghcr.io/gemc/simgrid:test"
 
-run_nersc_container "$image" "$repo_dir/tests/nersc_submission/environment.sh"
+# Stage and run in a dedicated scratch directory (podman-hpc mounts $SCRATCH automatically).
+work_dir="$SCRATCH/simgrid/environment"
+mkdir -p "$work_dir"
+cd "$work_dir"
+
+run_nersc_container "$image" "$repo_dir/tests/nersc/environment.sh"

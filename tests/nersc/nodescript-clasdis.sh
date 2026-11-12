@@ -1,22 +1,16 @@
 #!/bin/bash
-# GEMC-only NERSC trial, following the command-array structure of the OSG nodescript.
-# Usage: nodescript.sh [gcard] [nevents]
+# GEMC-only NERSC trial (internal generator). Uses the shared setup_test_environment so OSG and
+# NERSC exercise the same module/config stack. Usage: nodescript-clasdis.sh [nevents]
 set -euo pipefail
 
 source "${SIMGRID_FUNCTIONS_FILE:-functions.sh}"
 define_exit_codes
 
-if [[ $# -gt 2 ]]; then
-    printf 'Usage: nodescript.sh [gcard] [nevents]\n' >&2
+if [[ $# -gt 1 ]]; then
+    printf 'Usage: nodescript-clasdis.sh [nevents]\n' >&2
     exit 2
 fi
-gcard="${1:-/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard}"
-nevents="${2:-100}"
-[[ "$gcard" == /* ]] || gcard="$PWD/$gcard"
-if [[ ! -f "$gcard" || ! -r "$gcard" ]]; then
-    printf 'GEMC detector gcard is not readable: %s\n' "$gcard" >&2
-    exit "$EC_FILE_DOES_NOT_EXIST"
-fi
+nevents="${1:-100}"
 if [[ ! "$nevents" =~ ^[1-9][0-9]*$ ]]; then
     printf 'Event count must be a positive integer: %s\n' "$nevents" >&2
     exit 2
@@ -27,12 +21,16 @@ output_dir=$(mktemp -d "$PWD/output-${SLURM_JOB_ID:-manual}-XXXXXX")
 cd "$output_dir"
 printf 'Output directory: %s\n' "$output_dir"
 
-# Preserve the image's working software/module environment; no host CVMFS setup is required.
+# Read-only diagnostics, then the shared module/config environment (CLAS12_CONFIG, module checks,
+# gcard/yaml verification). GEMC comes from CVMFS modules, so /cvmfs must be mounted.
 report_environment "${SIMGRID_BACKEND:-}"
-export RCDB_CONNECTION=mysql://null
-run_timed require_executable gemc
+setup_test_environment "ungaro"
 
 # input: GEMC internal electron generator, output: gemc.hipo
+run_timed load_module "$CLAS12_GEMC_MODULE"
+run_timed load_module "$CLAS12_SQLITE_MODULE"
+run_timed require_executable gemc
+gcard="${CLAS12_CONFIG}/gemc/${CLAS12_CONFIG_TAG}/${CLAS12_RECON_CONFIG}.gcard"
 printf 'Detector gcard: %s\n' "$gcard"
 cmd=(
     gemc

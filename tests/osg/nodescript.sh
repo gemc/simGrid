@@ -31,19 +31,9 @@ source functions.sh
 
 define_exit_codes
 
-# Module environment setup
-export CLAS12_CONFIG="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/clas12-config/dev"
-echo "CLAS12_CONFIG: $CLAS12_CONFIG"
-export OSRELEASE="almalinux9-gcc11"
-echo "OSRELEASE: $OSRELEASE"
-run_timed clean_and_check_environment "ungaro" \
-    "gemc/dev" \
-    "sqlite/dev" \
-    "jdk/21.0.2" \
-    "coatjava/14.1.2"
-export RCDB_CONNECTION=mysql://null
-echo "SQLITE Version: dev"
-run_timed setup_job_files "14.1.2" "dev" "highlumi_stage2" "mc-ai"
+# Module environment setup — shared with the NERSC tests via setup_test_environment (functions.sh),
+# which uses the CLAS12_* version defaults so both platforms exercise the same stack.
+setup_test_environment "ungaro"
 
 # Pelican environment setup
 echo "Setting Pelican env variables"
@@ -60,10 +50,10 @@ echo
 
 # Running GEMC
 echo "input: lund.dat, output: gemc.hipo"
-run_timed load_module "gemc/dev"
-run_timed load_module "sqlite/dev"
+run_timed load_module "$CLAS12_GEMC_MODULE"
+run_timed load_module "$CLAS12_SQLITE_MODULE"
 run_timed require_executable "gemc"
-gcard="${CLAS12_CONFIG}/gemc/dev/highlumi_stage2.gcard"
+gcard="${CLAS12_CONFIG}/gemc/${CLAS12_CONFIG_TAG}/${CLAS12_RECON_CONFIG}.gcard"
 cmd=(
     gemc
     -USE_GUI=0
@@ -86,9 +76,9 @@ echo "Background merging not requested — skipping."
 # Running Reconstruction
 echo "input: gemc.hipo, output: recon.hipo"
 unload_module_if_loaded gemc
-run_timed load_module "jdk/21.0.2"
-run_timed load_module "coatjava/14.1.2"
-yaml="${CLAS12_CONFIG}/coatjava/14.1.2/mc-ai.yaml"
+run_timed load_module "$CLAS12_JDK_MODULE"
+run_timed load_module "$CLAS12_COATJAVA_MODULE"
+yaml="${CLAS12_CONFIG}/coatjava/${CLAS12_COATJAVA_VERSION}/${CLAS12_RECON_YAML}.yaml"
 recon_util="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/coatjava/bin/recon-util"
 run_timed require_executable "$recon_util"
 cmd=("$recon_util"

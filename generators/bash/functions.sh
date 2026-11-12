@@ -165,6 +165,15 @@ report_environment() {
         fi
     done
 
+    echo "=== CVMFS ==="
+    if [[ -d /cvmfs/jlab.opensciencegrid.org ]]; then
+        echo "/cvmfs/jlab.opensciencegrid.org: available"
+        ls /cvmfs/jlab.opensciencegrid.org >/dev/null 2>&1 \
+            && echo "listing OK" || echo "listing failed"
+    else
+        echo "/cvmfs/jlab.opensciencegrid.org: not available"
+    fi
+
     echo "=== Loaded modules ==="
     if type module >/dev/null 2>&1; then
         (set +u; module -t list) || echo "Unable to list loaded modules."
@@ -205,6 +214,21 @@ report_osg_environment() {
         fi
     done
 }
+
+# ── Default CLAS12 software versions ────────────────────────────────────────────
+# Single source of truth for the OSG and NERSC test node scripts so both platforms
+# exercise the same stack. Override any of these in the environment before calling
+# setup_test_environment or load_module.
+: "${CLAS12_CONFIG_TAG:=dev}"
+: "${CLAS12_OSRELEASE:=almalinux9-gcc11}"
+: "${CLAS12_GEMC_MODULE:=gemc/dev}"
+: "${CLAS12_SQLITE_MODULE:=sqlite/dev}"
+: "${CLAS12_JDK_MODULE:=jdk/21.0.2}"
+: "${CLAS12_COATJAVA_MODULE:=coatjava/14.1.2}"
+: "${CLAS12_COATJAVA_VERSION:=14.1.2}"
+: "${CLAS12_RECON_CONFIG:=highlumi_stage2}"
+: "${CLAS12_RECON_YAML:=mc-ai}"
+: "${CLAS12_MCGEN_MODULE:=mcgen/latest}"
 
 # -- clean_and_check_environment --
 # Print job header, clear inherited LMOD state, initialize module paths, unload
@@ -402,6 +426,30 @@ setup_job_files() {
 
     check_file_exists "$coatjava_yaml"
     check_file_exists "$gemc_gcard"
+}
+
+# ── setup_test_environment ──────────────────────────────────────────────────────
+# Shared module/config setup for the OSG and NERSC test node scripts, using the
+# CLAS12_* version defaults above so both platforms stay in sync. Exports
+# CLAS12_CONFIG/OSRELEASE/RCDB_CONNECTION, checks the required modules resolve, and
+# verifies the gcard/yaml exist. Load the modules themselves with load_module after.
+# Args: [submitted_by]  (default "ungaro")
+setup_test_environment() {
+    local submitted_by="${1:-ungaro}"
+    local config_root="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/clas12-config"
+    export CLAS12_CONFIG="${config_root}/${CLAS12_CONFIG_TAG}"
+    echo "CLAS12_CONFIG: $CLAS12_CONFIG"
+    export OSRELEASE="$CLAS12_OSRELEASE"
+    echo "OSRELEASE: $OSRELEASE"
+    run_timed clean_and_check_environment "$submitted_by" \
+        "$CLAS12_GEMC_MODULE" \
+        "$CLAS12_SQLITE_MODULE" \
+        "$CLAS12_JDK_MODULE" \
+        "$CLAS12_COATJAVA_MODULE"
+    export RCDB_CONNECTION=mysql://null
+    echo "RCDB_CONNECTION: $RCDB_CONNECTION"
+    run_timed setup_job_files "$CLAS12_COATJAVA_VERSION" "$CLAS12_CONFIG_TAG" \
+        "$CLAS12_RECON_CONFIG" "$CLAS12_RECON_YAML"
 }
 
 # ── run_generator ────────────────────────────────────────────────────────────

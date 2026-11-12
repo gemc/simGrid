@@ -1,18 +1,21 @@
 #!/bin/bash
-# GEMC NERSC trial with a Lund file input, following the command-array structure of the OSG nodescript.
-# Usage: nodescript-lund.sh <gcard> <nevents> <lund_file_url>
+# GEMC NERSC trial with a Lund file input. Uses the shared setup_test_environment so OSG and NERSC
+# exercise the same module/config stack. Usage: nodescript-lund.sh <nevents> <lund_file_url>
 set -euo pipefail
 
 source "${SIMGRID_FUNCTIONS_FILE:-functions.sh}"
 define_exit_codes
 
-if [[ $# -ne 3 ]]; then
-    printf 'Usage: nodescript-lund.sh <gcard> <nevents> <lund_file_url>\n' >&2
+if [[ $# -ne 2 ]]; then
+    printf 'Usage: nodescript-lund.sh <nevents> <lund_file_url>\n' >&2
     exit 2
 fi
-gcard="$1"
-nevents="$2"
-lund_url="$3"
+nevents="$1"
+lund_url="$2"
+if [[ ! "$nevents" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'Event count must be a positive integer: %s\n' "$nevents" >&2
+    exit 2
+fi
 
 # Keep cleanup and generated files isolated from the shared configuration and other jobs.
 output_dir=$(mktemp -d "$PWD/output-${SLURM_JOB_ID:-manual}-XXXXXX")
@@ -42,12 +45,16 @@ if [[ ! -s lund.dat ]]; then
     exit "$EC_FILE_DOES_NOT_EXIST"
 fi
 
-# Preserve the image's working software/module environment; no host CVMFS setup is required.
+# Read-only diagnostics, then the shared module/config environment (CLAS12_CONFIG, module checks,
+# gcard/yaml verification). GEMC comes from CVMFS modules, so /cvmfs must be mounted.
 report_environment "${SIMGRID_BACKEND:-}"
-export RCDB_CONNECTION=mysql://null
-run_timed require_executable gemc
+setup_test_environment "ungaro"
 
 # input: Lund file lund.dat, output: gemc.hipo
+run_timed load_module "$CLAS12_GEMC_MODULE"
+run_timed load_module "$CLAS12_SQLITE_MODULE"
+run_timed require_executable gemc
+gcard="${CLAS12_CONFIG}/gemc/${CLAS12_CONFIG_TAG}/${CLAS12_RECON_CONFIG}.gcard"
 printf 'Detector gcard: %s\n' "$gcard"
 printf 'Lund input: %s\n' "$lund_url"
 cmd=(

@@ -1,27 +1,27 @@
 # Test Submissions
 
-All jobs use `nersc_io/container.sh`. The available tests are:
+All jobs use `nersc_io/container.sh` and the `ghcr.io/gemc/simgrid:test` image. 
+The available tests are:
 
 
-- `environment.sbatch` runs `environment.sh` inside
-`docker.io/jeffersonlab/clas12software:production`: a read-only probe that reports the system,
-storage, available commands, and loaded modules (`report_environment nersc`).
-- `pelican-transfer.sbatch` runs `pelican_transfer.sh` inside
-`ghcr.io/gemc/simgrid:test`: it lists the test area, fetches the template
-`dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
-`osdf://jlab-osdf` token in-container with `token-renew.zsh`.
-- `nodescript-clasdis.sh` is the GEMC-only trial (internal generator). It has no batch wrapper yet;
-run it with the standalone `run_nersc_container` launcher (shown below). Reconstruction added later.
+- `environment.sbatch` runs `report_environment nersc`.
+- `clasdis.sbatch` runs `nodescript-clasdis.sh`: the GEMC-only trial with the internal electron
+   generator; `gemc` is loaded from CVMFS modules via the shared `setup_test_environment`.
+- `pelican-transfer.sbatch` runs `pelican_transfer.sh` it lists the test area, fetches the template
+   `dis.dat`, and uploads a copy under the first unused `dis<N>.dat` slot. It renews its
+   `osdf://jlab-osdf` token in-container with `token-renew.zsh`.
 - `lund-workflow.sbatch` runs `nodescript-lund.sh` as a Slurm job array, one task per row
-in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
-Lund file from OSDF, and runs GEMC on it.
+   in `lund_files`: each task renews its `osdf://jlab-osdf` token with `token-renew.zsh`, fetches its
+   Lund file from OSDF, and runs GEMC on it.
+- `generators-workflow.sbatch` runs `nodescript-generators.sh` as a Slurm job array, one task per
+   row in `generators_list`: each task loads the `mcgen` module and runs that generator with
+   `--trig 100 --docker`, confirming it produces output.
 
 Each test writes its Slurm logs and job output into a directory named for the submission file
 (`environment.sbatch` → `environment/`, `lund-workflow.sbatch` → `lund-workflow/`). Slurm does not
 create it, so make the directory in the submission directory before submitting:
 
 ```
-mkdir -p pelican-transfer
 sbatch pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
@@ -59,32 +59,28 @@ Shared jobs (https://docs.nersc.gov/jobs/examples/#shared),
 CVMFS jobs (https://docs.nersc.gov/services/cvmfs/#cvmfs-batch-jobs),
 job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 
-The GEMC trial defaults to `docker.io/jeffersonlab/gemc:dev-almalinux94`, already pulled with Podman-HPC,
-and the detector gcard `/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard`.
+## clasdis (GEMC-only)
 
-It has no batch wrapper yet; run `nodescript-clasdis.sh` with the standalone `run_nersc_container`
-launcher (see the standalone call below). The node script's optional arguments are `[gcard] [nevents]`;
-the default event count is 100, and an empty gcard argument preserves the default.
+`clasdis.sbatch` runs `nodescript-clasdis.sh`: GEMC with its internal electron generator
+(`-INPUT_GEN_FILE=gemc_internal`, `-BEAM_P="e-, 4*GeV, 20*deg, 20*deg"`). Optional argument
+`[nevents]` (default 100). It uses the shared `setup_test_environment` (below), loading `gemc` and
+`sqlite` from CVMFS modules and taking the gcard from `${CLAS12_CONFIG}/gemc/<tag>/<config>.gcard`.
 
-`nodescript-clasdis.sh` follows the command-array
-and timing structure of the OSG worker, using GEMC's internal electron generator:
+The launcher mounts only `/cvmfs` and the host `.ssh` (at `/sshkeys`); podman-hpc mounts the NERSC
+filesystems (`$HOME`, `$SCRATCH`, `/global/cfs`) automatically. `/cvmfs` is required, since the
+software is loaded from CVMFS modules. Each run creates a separate `output-<jobid>-<suffix>` directory
+under `$SCRATCH/simgrid/<test-name>` and retains `gemc.hipo` inside it; the full path is printed in the
+log, and the Slurm log stays in `<test-name>/` in the submission directory.
 
-```shell
--INPUT_GEN_FILE=gemc_internal
--BEAM_P="e-, 4*GeV, 20*deg, 20*deg"
-```
+## Shared environment setup
 
-It uses GEMC from the container's PATH and preserves its initialized software environment. The trial
-omits host CVMFS setup, Condor credentials, Lund downloads, background merging, reconstruction,
-DST creation, and Pelican uploads. The gcard must reference geometry and other data available in
-the image or mounted configuration tree.
-
-The batch job sets `SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464`. The launcher mounts that project
-directory read-only at the same absolute path, including related configuration files, and mounts
-`/cvmfs` read-only at `/cvmfs` when the JLab repository is present. The batch job runs from
-`$SCRATCH/simgrid/<test-name>`.
-Each run creates a separate `output-<jobid>-<suffix>` directory there and retains `gemc.hipo` inside it.
-The full output path is printed in the log. Slurm's log remains in the submission directory.
+The GEMC-based tests (clasdis, lund-workflow) and the OSG test node script all call
+`setup_test_environment` in `generators/bash/functions.sh`. It exports
+`CLAS12_CONFIG`/`OSRELEASE`/`RCDB_CONNECTION`, runs `clean_and_check_environment` and
+`setup_job_files`, and takes every software version from the `CLAS12_*` defaults at the top of
+`functions.sh` (`gemc/dev`, `sqlite/dev`, `jdk/21.0.2`, `coatjava/14.1.2`, config tag `dev`,
+reconstruction `highlumi_stage2`/`mc-ai`). OSG and NERSC therefore exercise the same stack; override
+any default in the environment before submitting.
 
 ## Lund workflow
 
@@ -108,13 +104,29 @@ sbatch --array=1-$(grep -c . lund_files) lund-workflow.sbatch
 the array in one step — the NERSC analog of the OSG `queue lundFile from lund_files` fan-out:
 
 ```shell
-nersc_io/submit-lund-workflow.sh [gcard] [nevents] [image]
+nersc_io/submit-lund-workflow.sh [nevents] [image]
 ```
 
 Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer token by running
 `/sshkeys/token-renew.zsh` in-container. The launcher mounts the host `$HOME/.ssh` (holding both
 `id_ed25519` and `token-renew.zsh`) read-only at `/sshkeys`, and the token is written to
 `$BEARER_TOKEN_FILE`. The job fails fast if no token is produced.
+
+## Generators workflow
+
+`generators-workflow.sbatch` is a smoke test for the mcgen event generators. It is a Slurm job array
+over `generators_list` (one generator per row); each task loads the `mcgen` module and runs
+`<generator> --trig <ntrig> --docker` (default `ntrig` 100), then checks a nonempty `.dat` was
+produced. Per-task logs are `generators-workflow/generators-workflow-<arrayID>_<taskID>.out`.
+
+```shell
+mkdir -p generators-workflow
+sbatch generators-workflow.sbatch
+sbatch --array=1-$(grep -c . generators_list) generators-workflow.sbatch
+```
+
+`generators_list` holds the generators from https://code.jlab.org/hallb/clas12/mcgen; edit it (and the
+`--array` range) to add or remove generators.
 
 The shared host launcher handles mounts, metadata forwarding, and container startup. Additional
 arguments are passed unchanged to the node script, and its exit code is returned to the caller.
@@ -123,24 +135,24 @@ From an interactive compute allocation, the equivalent standalone call is:
 ```shell
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
-export SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464
 mkdir -p "$SCRATCH/simgrid/clasdis"
 cd "$SCRATCH/simgrid/clasdis"
-run_nersc_container docker.io/jeffersonlab/gemc:dev-almalinux94 \
-    "$repo_dir/tests/nersc_submission/nodescript-clasdis.sh"
+run_nersc_container ghcr.io/gemc/simgrid:test \
+    "$repo_dir/tests/nersc/nodescript-clasdis.sh"
 ```
 
-The launcher mounts the current directory read-write and the node script and shared functions read-only.
-It exposes `SIMGRID_FUNCTIONS_FILE` and `SIMGRID_BACKEND` to the container. A caller can set
-`SIMGRID_FUNCTIONS_FILE` before launching to use a different host copy of the shared functions.
+The launcher stages `functions.sh` and the node script into the working directory (as HTCondor does
+on OSG), then runs the staged node script there. It exposes `SIMGRID_FUNCTIONS_FILE` and
+`SIMGRID_BACKEND` to the container. A caller can set `SIMGRID_FUNCTIONS_FILE` before launching to use a
+different host copy of the shared functions.
 Use Slurm for simulation execution; a standalone invocation runs on the calling node. To run only the
 environment report directly on a login node, use:
 
 ```shell
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
-run_nersc_container docker.io/jeffersonlab/clas12software:production \
-    "$repo_dir/tests/nersc_submission/environment.sh"
+run_nersc_container ghcr.io/gemc/simgrid:test \
+    "$repo_dir/tests/nersc/environment.sh"
 ```
 
 To open an interactive container shell on a login node:
@@ -148,7 +160,7 @@ To open an interactive container shell on a login node:
 ```shell
 podman-hpc run --rm -it --pull=never \
     --entrypoint /bin/bash \
-    docker.io/jeffersonlab/clas12software:production -l
+    ghcr.io/gemc/simgrid:test -l
 ```
 
 Replace the image reference to use another image already pulled with `podman-hpc pull`. Type `exit`

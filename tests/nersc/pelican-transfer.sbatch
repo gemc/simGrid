@@ -18,7 +18,7 @@ set -eu
 # Global home is available on compute nodes, independently of the submission directory.
 repo_dir="$HOME/software/simgrid/main"
 source "$repo_dir/nersc_io/container.sh"
-image="docker.io/jeffersonlab/clas12software:production"
+image="ghcr.io/gemc/simgrid:test"
 
 # Keep the downloaded template and any retries isolated in a directory named for this test.
 work_dir="$SCRATCH/simgrid/pelican-transfer"
@@ -27,4 +27,4 @@ cd "$work_dir"
 
 # The node script renews an osdf://jlab-osdf token with token-renew.zsh; the launcher mounts the
 # host .ssh (key + script) at /sshkeys.
-run_nersc_container "$image" "$repo_dir/tests/nersc_submission/pelican_transfer.sh"
+run_nersc_container "$image" "$repo_dir/tests/nersc/pelican_transfer.sh"

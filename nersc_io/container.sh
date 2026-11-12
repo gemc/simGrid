@@ -12,10 +12,9 @@ run_nersc_container() {
     local nodescript="$2"
     shift 2
     local functions_file="${SIMGRID_FUNCTIONS_FILE:-$HOME/software/simgrid/main/generators/bash/functions.sh}"
-    local config_dir="${SIMGRID_CONFIG_DIR:-}"
     local file
 
-    # Bind sources must be absolute, including for standalone calls with ./nodescript.sh.
+    # Resolve sources to absolute paths, including standalone calls with ./nodescript.sh.
     [[ "$nodescript" == /* ]] || nodescript="$PWD/$nodescript"
     [[ "$functions_file" == /* ]] || functions_file="$PWD/$functions_file"
     for file in "$nodescript" "$functions_file"; do
@@ -25,29 +24,35 @@ run_nersc_container() {
         fi
     done
 
+    # Stage the worker scripts into the working directory, exactly as HTCondor does on OSG, instead
+    # of bind-mounting them: copy functions.sh and the node script next to the job's output. The
+    # atomic temp+mv keeps concurrent array tasks from reading a half-written file. The working
+    # directory lives on $SCRATCH, which podman-hpc mounts into the container automatically.
+    local ns_base
+    ns_base=$(basename "$nodescript")
+    cp -f "$functions_file" "$PWD/.stage.$$.functions" \
+        && mv -f "$PWD/.stage.$$.functions" "$PWD/functions.sh" \
+        || { printf 'Failed to stage functions.sh into %s\n' "$PWD" >&2; return 2; }
+    cp -f "$nodescript" "$PWD/.stage.$$.$ns_base" \
+        && mv -f "$PWD/.stage.$$.$ns_base" "$PWD/$ns_base" \
+        || { printf 'Failed to stage %s into %s\n' "$ns_base" "$PWD" >&2; return 2; }
+
     printf 'Compute host: %s\n' "$(hostname)"
     printf 'Container image: %s\n' "$image"
-    printf 'Node script: %s\n' "$nodescript"
+    printf 'Node script: %s\n' "$PWD/$ns_base"
 
-    # Images must already be pulled/migrated. Keep job commands in the mounted nodescript.
-    # Forward only scheduler/storage metadata, leaving the image's software environment intact.
+    # podman-hpc auto-mounts the NERSC filesystems ($HOME, $SCRATCH, /global/cfs), so the only
+    # explicit mounts are CVMFS and the ssh keys the token script expects at /sshkeys. Forward
+    # scheduler/storage metadata and leave the image's software environment intact.
     local -a cmd=(
         podman-hpc run --rm --pull=never
-        --volume "${PWD}:${PWD}"
-        --volume "${functions_file}:/opt/simgrid/functions.sh:ro"
-        --volume "${nodescript}:/opt/simgrid/nodescript.sh:ro"
         --workdir "$PWD"
         --env 'SLURM_*'
         --env SCRATCH
-        --env SIMGRID_FUNCTIONS_FILE=/opt/simgrid/functions.sh
+        --env SIMGRID_FUNCTIONS_FILE="${PWD}/functions.sh"
         --env SIMGRID_BACKEND=nersc
         --entrypoint /bin/bash
     )
-
-    # Mount the host ssh keys so node scripts can renew an OSDF bearer token with token-renew.zsh.
-    if [[ -d "$HOME/.ssh" ]]; then
-        cmd+=(--volume "$HOME/.ssh:/sshkeys:ro")
-    fi
 
     # Mount CVMFS at the same path when the JLab repository is available on the host, so the
     # container resolves /cvmfs/jlab.opensciencegrid.org (gemc config, geometry, fields, modules).
@@ -58,14 +63,11 @@ run_nersc_container() {
             "$(hostname)" >&2
     fi
 
-    if [[ -n "$config_dir" ]]; then
-        [[ "$config_dir" == /* ]] || config_dir="$PWD/$config_dir"
-        if [[ ! -d "$config_dir" || ! -r "$config_dir" || ! -x "$config_dir" ]]; then
-            printf 'Configuration directory is not accessible: %s\n' "$config_dir" >&2
-            return 2
-        fi
-        cmd+=(--group-add keep-groups --volume "${config_dir}:${config_dir}:ro")
+    # Mount the host ssh keys so node scripts can renew an OSDF bearer token with token-renew.zsh.
+    if [[ -d "$HOME/.ssh" ]]; then
+        cmd+=(--volume "$HOME/.ssh:/sshkeys:ro")
     fi
-    cmd+=("$image" -l /opt/simgrid/nodescript.sh "$@")
+
+    cmd+=("$image" -l "$PWD/$ns_base" "$@")
     "${cmd[@]}"
 }

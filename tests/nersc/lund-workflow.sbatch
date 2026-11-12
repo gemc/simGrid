@@ -24,17 +24,16 @@ source "$repo_dir/nersc_io/container.sh"
 # --array above matches the four rows currently in lund_files; override it to match the file's
 # line count, for example:
 #   sbatch --array=1-$(grep -c . lund_files) lund-workflow.sbatch
-# Usage: sbatch lund-workflow.sbatch [gcard] [nevents] [image]
-if [[ $# -gt 3 ]]; then
-    printf 'Usage: sbatch lund-workflow.sbatch [gcard] [nevents] [image]\n' >&2
+# Usage: sbatch lund-workflow.sbatch [nevents] [image]
+if [[ $# -gt 2 ]]; then
+    printf 'Usage: sbatch lund-workflow.sbatch [nevents] [image]\n' >&2
     exit 2
 fi
 
-# An empty argument lets the nodescript select its default gcard.
-gcard="${1:-/global/cfs/cdirs/m5464/clas12-config/main/gemc/dev/rga_fall2018.gcard}"
-nevents="${2:-100}"
-image="${3:-ghcr.io/gemc/simgrid:test}"
-lund_list="$repo_dir/tests/nersc_submission/lund_files"
+# The node script derives the gcard from CLAS12_CONFIG (CVMFS); gemc is loaded from CVMFS modules.
+nevents="${1:-100}"
+image="${2:-ghcr.io/gemc/simgrid:test}"
+lund_list="$repo_dir/tests/nersc/lund_files"
 
 # The array index is the row position in lund_files: task N fetches the Lund file on line N.
 task_id="${SLURM_ARRAY_TASK_ID:-1}"
@@ -45,12 +44,10 @@ if [[ -z "$lund_file" ]]; then
 fi
 printf 'Array task %s -> %s\n' "$task_id" "$lund_file"
 
-# Expose project CFS at the same absolute path; the launcher mounts this directory read-only.
-export SIMGRID_CONFIG_DIR=/global/cfs/cdirs/m5464
 work_dir="$SCRATCH/simgrid/lund-workflow"
 mkdir -p "$work_dir"
 cd "$work_dir"
 
 # Each task renews an osdf://jlab-osdf token with token-renew.zsh; the launcher mounts the
 # host .ssh (key + script) at /sshkeys.
-run_nersc_container "$image" "$repo_dir/tests/nersc_submission/nodescript-lund.sh"  "$gcard" "$nevents" "$lund_file"
+run_nersc_container "$image" "$repo_dir/tests/nersc/nodescript-lund.sh" "$nevents" "$lund_file"
