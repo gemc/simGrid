@@ -1,4 +1,4 @@
-﻿#!/bin/zsh
+#!/bin/zsh
 
 # use ssh agent to grab a new token
 uid=$(id -u)

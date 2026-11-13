@@ -47,6 +47,12 @@ if [[ -z "$lund_file" ]]; then
 fi
 printf 'Array task %s -> %s\n' "$task_id" "$lund_file"
 
+# Use the input basename and address only this array task.
+if [[ -n "${SLURM_ARRAY_JOB_ID:-}" ]]; then
+    scontrol update "JobId=${SLURM_ARRAY_JOB_ID}_${task_id}" "JobName=lund-${lund_file##*/}" \
+        || printf 'Warning: could not update the Lund task name.\n' >&2
+fi
+
 work_dir="$SCRATCH/simgrid/lund"
 mkdir -p "$work_dir"
 cd "$work_dir"

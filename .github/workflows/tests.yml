@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web_portal/type1.php'
+      - 'tests/nersc/generators_list'
+      - 'tests/test_generators_list.py'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - 'web_portal/type1.php'
+      - 'tests/nersc/generators_list'
+      - 'tests/test_generators_list.py'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generators-list-sync:
+    name: generators_list matches the portal generator dropdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check tests/nersc/generators_list is in sync with web_portal/type1.php
+        run: python3 -m unittest tests.test_generators_list -v

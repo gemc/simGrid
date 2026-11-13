@@ -31,7 +31,7 @@ listing=$("${cmd[@]}")
 printf '%s\n' "$listing"
 
 # input: remote dis.dat, output: ./dis.dat template to re-upload
-cmd=(pelican object get "$base/dis.dat")
+cmd=(pelican object get "$base/dis.dat" dis.dat)
 echo "Running pelican get: ${cmd[@]}"
 run_timed "${cmd[@]}"
 if [[ ! -s dis.dat ]]; then

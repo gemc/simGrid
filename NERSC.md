@@ -133,6 +133,70 @@ itself, so the script is reachable at `/sshkeys/token-renew.zsh` inside the cont
 
 <br/>
 
+## Job monitoring and failure handling
+
+Use `squeue` for pending and running jobs, and `sacct` for both active jobs and finished-job history:
+
+```shell
+squeue -u "$USER"
+sacct -u "$USER" --starttime today -X \
+    --format=JobID%25,JobName%40,State%20,ExitCode,Elapsed
+```
+
+Replace `today` with a date to inspect older jobs. Failed jobs leave `squeue` but remain in accounting
+history; they have already released their resources and do not need to be removed. Logs and output files
+remain on disk until deleted separately. For arrays, inspect each task's state and exit code.
+
+The main states and flags are:
+
+| State | Meaning |
+|---|---|
+| `PENDING` | Waiting to start; the reason can indicate a hold |
+| `RUNNING` | Executing |
+| `COMPLETING` | Finishing cleanup |
+| `COMPLETED` | Finished successfully |
+| `FAILED` | Nonzero exit code or another failure |
+| `OUT_OF_MEMORY` | Exceeded available memory |
+| `TIMEOUT` | Reached the time limit |
+| `NODE_FAIL` / `BOOT_FAIL` | Compute-node failure |
+| `CANCELLED` | Cancelled by the user or an administrator |
+| `PREEMPTED` | Interrupted by scheduler policy; may be requeued |
+| `SPECIAL_EXIT` | Special requeued-and-held condition |
+
+A held job commonly displays as `PENDING` with reason `JobHeldUser`. It consumes no compute resources and
+cannot start until released. See the [Slurm state reference](https://slurm.schedmd.com/job_state_codes.html)
+and [NERSC monitoring guide](https://docs.nersc.gov/jobs/monitoring/).
+
+To return a failed job to the queue in a held state, then release or cancel it:
+
+```shell
+scontrol requeuehold JOB_ID
+scontrol release JOB_ID    # Permit another run, starting the batch script from the beginning.
+scancel JOB_ID             # Cancel it instead if no retry is wanted.
+```
+
+Requeuing requires the job to remain known to the scheduler and the operation to be permitted; an old
+`sacct` record alone is not sufficient. Slurm also supports
+`scontrol requeuehold State=SpecialExit JOB_ID` to flag a held retry as `SPECIAL_EXIT`.
+See the [Slurm control commands](https://slurm.schedmd.com/scontrol.html).
+
+### Selecting which exit codes cause a hold
+
+Slurm's `RequeueExitHold` setting accepts selected exit codes and ranges, but it is an administrator
+setting, not a per-job `sbatch` option equivalent to Condor's `on_exit_hold`. For example, an administrator
+could configure `RequeueExitHold=202-215,230` to hold those batch exit codes automatically. This example
+does not describe a verified NERSC configuration. See the
+[Slurm configuration reference](https://slurm.schedmd.com/slurm.conf.html#OPT_RequeueExitHold).
+
+We can implement our own selection policy in a batch wrapper or submission monitor and request a held
+retry only for matching failures, subject to NERSC permissions. This would be a future addition; the
+current tests do not automatically hold failures. Match the final batch exit code: our GEMC wrapper maps
+GEMC failures to `204`, including a library-loader failure that originally returned `127`. Scheduler
+failures such as `TIMEOUT` and `OUT_OF_MEMORY` also need checks of the recorded state, since a batch
+wrapper may be terminated before it can handle them.
+
+<br/>
+
 ## Scrontab
 
 Before each cron command, a #SCRON directive is needed. Parameters:

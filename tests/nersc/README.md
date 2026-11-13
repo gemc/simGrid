@@ -121,7 +121,9 @@ any default in the environment before submitting.
 generator. It is a Slurm job array: each task reads one row of `lund_files` by its array index
 (`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
 matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
-GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are
+GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. At startup each task requests a Slurm name based on its
+input basename, such as `lund-dis1.dat`. Pending tasks keep the initial `lund` name until they start.
+Per-task logs are
 `lund/lund-<arrayID>_<taskID>.out` and the matching `.err`.
 
 The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
@@ -150,7 +152,19 @@ Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer tok
 `generators.sbatch` is a smoke test for the mcgen event generators. It is a Slurm job array
 over `generators_list` (one generator per row); each task loads the `mcgen` module and runs
 `<generator> --trig <ntrig> --docker` (default `ntrig` 100), then checks a nonempty `.dat` was
-produced. Per-task logs are `generators/generators-<arrayID>_<taskID>.out` and the matching `.err`.
+produced. At startup each task requests a Slurm name such as `generators-clasdis`; pending tasks keep the
+initial `generators` name until they start. Per-task logs are
+`generators/generators-<arrayID>_<taskID>.out` and the matching `.err`.
+
+Use a wider name column to display these names in accounting history:
+
+```shell
+sacct -u "$USER" --starttime today -X --format=JobID%25,JobName%40,State%20,ExitCode,Elapsed
+```
+
+Task naming uses `scontrol update JobId=<arrayID>_<taskID> JobName=<name>`. If the scheduler rejects the
+rename, the test prints a warning and continues with the original name. See the
+[Slurm array-task documentation](https://slurm.schedmd.com/job_array.html).
 
 ```shell
 mkdir -p generators

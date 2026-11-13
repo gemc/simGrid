@@ -46,6 +46,12 @@ if [[ -z "$generator" ]]; then
 fi
 printf 'Array task %s -> %s\n' "$task_id" "$generator"
 
+# Address this array task explicitly so sibling tasks keep their own names.
+if [[ -n "${SLURM_ARRAY_JOB_ID:-}" ]]; then
+    scontrol update "JobId=${SLURM_ARRAY_JOB_ID}_${task_id}" "JobName=generators-${generator}" \
+        || printf 'Warning: could not update the generator task name.\n' >&2
+fi
+
 work_dir="$SCRATCH/simgrid/generators"
 mkdir -p "$work_dir"
 cd "$work_dir"
