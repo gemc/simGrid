@@ -17,11 +17,12 @@ The available tests are:
    row in `generators_list`: each task loads the `mcgen` module and runs that generator with
    `--trig 100 --docker`, confirming it produces output.
 
-Each test writes its Slurm logs and job output into a directory named for the submission file
-(`environment.sbatch` → `environment/`, `lund.sbatch` → `lund/`). Slurm does not
-create it, so make the directory in the submission directory before submitting:
+Each test writes separate Slurm stdout (`.out`) and stderr (`.err`) logs into a directory named for the
+submission file (`environment.sbatch` → `environment/`, `lund.sbatch` → `lund/`). Slurm does not create
+it, so make the directory in the submission directory before submitting:
 
 ```
+mkdir -p pelican-transfer
 sbatch pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
@@ -30,10 +31,10 @@ squeue -j <job_id>
 To launch all .sbatch files in a directory:
 
 ```
-for f in *.sbatch; do sbatch "$f"; done
+for f in *.sbatch; do mkdir -p "${f%.sbatch}"; sbatch "$f"; done
 ```
 
-To kill a job a all jobs:
+To cancel selected jobs or all your jobs:
 
 ```
 scancel 123456 123457          # kill several jobs by ID
@@ -48,19 +49,34 @@ Explanation:
 
 Status:
 
-- `PD`: waiting for resources.
+- `PD`: pending; the reason may indicate resource availability, a dependency, or a hold.
 - `R`: running.
-- `No job row`: it has left the queue; check the final outcome:
-
-
-
+- `No job row`: it has left the queue; check the final outcome with `sacct`.
 
 After it finishes:
 
 ```
+job_id=123456  # Replace with the ID printed by sbatch.
+cat "pelican-transfer/pelican-transfer-${job_id}.err"
 cat "pelican-transfer/pelican-transfer-${job_id}.out"
-sacct -j "$job_id" --format=JobID,State,ExitCode,Elapsed,AllocCPUS
+sacct -j "$job_id" --format=JobID%25,State%20,ExitCode,Elapsed,AllocCPUS
 ```
+
+Slurm records runtime failures as terminal states such as `FAILED`, `OUT_OF_MEMORY`, `TIMEOUT`, or
+`NODE_FAIL`; it does not automatically keep them in a Condor-style `HOLD` queue. Use `squeue` for active
+jobs and `sacct` for completed jobs. A Slurm hold is a pending-job condition, not a runtime failure report.
+To see why an active job is pending:
+
+```shell
+squeue -j "$job_id" -o "%.20i %.12T %R"
+```
+
+For the Lund and generators arrays, `sacct -j "$job_id"` shows individual tasks; check every task's state
+and exit code. Their logs use `<test-name>/<test-name>-<arrayID>_<taskID>.out` and the matching `.err`.
+The container launcher returns the worker's nonzero exit code to the batch script so Slurm can record
+the failure. An empty `.err` is not proof of success: some applications and shared worker functions print
+failure messages to stdout, while warnings may appear on stderr. Check `State` and `ExitCode`, then read
+both logs for details. These directives apply to newly submitted jobs; existing logs remain combined.
 
 Expected result: the main job reports COMPLETED with ExitCode=0:0. Missing optional tools and
 uninitialized modules are reported without failing the environment report. The GEMC trial also
@@ -106,7 +122,7 @@ generator. It is a Slurm job array: each task reads one row of `lund_files` by i
 (`sed -n "${SLURM_ARRAY_TASK_ID}p"`), so the array index is the row position and the filenames do not
 matter. `nodescript-lund.sh` then fetches that file with `pelican object get <url> lund.dat` and runs
 GEMC with `-INPUT_GEN_FILE="lund, lund.dat"`. Per-task logs are
-`lund/lund-<arrayID>_<taskID>.out`.
+`lund/lund-<arrayID>_<taskID>.out` and the matching `.err`.
 
 The in-file default is `#SBATCH --array=1-4`, matching the four rows currently in `lund_files`. Submit
 with that default, or size the array to the file's line count:
@@ -134,7 +150,7 @@ Each task fetches from OSDF, so it first renews an `osdf://jlab-osdf` bearer tok
 `generators.sbatch` is a smoke test for the mcgen event generators. It is a Slurm job array
 over `generators_list` (one generator per row); each task loads the `mcgen` module and runs
 `<generator> --trig <ntrig> --docker` (default `ntrig` 100), then checks a nonempty `.dat` was
-produced. Per-task logs are `generators/generators-<arrayID>_<taskID>.out`.
+produced. Per-task logs are `generators/generators-<arrayID>_<taskID>.out` and the matching `.err`.
 
 ```shell
 mkdir -p generators

@@ -10,6 +10,7 @@
 #SBATCH --mem=2G
 #SBATCH --time=00:10:00
 #SBATCH --output=generators/generators-%A_%a.out
+#SBATCH --error=generators/generators-%A_%a.err
 #SBATCH --array=1-17
 
 # Logs are written under generators/ (named for this test); create it before submitting:

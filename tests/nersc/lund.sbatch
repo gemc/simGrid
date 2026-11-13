@@ -10,6 +10,7 @@
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
 #SBATCH --output=lund/lund-%A_%a.out
+#SBATCH --error=lund/lund-%A_%a.err
 #SBATCH --array=1-4
 
 # Logs are written under lund/ (named for this test); create it before submitting:

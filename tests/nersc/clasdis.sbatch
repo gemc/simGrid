@@ -10,6 +10,7 @@
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
 #SBATCH --output=clasdis/clasdis-%j.out
+#SBATCH --error=clasdis/clasdis-%j.err
 
 # Logs are written under clasdis/ (named for this test); create it before submitting:
 #   mkdir -p clasdis

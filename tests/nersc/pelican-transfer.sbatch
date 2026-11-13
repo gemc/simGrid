@@ -10,6 +10,7 @@
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
 #SBATCH --output=pelican-transfer/pelican-transfer-%j.out
+#SBATCH --error=pelican-transfer/pelican-transfer-%j.err
 
 # Logs are written under pelican-transfer/ (named for this test); create it before submitting:
 #   mkdir -p pelican-transfer

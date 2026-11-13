@@ -10,6 +10,7 @@
 #SBATCH --mem=2G
 #SBATCH --time=00:05:00
 #SBATCH --output=environment/environment-%j.out
+#SBATCH --error=environment/environment-%j.err
 
 # Logs are written under environment/ (named for this test); create it before submitting:
 #   mkdir -p environment
