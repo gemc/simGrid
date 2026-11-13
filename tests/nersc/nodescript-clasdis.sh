@@ -1,5 +1,5 @@
 #!/bin/bash
-# GEMC-only NERSC trial (internal generator). Uses the shared setup_test_environment so OSG and
+# Full NERSC trial (internal generator). Uses the shared setup_test_environment so OSG and
 # NERSC exercise the same module/config stack. Usage: nodescript-clasdis.sh [nevents]
 set -euo pipefail
 
@@ -47,6 +47,9 @@ cmd=(
     "-OUTPUT=hipo, gemc.hipo"
     "-INTEGRATEDRAW=*"
 )
+if [[ -n "${SIMGRID_TASK_SEED:-}" ]]; then
+    cmd+=("-RANDOM=$SIMGRID_TASK_SEED")
+fi
 echo "Running GEMC: ${cmd[@]}"
 run_timed run_gemc "${cmd[@]}"
 
@@ -55,4 +58,31 @@ if [[ ! -s gemc.hipo ]]; then
     exit "$EC_HIPO_SIZE"
 fi
 printf 'GEMC output: %s/gemc.hipo\n' "$output_dir"
+
+# input: gemc.hipo, output: recon.hipo
+unload_module_if_loaded gemc
+run_timed load_module "$CLAS12_JDK_MODULE"
+run_timed load_module "$CLAS12_COATJAVA_MODULE"
+yaml="${CLAS12_CONFIG}/coatjava/${CLAS12_COATJAVA_VERSION}/${CLAS12_RECON_YAML}.yaml"
+recon_util="/cvmfs/jlab.opensciencegrid.org/hallb/clas12/sw/noarch/coatjava/bin/recon-util"
+run_timed require_executable "$recon_util"
+cmd=("$recon_util" -y "$yaml" -i gemc.hipo -o recon.hipo -- -Xmx1920m)
+echo "Running Reconstruction: ${cmd[@]}"
+run_timed run_reconstruction "${cmd[@]}"
+rm -f gemc.hipo
+
+# input: recon.hipo, output: integrity status
+run_timed require_executable hipo-utils
+cmd=(hipo-utils -test recon.hipo)
+echo "Running HIPO Integrity Test: ${cmd[@]}"
+run_timed test_hipo_file "${cmd[@]}"
+
+# input: recon.hipo, output: named DST HIPO file retained on scratch
+DST_BANKS='RUN::*,RAW::epics,RAW::scaler,HEL::flip,HEL::online,REC::*,RECFT::*'
+DST_BANKS+=',MC::RecMatch,MC::GenMatch,MC::Particle,MC::User,MC::Header,MC::Lund,MC::Event'
+DST_BANKS+=',RICH::Particle,RICH::Ring'
+cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
+echo "Running DST Filter: ${cmd[@]}"
+run_timed create_dst clasdis "${SLURM_JOB_ID:-manual}" "${SIMGRID_TASK_ID:-0}" "${cmd[@]}"
+printf 'DST output: %s/%s\n' "$output_dir" "$OUTPUT_FILE"
 print_timing_summary

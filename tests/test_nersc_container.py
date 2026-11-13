@@ -50,8 +50,10 @@ class NerscContainerTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 arguments = self.args_file.read_bytes().decode().split("\0")[:-1]
                 mounts = [arguments[i + 1] for i, value in enumerate(arguments) if value == "--volume"]
-                self.assertIn(f"{self.node_script}:/opt/simgrid/nodescript.sh:ro", mounts)
-                self.assertIn(f"{FUNCTIONS_SH}:/opt/simgrid/functions.sh:ro", mounts)
+                self.assertIn(f"{self.work_dir}:{self.work_dir}", mounts)
+                self.assertEqual((self.work_dir / "functions.sh").read_bytes(), FUNCTIONS_SH.read_bytes())
+                self.assertEqual(arguments[arguments.index("--workdir") + 1], str(self.work_dir))
+                self.assertIn(str(self.node_script), arguments)
                 self.assertEqual(arguments[-2:], list(worker_args))
                 self.assertFalse((self.work_dir / "should-not-exist").exists())
 
@@ -72,10 +74,8 @@ class NerscContainerTests(unittest.TestCase):
         self.assertIn("Usage:", result.stderr)
         self.assertFalse(self.args_file.exists())
 
-    def test_configuration_directory_is_mounted_read_only_with_group_access(self):
-        config_dir = self.work_dir / "configuration files"
-        config_dir.mkdir()
-        self.env["SIMGRID_CONFIG_DIR"] = config_dir.name
+    def test_simulation_settings_and_task_identity_are_forwarded_in_both_shells(self):
+        self.env.update(SIMGRID_TASK_ID="17", SIMGRID_TASK_SEED="100017", CLAS12_GEMC_MODULE="gemc/dev")
         for shell in ("bash", "zsh"):
             with self.subTest(shell=shell):
                 if not shutil.which(shell):
@@ -83,11 +83,13 @@ class NerscContainerTests(unittest.TestCase):
                 result = self.run_launcher(shell, "registry/image:test", str(self.node_script))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 arguments = self.args_file.read_bytes().decode().split("\0")[:-1]
-                self.assertIn(f"{config_dir}:{config_dir}:ro", arguments)
-                self.assertEqual(arguments[arguments.index("--group-add") + 1], "keep-groups")
+                forwarded = [arguments[i + 1] for i, value in enumerate(arguments) if value == "--env"]
+                self.assertIn("CLAS12_*", forwarded)
+                self.assertIn("SIMGRID_TASK_ID", forwarded)
+                self.assertIn("SIMGRID_TASK_SEED", forwarded)
 
-    def test_missing_configuration_directory_fails_before_starting_podman(self):
-        self.env["SIMGRID_CONFIG_DIR"] = str(self.work_dir / "missing")
+    def test_missing_functions_fail_before_starting_podman(self):
+        self.env["SIMGRID_FUNCTIONS_FILE"] = str(self.work_dir / "missing-functions.sh")
         result = self.run_launcher("bash", "registry/image:test", str(self.node_script))
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.args_file.exists())

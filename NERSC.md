@@ -108,7 +108,7 @@ For batch jobs, `nersc_io/container.sh` provides `run_nersc_container <image> <n
 mounts a worker script and runs it non-interactively.
 
 To work inside an image by hand — renewing a token, inspecting OSDF storage, or trying a command before
-scripting it — launch it interactively with `podman-hpc run`. Mount the `.ssh` directory at `/sshkeys` so that
+scripting it — launch it interactively with `podman-hpc1 run`. Mount the `.ssh` directory at `/sshkeys` so that
 `token-renew` can install the JLab key and request a token:
 
 ```shell

@@ -63,7 +63,10 @@ jobs:
           tags: type=raw,value=${{ matrix.variant }}-${{ matrix.arch }}
 
       - name: Build and publish
+        id: build
         uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
         with:
           context: ./docker
           file: ./docker/Dockerfile-almalinux9-${{ matrix.variant }}
@@ -73,6 +76,41 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Export build logs
+        id: export_logs
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          filename="logs${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${VARIANT}-${ARCH}.tar.gz"
+          archive_path="$RUNNER_TEMP/$filename"
+          docker buildx history export --finalize --output "$archive_path" '^0'
+          tar -tzf "$archive_path" > /dev/null
+          printf 'path=%s\nname=%s\n' "$archive_path" "$filename" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build logs
+        id: build_logs
+        if: ${{ !cancelled() && steps.export_logs.outputs.path != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.export_logs.outputs.path }}
+          archive: false
+          if-no-files-found: error
+
+      - name: Link build logs in summary
+        if: ${{ !cancelled() && steps.build_logs.outputs.artifact-url != '' }}
+        shell: bash
+        env:
+          ARCHIVE_NAME: ${{ steps.export_logs.outputs.name }}
+          ARTIFACT_URL: ${{ steps.build_logs.outputs.artifact-url }}
+        run: |
+          printf '\n### Build logs\n\n[Download `%s`](%s)\n' \
+            "$ARCHIVE_NAME" "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
 
   manifest:
     name: Publish ${{ matrix.variant }} manifest

@@ -53,6 +53,9 @@ run_nersc_container() {
         --workdir "$PWD"
         --env 'SLURM_*'
         --env SCRATCH
+        --env 'CLAS12_*'
+        --env SIMGRID_TASK_ID
+        --env SIMGRID_TASK_SEED
         --env SIMGRID_FUNCTIONS_FILE="${PWD}/functions.sh"
         --env SIMGRID_BACKEND=nersc
         --entrypoint /bin/bash

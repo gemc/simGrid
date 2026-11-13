@@ -7,8 +7,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=2G
-#SBATCH --time=00:05:00
+#SBATCH --mem=4G
+#SBATCH --time=00:30:00
 #SBATCH --output=clasdis/clasdis-%j.out
 #SBATCH --error=clasdis/clasdis-%j.err
 
