@@ -19,6 +19,7 @@ set -eu
 # Resolve the checkout the job was submitted from; fall back to the installed main checkout.
 repo_dir="${SIMGRID_REPO_DIR:-$(cd "${SLURM_SUBMIT_DIR:-$PWD}/../.." 2>/dev/null && pwd)}"
 [[ -n "$repo_dir" && -f "$repo_dir/nersc_io/container.sh" ]] || repo_dir="$HOME/software/simgrid/main"
+export SIMGRID_FUNCTIONS_FILE="$repo_dir/generators/bash/functions.sh"
 source "$repo_dir/nersc_io/container.sh"
 
 # One array task runs per row in lund_files: the array index is the row number. The default

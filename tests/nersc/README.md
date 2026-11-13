@@ -27,6 +27,20 @@ squeue -u mungaro
 squeue -j <job_id>
 ```
 
+To launch all .sbatch files in a directory:
+
+```
+for f in *.sbatch; do sbatch "$f"; done
+```
+
+To kill a job a all jobs:
+
+```
+scancel 123456 123457          # kill several jobs by ID
+scancel -u $USER               # kill ALL your jobs
+
+```
+
 Explanation: 
 
 - `sbatch` submits the script to Slurm.
@@ -37,6 +51,9 @@ Status:
 - `PD`: waiting for resources.
 - `R`: running.
 - `No job row`: it has left the queue; check the final outcome:
+
+
+
 
 After it finishes:
 
@@ -134,6 +151,7 @@ From an interactive compute allocation, the equivalent standalone call is:
 
 ```shell
 repo_dir="$HOME/software/simgrid/main"
+export SIMGRID_FUNCTIONS_FILE="$repo_dir/generators/bash/functions.sh"
 source "$repo_dir/nersc_io/container.sh"
 mkdir -p "$SCRATCH/simgrid/clasdis"
 cd "$SCRATCH/simgrid/clasdis"
@@ -150,6 +168,7 @@ environment report directly on a login node, use:
 
 ```shell
 repo_dir="$HOME/software/simgrid/main"
+export SIMGRID_FUNCTIONS_FILE="$repo_dir/generators/bash/functions.sh"
 source "$repo_dir/nersc_io/container.sh"
 run_nersc_container ghcr.io/gemc/simgrid:test \
     "$repo_dir/tests/nersc/environment.sh"
