@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4G
+#SBATCH --mem=2500M
 #SBATCH --time=00:30:00
 #SBATCH --output=lund/lund-%A_%a.out
 #SBATCH --error=lund/lund-%A_%a.err
