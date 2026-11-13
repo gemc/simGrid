@@ -189,7 +189,7 @@ The shared reporting API is:
 
 ```shell
 source generators/bash/functions.sh
-report_environment        # Common system, storage, commands, and loaded modules.
+report_environment        # Common system, storage, CVMFS, and loaded modules.
 report_environment nersc  # Also report Slurm allocation and scratch location.
 report_environment osg    # Also report selected HTCondor job and site metadata.
 ```

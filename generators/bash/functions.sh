@@ -132,7 +132,6 @@ print_timing_summary() {
 # Missing optional tools and unavailable diagnostic services do not fail the job.
 report_environment() {
     local backend="${1:-}"
-    local tool
     case "$backend" in
         ""|osg|nersc) ;;
         *) printf 'Usage: report_environment [osg|nersc]\n' >&2; return 2 ;;
@@ -157,13 +156,6 @@ report_environment() {
     echo "=== Storage ==="
     printf 'TMPDIR: %s\n' "${TMPDIR:-unset}"
     df -h . || echo "Unable to report working-directory storage."
-
-    echo "=== Available commands ==="
-    for tool in podman-hpc shifter pelican gemc java python3; do
-        if ! command -v "$tool"; then
-            printf '%s: unavailable in this environment\n' "$tool"
-        fi
-    done
 
     echo "=== CVMFS ==="
     if [[ -d /cvmfs/jlab.opensciencegrid.org ]]; then

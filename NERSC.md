@@ -112,7 +112,7 @@ scripting it — launch it interactively with `podman-hpc run`. Mount the `.ssh`
 `token-renew` can install the JLab key and request a token:
 
 ```shell
-podman-hpc run -it --rm -v "$HOME/.ssh:/sshkeys:ro" ghcr.io/gemc/simgrid:test bash
+podman-hpc run -it --rm -v "$HOME/.ssh:/sshkeys:ro" -v /cvmfs:/cvmfs:ro ghcr.io/gemc/simgrid:test bash
 ```
 
 Once inside the container:

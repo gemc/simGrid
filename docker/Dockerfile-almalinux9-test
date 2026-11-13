@@ -34,10 +34,13 @@ RUN rpm -i https://repo.osg-htc.org/osg/24-main/osg-24-main-el9-release-latest.r
 
 RUN echo "module use /cvmfs/jlab.opensciencegrid.org/geant4/modules" >> /etc/profile.d/localSetup.sh
 
+# mesa-libGL/libpng/harfbuzz/libicu/pcre2-utf16: system runtime libraries the CVMFS gemc (Qt5 +
+# Geant4 OpenGL) links against; ldd of the CVMFS gemc shows these as the only "not found" libs.
 RUN dnf install -y --allowerasing \
     mariadb-devel python3-numpy gcc binutils lsof bzip2 wget curl nano bash tcsh zsh hostname \
     environment-modules rsync patch which pelican pelican-osdf-compat pelican-server htgettoken \
     openssh-clients \
+    mesa-libGL libpng harfbuzz libicu pcre2-utf16 \
  && dnf -y update \
  && dnf clean packages \
  && dnf clean all \
