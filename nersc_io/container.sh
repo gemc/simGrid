@@ -28,9 +28,9 @@ run_nersc_container() {
     done
 
     # Stage the worker scripts into the working directory, exactly as HTCondor does on OSG, instead
-    # of bind-mounting them: copy functions.sh and the node script next to the job's output. The
-    # atomic temp+mv keeps concurrent array tasks from reading a half-written file. The working
-    # directory lives on $SCRATCH, which podman-hpc mounts into the container automatically.
+    # of bind-mounting them individually: copy functions.sh and the node script next to the job's
+    # output. The atomic temp+mv keeps concurrent array tasks from reading a half-written file. The
+    # working directory is bind-mounted into the container at the same path (below).
     local ns_base
     ns_base=$(basename "$nodescript")
     cp -f "$functions_file" "$PWD/.stage.$$.functions" \
@@ -44,11 +44,12 @@ run_nersc_container() {
     printf 'Container image: %s\n' "$image"
     printf 'Node script: %s\n' "$PWD/$ns_base"
 
-    # podman-hpc auto-mounts the NERSC filesystems ($HOME, $SCRATCH, /global/cfs), so the only
-    # explicit mounts are CVMFS and the ssh keys the token script expects at /sshkeys. Forward
+    # Mount the working directory (it holds the staged scripts and receives the job output) at the
+    # same path, plus CVMFS and the ssh keys the token script expects at /sshkeys. Forward
     # scheduler/storage metadata and leave the image's software environment intact.
     local -a cmd=(
         podman-hpc run --rm --pull=never
+        --volume "${PWD}:${PWD}"
         --workdir "$PWD"
         --env 'SLURM_*'
         --env SCRATCH

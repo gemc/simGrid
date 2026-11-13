@@ -83,11 +83,11 @@ job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 `[nevents]` (default 100). It uses the shared `setup_test_environment` (below), loading `gemc` and
 `sqlite` from CVMFS modules and taking the gcard from `${CLAS12_CONFIG}/gemc/<tag>/<config>.gcard`.
 
-The launcher mounts only `/cvmfs` and the host `.ssh` (at `/sshkeys`); podman-hpc mounts the NERSC
-filesystems (`$HOME`, `$SCRATCH`, `/global/cfs`) automatically. `/cvmfs` is required, since the
+The launcher mounts the working directory (`$SCRATCH/simgrid/<test-name>`, holding the staged scripts
+and receiving output), `/cvmfs`, and the host `.ssh` (at `/sshkeys`). `/cvmfs` is required, since the
 software is loaded from CVMFS modules. Each run creates a separate `output-<jobid>-<suffix>` directory
-under `$SCRATCH/simgrid/<test-name>` and retains `gemc.hipo` inside it; the full path is printed in the
-log, and the Slurm log stays in `<test-name>/` in the submission directory.
+under the working directory and retains `gemc.hipo` inside it; the full path is printed in the log, and
+the Slurm log stays in `<test-name>/` in the submission directory.
 
 ## Shared environment setup
 
