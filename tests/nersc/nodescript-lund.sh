@@ -110,4 +110,12 @@ cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
 echo "Running DST Filter: ${cmd[@]}"
 run_timed create_dst lund "${SLURM_JOB_ID:-manual}" "${SIMGRID_TASK_ID:-${SLURM_ARRAY_TASK_ID:-0}}" "${cmd[@]}"
 printf 'DST output: %s/%s\n' "$output_dir" "$OUTPUT_FILE"
+
+# Upload the final DST to JLab under a unique per-job path (token obtained earlier for the fetch).
+jlab_dir="osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/lund/output-${SLURM_JOB_ID:-manual}"
+cmd=(pelican object put "$OUTPUT_FILE" "$jlab_dir/$OUTPUT_FILE")
+echo "Running pelican put: ${cmd[@]}"
+run_timed "${cmd[@]}"
+printf 'Uploaded DST to %s/%s\n' "$jlab_dir" "$OUTPUT_FILE"
+
 print_timing_summary

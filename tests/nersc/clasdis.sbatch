@@ -29,7 +29,7 @@ if [[ $# -gt 2 ]]; then
 fi
 
 # The node script derives the gcard from CLAS12_CONFIG (CVMFS); gemc is loaded from CVMFS modules.
-nevents="${1:-100}"
+nevents="${1:-200}"
 image="${2:-ghcr.io/gemc/simgrid:test}"
 
 work_dir="$SCRATCH/simgrid/clasdis"

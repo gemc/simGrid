@@ -56,6 +56,8 @@ run_nersc_container() {
         --env 'CLAS12_*'
         --env SIMGRID_TASK_ID
         --env SIMGRID_TASK_SEED
+        --env SIMGRID_TASK_STARTED_AT
+        --env SIMGRID_JLAB_OUTPUT_DIR
         --env SIMGRID_FUNCTIONS_FILE="${PWD}/functions.sh"
         --env SIMGRID_BACKEND=nersc
         --entrypoint /bin/bash

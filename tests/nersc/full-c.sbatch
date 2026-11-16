@@ -11,7 +11,7 @@
 #SBATCH --error=full-c/full-c-%j.err
 #SBATCH --signal=B:TERM@120
 
-# C: TaskFarmer executes 100 Lund + 100 clasdis tasks in one shared container per worker node.
+# C: TaskFarmer executes 100 clasdis tasks with 5,000 events each in one shared container per worker node.
 # Before submission: module load taskfarmer; mkdir -p full-c
 set -euo pipefail
 repo_dir="${SIMGRID_REPO_DIR:-$(cd "${SLURM_SUBMIT_DIR:-$PWD}/../.." && pwd)}"

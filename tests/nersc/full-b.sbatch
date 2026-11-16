@@ -11,7 +11,7 @@
 #SBATCH --error=full-b/full-b-%j.err
 #SBATCH --signal=B:TERM@120
 
-# B: TaskFarmer launches a separate container for each of 100 Lund + 100 clasdis tasks.
+# B: TaskFarmer launches a separate container for each of 100 clasdis tasks with 5,000 events each.
 # Before submission: module load taskfarmer; mkdir -p full-b
 set -euo pipefail
 repo_dir="${SIMGRID_REPO_DIR:-$(cd "${SLURM_SUBMIT_DIR:-$PWD}/../.." && pwd)}"

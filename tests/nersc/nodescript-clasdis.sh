@@ -3,6 +3,10 @@
 # NERSC exercise the same module/config stack. Usage: nodescript-clasdis.sh [nevents]
 set -euo pipefail
 
+if [[ -n "${SIMGRID_TASK_STARTED_AT:-}" ]]; then
+    printf 'Task launch delay to worker start: %ss\n' "$(( $(date +%s) - SIMGRID_TASK_STARTED_AT ))"
+fi
+
 source "${SIMGRID_FUNCTIONS_FILE:-functions.sh}"
 define_exit_codes
 
@@ -10,7 +14,7 @@ if [[ $# -gt 1 ]]; then
     printf 'Usage: nodescript-clasdis.sh [nevents]\n' >&2
     exit 2
 fi
-nevents="${1:-100}"
+nevents="${1:-200}"
 if [[ ! "$nevents" =~ ^[1-9][0-9]*$ ]]; then
     printf 'Event count must be a positive integer: %s\n' "$nevents" >&2
     exit 2
@@ -85,4 +89,25 @@ cmd=(hipo-utils -filter -b "$DST_BANKS" -merge -o dst.hipo recon.hipo)
 echo "Running DST Filter: ${cmd[@]}"
 run_timed create_dst clasdis "${SLURM_JOB_ID:-manual}" "${SIMGRID_TASK_ID:-0}" "${cmd[@]}"
 printf 'DST output: %s/%s\n' "$output_dir" "$OUTPUT_FILE"
+
+# Obtain an OSDF bearer token, then upload the final DST to JLab under a unique per-job path.
+run_timed require_executable pelican
+uid=$(id -u)
+export XDG_RUNTIME_DIR="/run/user/$uid"
+export BEARER_TOKEN_FILE="${BEARER_TOKEN_FILE:-/var/run/user/$uid/bt_u$uid}"
+if [[ "${SIMGRID_TOKEN_READY:-0}" != 1 ]]; then
+    echo "Running token-renew: zsh /sshkeys/token-renew.zsh"
+    run_timed zsh /sshkeys/token-renew.zsh
+fi
+if [[ ! -s "$BEARER_TOKEN_FILE" ]]; then
+    echo "token-renew did not produce a bearer token at $BEARER_TOKEN_FILE" >&2
+    exit "$EC_INFRASTRUCTURE"
+fi
+jlab_dir="osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/clasdis/output-${SLURM_JOB_ID:-manual}"
+jlab_dir="${SIMGRID_JLAB_OUTPUT_DIR:-$jlab_dir}"
+cmd=(pelican object put "$OUTPUT_FILE" "$jlab_dir/$OUTPUT_FILE")
+echo "Running pelican put: ${cmd[@]}"
+run_timed "${cmd[@]}"
+printf 'Uploaded DST to %s/%s\n' "$jlab_dir" "$OUTPUT_FILE"
+
 print_timing_summary

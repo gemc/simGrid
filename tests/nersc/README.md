@@ -15,7 +15,7 @@ The available tests are:
    Lund file from OSDF, and runs GEMC, reconstruction, HIPO validation, and DST creation.
 - `full-b.sbatch` runs TaskFarmer with a separate container for each simulation task (layout B).
 - `full-c.sbatch` runs TaskFarmer with one shared container per worker node (layout C).
-   Each full test runs 100 Lund jobs and 100 clasdis jobs, with 500 events per job.
+   Each full test runs 100 clasdis jobs with 5,000 events per job.
 - `generators.sbatch` runs `nodescript-generators.sh` as a Slurm job array, one task per
    row in `generators_list`: each task loads the `mcgen` module and runs that generator with
    `--trig 100 --docker`, confirming it produces output.
@@ -99,7 +99,7 @@ job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 
 `clasdis.sbatch` runs `nodescript-clasdis.sh`: GEMC with its internal electron generator
 (`-INPUT_GEN_FILE=gemc_internal`, `-BEAM_P="e-, 4*GeV, 20*deg, 20*deg"`). Optional argument
-`[nevents]` (default 100). It uses the shared `setup_test_environment` (below), loading `gemc` and
+`[nevents]` (default 200). It uses the shared `setup_test_environment` (below), loading `gemc` and
 `sqlite` from CVMFS modules and taking the gcard from `${CLAS12_CONFIG}/gemc/<tag>/<config>.gcard`.
 
 The launcher mounts the working directory (`$SCRATCH/simgrid/<test-name>`, holding the staged scripts
@@ -109,8 +109,8 @@ under the working directory. After GEMC, both this workflow and the Lund workflo
 reconstruction command (`recon-util ... -- -Xmx1920m`), test `recon.hipo`, and apply the same DST bank
 filter. The shared `create_dst` wrapper validates the final DST and removes `recon.hipo`; GEMC output
 is removed after successful reconstruction. The resulting named DST stays in the output directory,
-and its full path is printed in the log. These tests do not upload the DST to JLab. The standalone
-Lund and clasdis jobs request 4 GB and 30 minutes to accommodate reconstruction.
+and its full path is printed in the log. The DST is also uploaded to JLab under a unique per-job path.
+The standalone Lund and clasdis jobs request 30 minutes to accommodate reconstruction.
 
 ## Shared environment setup
 
@@ -184,18 +184,20 @@ sbatch --array=1-$(grep -c . generators_list) generators.sbatch
 
 ## Full TaskFarmer comparison: B and C
 
-Upcoming in the next release: `full-b.sbatch` and `full-c.sbatch` run the same 200-task workload:
-100 Lund jobs plus 100 clasdis jobs, all with 500 requested events. The clasdis workflow retains the
-existing internal electron generator; it does not invoke the external `clasdis` executable. The four
-URLs in `lund_files` are cycled across the 100 Lund tasks. These repeated inputs measure throughput;
-they do not represent 100 distinct Lund datasets. Task IDs and GEMC seeds are identical between B
-and C, with seed `100000 + task_id`.
+See [README_b.md](README_b.md) for the per-task container walkthrough and
+[README_c.md](README_c.md) for the shared-container walkthrough, including startup, physics steps,
+outputs, monitoring, and restart behavior.
+
+Upcoming in the next release: `full-b.sbatch` and `full-c.sbatch` run the same 100-task workload:
+100 clasdis jobs with 5,000 requested events each. The clasdis workflow retains the existing internal
+electron generator; it does not invoke the external `clasdis` executable. The full tests do not use
+Lund inputs. Task IDs run from 0 through 99, with the same GEMC seed `100000 + task_id` in B and C.
 
 Each test requests two full CPU nodes in the regular QOS: one TaskFarmer manager and one worker.
 The CPU request exposes all 256 hardware threads per node. `THREADS=100` sets the worker's maximum
-concurrent simulation tasks; it can be lowered before submission. There are 100,000 requested
-events per test, or 200,000 across both layouts. These are two Slurm allocations, each containing
-200 simulation tasks, rather than 400 separate Slurm submissions.
+concurrent simulation tasks; it can be lowered before submission. There are 500,000 requested
+events per test, or 1,000,000 across both layouts. These are two Slurm allocations, each containing
+100 simulation tasks, rather than 200 separate Slurm submissions.
 
 Submit from `tests/nersc` after pulling the image and preparing `$HOME/.ssh` as for the Lund test:
 
@@ -211,22 +213,42 @@ concurrency, submit with `THREADS=20 sbatch full-b.sbatch` and the same setting 
 the same shared CLAS12 defaults as the standalone tests. For a fair comparison, keep the image,
 software versions, inputs, node count, and concurrency unchanged between the two runs.
 
-`full-taskfarmer.sh` snapshots the node scripts, shared functions, and Lund list into
+`full-taskfarmer.sh` snapshots the clasdis node script, shared functions, and task wrappers into
 `$SCRATCH/simgrid/full-b/<job_id>/` or `full-c/<job_id>/`, then writes `tasks.txt` and starts
 `runcommands.sh`. Each task has a separate `jobs/<task_id>/` directory with `task.out`, `task.err`,
-an `exit-code` file, and an isolated output directory containing the validated DST. Even task IDs
-use Lund inputs; odd IDs use the internal generator. Success requires 200 zero exit-code records.
+an `exit-code` file, and an isolated output directory containing the validated DST. All tasks use
+the internal generator. Success requires 100 zero exit-code records for a new campaign.
 The batch log prints completed tasks and elapsed seconds; include the manager node when comparing
 allocated node-hours. Slurm accounting alone describes the allocation, so also inspect task logs
 and TaskFarmer's progress and error files.
 
+Each task sends its validated DST to JLab with Pelican. All HIPO files are placed directly inside
+the allocation's job-ID directory:
+
+```text
+/volatile/clas12/osg/ungaro/test/
+    full-b/<job_id>/clasdis-<job_id>-<task_id>.hipo
+    full-c/<job_id>/clasdis-<job_id>-<task_id>.hipo
+```
+
+The corresponding OSDF destinations are
+`osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/full-b/<job_id>/` and
+`osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/full-c/<job_id>/`. Each task keeps its scratch
+copy and reports a nonzero exit code if token initialization or the transfer fails.
+
 - B calls the existing container launcher once per task, with up to 100 simultaneous containers on
-  the worker node. Each Lund task renews its own token inside its container.
+  the worker node. Each task renews its token before uploading the DST to JLab.
 - C starts a named container on first use of each worker node and uses `podman-hpc exec` for each
-  task. Startup and the first Lund token renewal are serialized with a host-local `flock`; the
-  lock is released before simulation. All Lund tasks in that container share the token, while
-  their files, shell environments, and logs remain in separate task directories. This short test
-  assumes the token stays valid for the campaign; it does not implement periodic renewal.
+  task. Startup and token initialization are serialized with a host-local `flock`; the lock is
+  released before simulation. Tasks reuse that container's token. Their physics files, shell
+  environments, and logs remain in separate task directories.
+
+For comparison, each task log records its launch delay from wrapper startup to the worker script.
+This includes staging and container startup; in C it also includes shared startup and token-lock
+waits. Stage timing summaries distinguish GEMC, reconstruction, validation, and Pelican uploads.
+Compare launch delay, physics time, upload time, failures, and allocation node-hours separately.
+Use matching image/software versions, resources, event counts, and seeds, and repeat runs before
+drawing performance conclusions; network transfers and shared-service load can vary between runs.
 
 C uses explicit container lifecycle management rather than inserting `shared-run` around individual
 TaskFarmer commands: Podman-HPC's shared launcher expects coordinated parallel ranks. The batch script
@@ -243,7 +265,7 @@ TaskFarmer's [worker and recovery model](https://docs.nersc.gov/jobs/workflow/ta
 Podman-HPC's
 [shared launcher implementation](https://github.com/NERSC/podman-hpc/blob/main/podman_hpc/podman_hpc.py)
 describe the underlying mechanisms. Local mocked tests check task counts, command sequencing,
-container reuse, failure propagation, and token initialization. The B/C batch tests still require
+container reuse, failure propagation, and event arguments. The B/C batch tests still require
 execution on Perlmutter to establish runtime compatibility, memory use, and throughput.
 
 ## Container launcher

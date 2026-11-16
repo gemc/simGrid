@@ -17,6 +17,7 @@ class RunSelectionTests(unittest.TestCase):
             ("rge_spring2024_liq", "rge_spring2024"),
             ("rge_spring2024", "rge_spring2024"),
             ("rgd_fall2023", "rgd_fall2023"),
+            ("rgd_fall2023_ds", "rgd_fall2023"),
             ("example_sol_extra", "example_sol_extra"),
         ):
             with self.subTest(configuration=configuration):

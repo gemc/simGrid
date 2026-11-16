@@ -53,6 +53,7 @@ DENOISE_VERSION = "4.2.3"
 # Map such a configuration to the directory that actually holds its background
 # files.  This affects only the background fetch path, not the gcard or config.
 BG_CONFIGURATION_OVERRIDES = {
+	"rgd_fall2023_ds": "rgd_fall2023",
 	"rge_spring2024_sol": "rge_spring2024",
 	"rge_spring2024_liq": "rge_spring2024",
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Prepare and run the same 200-task, 500-event campaign for container layouts B and C.
+# Prepare and run the same clasdis campaign with 5,000 events per task for layouts B and C.
 set -euo pipefail
 layout="${1:?Expected B or C}"
 image="${2:?Expected container image}"
@@ -22,21 +22,13 @@ campaign=$(cd "$campaign" && pwd)
 # Preserve the task list and TaskFarmer progress files when explicitly resuming a campaign.
 if [[ ! -f "$campaign/tasks.txt" ]]; then
     cp "$repo_dir/generators/bash/functions.sh" "$campaign/scripts/functions.sh"
-    cp "$repo_dir/tests/nersc/"nodescript-{lund,clasdis}.sh "$campaign/scripts/"
+    cp "$repo_dir/tests/nersc/nodescript-clasdis.sh" "$campaign/scripts/"
     cp "$repo_dir/tests/nersc/full-task.sh" "$campaign/scripts/full-task.sh"
     cp "$repo_dir/nersc_io/container.sh" "$campaign/scripts/container.sh"
-    cp "$repo_dir/tests/nersc/lund_files" "$campaign/lund_files"
-    inputs=()
-    while IFS= read -r input; do inputs+=("$input"); done \
-        < <(sed '/^[[:space:]]*$/d' "$campaign/lund_files")
-    (( ${#inputs[@]} > 0 )) || { echo 'No Lund inputs listed.' >&2; exit 2; }
     printf '%s\n%s\n' "$layout" "$image" > "$campaign/config"
     for (( i=0; i<100; i++ )); do
-        printf 'bash %q %q %q %s lund %q %q\n' \
-            "$campaign/scripts/full-task.sh" "$campaign" "$layout" "$((2*i))" \
-            "$image" "${inputs[i % ${#inputs[@]}]}"
         printf 'bash %q %q %q %s clasdis %q\n' \
-            "$campaign/scripts/full-task.sh" "$campaign" "$layout" "$((2*i+1))" "$image"
+            "$campaign/scripts/full-task.sh" "$campaign" "$layout" "$i" "$image"
     done > "$campaign/tasks.txt"
 else
     expected=$(printf '%s\n%s' "$layout" "$image")
@@ -44,8 +36,9 @@ else
         echo 'Resume requires the original layout and image.' >&2; exit 2;
     }
 fi
-printf 'Campaign: %s\nLayout: %s; 100 Lund + 100 clasdis jobs; 500 events each; THREADS=%s\n' \
-    "$campaign" "$layout" "$THREADS"
+task_count=$(awk 'END {print NR}' "$campaign/tasks.txt")
+printf 'Campaign: %s\nLayout: %s; tasks=%s; THREADS=%s\n' \
+    "$campaign" "$layout" "$task_count" "$THREADS"
 [[ "${SIMGRID_FULL_PREPARE_ONLY:-0}" != 1 ]] || exit 0
 command -v runcommands.sh >/dev/null || {
     echo 'Load the taskfarmer module before submitting.' >&2; exit 2;
@@ -77,7 +70,7 @@ for status in jobs/*/exit-code; do
     [[ -f "$status" ]] || continue
     if [[ "$(cat "$status")" == 0 ]]; then completed=$((completed+1)); fi
 done
-printf 'Completed: %s/200; elapsed: %ss; allocated nodes: %s\n' \
-    "$completed" "$((finished-started))" "$SLURM_NNODES"
-(( completed == 200 )) || rc=1
+printf 'Completed: %s/%s; elapsed: %ss; allocated nodes: %s\n' \
+    "$completed" "$task_count" "$((finished-started))" "$SLURM_NNODES"
+(( completed == task_count )) || rc=1
 exit "$rc"

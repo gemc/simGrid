@@ -13,8 +13,8 @@ layout="${2:?}"
 task_id="${3:?}"
 workflow="${4:?}"
 image="${5:?}"
-case "$layout" in B|C) ;; *) exit 2 ;; esac
-case "$workflow" in lund|clasdis) ;; *) exit 2 ;; esac
+case "$layout" in B) test_name=full-b ;; C) test_name=full-c ;; *) exit 2 ;; esac
+case "$workflow" in clasdis) ;; *) exit 2 ;; esac
 [[ "$task_id" =~ ^[0-9]+$ ]] || exit 2
 task_dir="$campaign/jobs/$task_id"
 mkdir -p "$task_dir"
@@ -29,13 +29,14 @@ record_result() {
 }
 trap record_result EXIT
 export SIMGRID_TASK_ID="$task_id" SIMGRID_TASK_SEED="$((100000+task_id))"
+export SIMGRID_TASK_STARTED_AT="$started"
+export SIMGRID_JLAB_OUTPUT_DIR="osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/$test_name/$SLURM_JOB_ID"
 export SIMGRID_FUNCTIONS_FILE="$campaign/scripts/functions.sh"
 nodescript="$campaign/scripts/nodescript-$workflow.sh"
-args=(500)
-if [[ "$workflow" == lund ]]; then args+=("${6:?Expected Lund URI}"); fi
+args=(5000)
 
 if [[ "$layout" == C ]]; then
-    # Serialize startup and token renewal on each host, then release the lock before any physics.
+    # Serialize startup and shared-token initialization, then release the lock before any physics.
     state="$campaign/containers/$(hostname -s)"
     mkdir -p "$state"
     exec 9> "${TMPDIR:-/tmp}/simgrid-full-${SLURM_JOB_ID}-${UID}.lock"
@@ -46,10 +47,9 @@ if [[ "$layout" == C ]]; then
             --volume "$HOME/.ssh:/sshkeys:ro" --env 'SLURM_*' --env SCRATCH
             --env 'CLAS12_*' --env SIMGRID_BACKEND=nersc --entrypoint /bin/bash)
         "${cmd[@]}" "$image" -lc 'exec sleep infinity'
-        # This marker belongs to this container instance, including after a campaign is resumed.
         rm -f "$state/token-ready"
     fi
-    if [[ "$workflow" == lund && ! -f "$state/token-ready" ]]; then
+    if [[ ! -f "$state/token-ready" ]]; then
         podman-hpc exec "$container_name" /bin/bash -lc '
             uid=$(id -u)
             export XDG_RUNTIME_DIR=/run/user/$uid BEARER_TOKEN_FILE=/var/run/user/$uid/bt_u$uid
@@ -62,7 +62,9 @@ if [[ "$layout" == C ]]; then
     cmd=(podman-hpc exec --workdir "$task_dir"
         --env SIMGRID_FUNCTIONS_FILE="$SIMGRID_FUNCTIONS_FILE"
         --env SIMGRID_TASK_ID="$SIMGRID_TASK_ID" --env SIMGRID_TASK_SEED="$SIMGRID_TASK_SEED"
-        --env SIMGRID_TOKEN_READY=1 "$container_name" /bin/bash -l "$nodescript" "${args[@]}")
+        --env SIMGRID_TASK_STARTED_AT="$SIMGRID_TASK_STARTED_AT"
+        --env SIMGRID_JLAB_OUTPUT_DIR="$SIMGRID_JLAB_OUTPUT_DIR" --env SIMGRID_TOKEN_READY=1
+        "$container_name" /bin/bash -l "$nodescript" "${args[@]}")
 else
     source "$campaign/scripts/container.sh"
     cmd=(run_nersc_container "$image" "$nodescript" "${args[@]}")

@@ -39,7 +39,12 @@ class FullWorkflowTests(unittest.TestCase):
             '  [[ "${FAIL_STEP:-}" != "$1" ]] || return 214\n'
             '  if [[ "$1" == -filter ]]; then cp recon.hipo dst.hipo; else test -s "$2"; fi\n'
             '}\n'
-            'pelican() { printf input > lund.dat; }\n'
+            'pelican() {\n'
+            '  echo "pelican $*" >> "$TRACE"\n'
+            '  [[ "${FAIL_STEP:-}" != upload || "$1 $2" != "object put" ]] || return 202\n'
+            '  if [[ "$1 $2" == "object get" ]]; then printf input > lund.dat; fi\n'
+            '}\n'
+            'zsh() { echo "token-renew" >> "$TRACE"; }\n'
             'print_timing_summary() { :; }\n'
         )
         token = self.work / "token"
@@ -48,8 +53,10 @@ class FullWorkflowTests(unittest.TestCase):
                         SIMGRID_TASK_ID="17", SIMGRID_TASK_SEED="100017", SIMGRID_TOKEN_READY="1",
                         BEARER_TOKEN_FILE=str(token), SLURM_JOB_ID="123")
 
-    def run_workflow(self, workflow):
-        args = ["bash", str(NERSC / f"nodescript-{workflow}.sh"), "500"]
+    def run_workflow(self, workflow, events="500"):
+        args = ["bash", str(NERSC / f"nodescript-{workflow}.sh")]
+        if events is not None:
+            args.append(events)
         if workflow == "lund":
             args.append("osdf:///input/dis1.dat")
         return subprocess.run(args, cwd=self.work, env=self.env, capture_output=True, text=True)
@@ -71,6 +78,28 @@ class FullWorkflowTests(unittest.TestCase):
                 self.assertFalse((dst[0].parent / "gemc.hipo").exists())
                 self.assertFalse((dst[0].parent / "recon.hipo").exists())
                 self.trace.unlink()
+
+    def test_standalone_clasdis_defaults_to_200_events(self):
+        result = self.run_workflow("clasdis", events=None)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("-N=200 ", self.trace.read_text())
+
+    def test_full_layouts_upload_to_flat_job_directories_and_report_transfer_failure(self):
+        base = "osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test"
+        for layout in ("b", "c"):
+            for failed in (False, True):
+                with self.subTest(layout=layout, failed=failed):
+                    self.env.update(SIMGRID_JLAB_OUTPUT_DIR=f"{base}/full-{layout}/123",
+                                    SIMGRID_TOKEN_READY="1" if layout == "c" else "0",
+                                    FAIL_STEP="upload" if failed else "")
+                    result = self.run_workflow("clasdis", events="5000")
+                    self.assertEqual(result.returncode, 202 if failed else 0, result.stdout + result.stderr)
+                    commands = self.trace.read_text()
+                    destination = f"{base}/full-{layout}/123/clasdis-123-17.hipo"
+                    self.assertIn(f"pelican object put clasdis-123-17.hipo {destination}", commands)
+                    self.assertEqual("token-renew" in commands, layout == "b")
+                    self.assertEqual("Uploaded DST to" in result.stdout, not failed)
+                    self.trace.unlink()
 
     def test_reconstruction_and_integrity_failures_do_not_create_dst(self):
         for step in ("recon", "-test", "-filter"):
@@ -95,22 +124,22 @@ class TaskFarmerLayoutTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return self.work / "simgrid" / f"full-{layout.lower()}" / "123"
 
-    def test_layouts_have_identical_200_task_workloads_and_resume_preserves_state(self):
+    def test_layouts_have_identical_100_clasdis_tasks_and_resume_preserves_state(self):
         for layout in ("B", "C"):
             with self.subTest(layout=layout):
                 campaign = self.prepare(layout)
                 tasks = [shlex.split(line) for line in (campaign / "tasks.txt").read_text().splitlines()]
-                self.assertEqual(len(tasks), 200)
-                self.assertEqual([int(task[4]) for task in tasks], list(range(200)))
-                self.assertEqual(sum(task[5] == "lund" for task in tasks), 100)
-                self.assertEqual(sum(task[5] == "clasdis" for task in tasks), 100)
-                self.assertEqual(len({task[7] for task in tasks if task[5] == "lund"}), 4)
+                self.assertEqual(len(tasks), 100)
+                self.assertEqual([int(task[4]) for task in tasks], list(range(100)))
+                self.assertTrue(all(task[5] == "clasdis" and len(task) == 7 for task in tasks))
+                self.assertFalse((campaign / "lund_files").exists())
+                self.assertFalse((campaign / "scripts/nodescript-lund.sh").exists())
                 progress = campaign / "progress.tasks.txt.tfin"
                 progress.write_text("existing progress")
                 self.assertEqual(self.prepare(layout), campaign)
                 self.assertEqual(progress.read_text(), "existing progress")
 
-    def test_b_uses_fresh_containers_and_c_reuses_one_container_and_renews_once(self):
+    def test_b_uses_fresh_containers_and_c_reuses_one_container_and_token(self):
         bin_dir = self.work / "bin"
         bin_dir.mkdir()
         calls = self.work / "calls"
@@ -118,6 +147,7 @@ class TaskFarmerLayoutTests(unittest.TestCase):
         mock.write_text(
             '#!/bin/bash\n'
             'printf "%s\\n" "$*" >> "$CALLS"\n'
+            'printf "%s\\n" "$SIMGRID_JLAB_OUTPUT_DIR" >> "$DESTINATIONS"\n'
             'case "$1 $2" in\n'
             '  "container exists") test -f "$CONTAINER_EXISTS"; exit $? ;;\n'
             '  "run --rm") touch "$CONTAINER_EXISTS" ;;\n'
@@ -130,26 +160,46 @@ class TaskFarmerLayoutTests(unittest.TestCase):
         flock.write_text("#!/bin/bash\nexit 0\n")
         flock.chmod(0o755)
         self.env.update(PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], CALLS=str(calls),
+                        DESTINATIONS=str(self.work / "destinations"),
                         CONTAINER_EXISTS=str(self.work / "container"))
         for layout in ("B", "C"):
             campaign = self.prepare(layout)
             for task_id in (0, 2):
                 result = subprocess.run(
                     ["bash", str(campaign / "scripts/full-task.sh"), str(campaign), layout,
-                     str(task_id), "lund", "image:test", "osdf:///input/dis1.dat"],
+                     str(task_id), "clasdis", "image:test"],
                     env=self.env, capture_output=True, text=True,
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual((campaign / f"jobs/{task_id}/exit-code").read_text().strip(), "0")
             commands = calls.read_text().splitlines()
+            physics = [line for line in commands if "nodescript-clasdis.sh" in line]
+            self.assertEqual(len(physics), 2)
+            self.assertTrue(all(line.endswith("nodescript-clasdis.sh 5000") for line in physics))
+            self.assertFalse(any("nodescript-lund.sh" in line for line in commands))
+            destination = f"osdf:///jlab-osdf/clas12/volatile/osg/ungaro/test/full-{layout.lower()}/123"
+            self.assertEqual(set((self.work / "destinations").read_text().splitlines()), {destination})
             if layout == "B":
                 self.assertEqual(sum(line.startswith("run ") for line in commands), 2)
                 self.assertTrue(all("--env SIMGRID_TASK_SEED" in line for line in commands))
+                self.assertTrue(all("--env SIMGRID_JLAB_OUTPUT_DIR" in line for line in physics))
+                self.assertFalse(any("token-renew" in line for line in commands))
             else:
                 self.assertEqual(sum(line.startswith("run ") for line in commands), 1)
-                self.assertEqual(sum("zsh /sshkeys/token-renew.zsh" in line for line in commands), 1)
                 self.assertEqual(sum(line.startswith("exec --workdir") for line in commands), 2)
+                self.assertEqual(sum("zsh /sshkeys/token-renew.zsh" in line for line in commands), 1)
+                self.assertTrue(all(f"--env SIMGRID_JLAB_OUTPUT_DIR={destination}" in line for line in physics))
+                self.assertTrue(all("--env SIMGRID_TOKEN_READY=1" in line for line in physics))
+            self.env["MOCK_EXIT"] = "202"
+            result = subprocess.run(
+                ["bash", str(campaign / "scripts/full-task.sh"), str(campaign), layout,
+                 "99", "clasdis", "image:test"], env=self.env, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 202)
+            self.assertEqual((campaign / "jobs/99/exit-code").read_text().strip(), "202")
+            self.env.pop("MOCK_EXIT")
             calls.unlink()
+            (self.work / "destinations").unlink()
             (self.work / "container").unlink(missing_ok=True)
 
     def test_task_startup_failure_is_recorded_and_returned(self):
@@ -163,7 +213,7 @@ class TaskFarmerLayoutTests(unittest.TestCase):
         self.env["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
         result = subprocess.run(
             ["bash", str(campaign / "scripts/full-task.sh"), str(campaign), "C", "0",
-             "lund", "image:test", "osdf:///input/dis1.dat"], env=self.env,
+             "clasdis", "image:test"], env=self.env,
         )
         self.assertEqual(result.returncode, 23)
         self.assertEqual((campaign / "jobs/0/exit-code").read_text().strip(), "23")
@@ -174,10 +224,10 @@ class TaskFarmerLayoutTests(unittest.TestCase):
         farmer = bin_dir / "runcommands.sh"
         farmer.write_text(
             '#!/bin/bash\n'
-            'for ((i=0; i<200; i++)); do\n'
+            'for ((i=0; i<100; i++)); do\n'
             '  mkdir -p "jobs/$i"\n'
             '  code=0\n'
-            '  if [[ "${FAIL_ONE:-0}" == 1 && "$i" == 199 ]]; then code=207; fi\n'
+            '  if [[ "${FAIL_ONE:-0}" == 1 && "$i" == 99 ]]; then code=207; fi\n'
             '  printf "%s\\n" "$code" > "jobs/$i/exit-code"\n'
             'done\n'
         )
@@ -193,7 +243,7 @@ class TaskFarmerLayoutTests(unittest.TestCase):
                 result = subprocess.run(["bash", str(NERSC / "full-taskfarmer.sh"), "C", "image:test"],
                                         env=self.env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0 if failed == "0" else 1, result.stderr)
-                self.assertIn("Completed: 200/200" if failed == "0" else "Completed: 199/200", result.stdout)
+                self.assertIn("Completed: 100/100" if failed == "0" else "Completed: 99/100", result.stdout)
         cleanup = (self.work / "cleanup").read_text().splitlines()
         self.assertEqual(len(cleanup), 2)
         self.assertTrue(all("--ntasks=2" in line and "--cleanup" in line for line in cleanup))
