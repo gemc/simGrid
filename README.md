@@ -357,6 +357,15 @@ display `N/A`. The old live Condor history counter has been retired: retained hi
 24 hours and undercount completions. `--from-db` preserves stored rates and totals until a new snapshot
 is built.
 
+The total remaining-time estimate accounts for queue waiting and cannot be shorter than a user's
+completion estimate. It takes the maximum of unfinished jobs divided by the completion rate, the
+latest user completion estimate, and the last queued submission's arrival plus processing time.
+Taking the maximum allows queue waiting and processing to overlap. Totals assume 10,000 jobs per
+queued submission; the queue-to-OSG rate is inferred from the completion rate using that same
+assumption, rather than measured from actual submissions. A user's `to osg` estimate describes
+only their first queued submission's arrival, not completion of all their jobs. Missing inputs
+needed for completion estimates display `N/A`; no unfinished work displays zero days.
+
 For a matched submission, the script initially reads Condor `JobPrio` but then replaces its
 displayed `priority` field with MySQL `submissions.priority`. Therefore the portal table does not
 show the runtime priority applied by `run_priority_map.py`; use that script's `-p` output to inspect

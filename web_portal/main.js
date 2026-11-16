@@ -161,19 +161,49 @@ function calculateEstimatedTimeRemaining(
 	};
 }
 
-function calculateTotalEstimatedTimeRemaining(pending, jobs, done, completionRate) {
+function calculateTotalEstimatedTimeRemaining(
+		pending, jobs, done, completionRate, highestQueuePosition, submissionsRate, userEstimates
+) {
 	pending = Number(pending);
 	jobs = Number(jobs);
 	done = Number(done);
 	completionRate = Number(completionRate);
+	highestQueuePosition = Number(highestQueuePosition);
+	submissionsRate = Number(submissionsRate);
 
 	var estimatedQueuedJobs = Math.max(pending, 0) * ESTIMATED_JOBS_PER_SUBMISSION;
 	var remainingJobs = Math.max(jobs - done, 0) + estimatedQueuedJobs;
-	return {
+	var estimate = {
 		estimatedQueuedJobs: estimatedQueuedJobs,
 		remainingJobs: remainingJobs,
-		days: isFinite(completionRate) && completionRate > 0 ? remainingJobs / completionRate : null
+		days: null
 	};
+	if (![pending, jobs, done].every(isFinite)) return estimate;
+	if (remainingJobs === 0) {
+		estimate.days = 0;
+		return estimate;
+	}
+	if (!isFinite(completionRate) || completionRate <= 0) return estimate;
+
+	var days = remainingJobs / completionRate;
+	if (pending > 0) {
+		if (!isFinite(highestQueuePosition) || highestQueuePosition <= 0 ||
+			!isFinite(submissionsRate) || submissionsRate <= 0) return estimate;
+		// Earlier jobs can run while later submissions wait. Include the last arrival
+		// and its processing time rather than adding the whole queue delay to all work.
+		var lastQueuedCompletion = highestQueuePosition / submissionsRate +
+			ESTIMATED_JOBS_PER_SUBMISSION / completionRate;
+		days = Math.max(days, lastQueuedCompletion);
+	}
+	for (var i = 0; i < userEstimates.length; i++) {
+		var userEstimate = userEstimates[i];
+		if (userEstimate.days === null || !isFinite(userEstimate.days)) return estimate;
+		// A "to osg" estimate describes first arrival, not completion. The last-arrival
+		// bound above covers users who have no submitted jobs from which to infer runtime.
+		if (!userEstimate.queueOnly) days = Math.max(days, userEstimate.days);
+	}
+	estimate.days = days;
+	return estimate;
 }
 
 function estimatedTimeRemainingClass(days) {
@@ -204,17 +234,20 @@ function renderEstimateNote(
 		isFinite(currentSubmissionsRate) && Number(currentSubmissionsRate) >= 0 ?
 		formatNumberWithCommas(currentSubmissionsRate, 1) : "N/A";
 
-	return "<div class=\"estimate-note\">** Estimate combines processing time <b>tproc</b> and " +
+	return "<div class=\"estimate-note\">** User estimates combine processing time <b>tproc</b> and " +
 		"queue time <b>tqueue</b>." +
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
-		"<br/><b>tqueue</b> uses the highest queue position and current submissions rate." +
+		"<br/><b>tqueue</b> uses queue position and an estimated submissions rate. " +
+		"A 'to osg' estimate shows the first queued submission's arrival only." +
+		"<br/>Total time left is at least the longest user completion estimate and includes " +
+		"the last queued submission's arrival and processing. Queue waiting and processing can overlap." +
 		"<br/>Note: Total time left includes 10,000 jobs for each queued submission." +
         "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per OSG submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
 		"<tr><th>Completion Rate (latest 24-hour interval)</th><td>" +
 		escapeHtml(completionRateText) + " jobs / day</td></tr>" +
-		"<tr><th>Queue to OSG Rate (10,000 jobs / submission)</th><td>" +
+		"<tr><th>Estimated queue to OSG rate (10,000 jobs / submission)</th><td>" +
 		escapeHtml(submissionsRateText) + " submissions / day</td></tr>" +
 		"</tbody></table></div>";
 }
@@ -1158,6 +1191,7 @@ function osgLogtoTable(mode) {
 			var currentSubmissionsRate = averageCompletionsPerDay != null &&
 				isFinite(averageCompletionsPerDay) && Number(averageCompletionsPerDay) >= 0 ?
 				Number(averageCompletionsPerDay) / ESTIMATED_JOBS_PER_SUBMISSION : null;
+			var userEstimates = [];
 			for (var u = 0; u < data_summary.user.length; u++) {
 				txt_summary += "</tr><tr>";
 				txt_summary += "<td>" + escapeHtml(data_summary.user[u]) + "</td>";
@@ -1177,6 +1211,9 @@ function osgLogtoTable(mode) {
 					concurrentJobsPerSubmission, averageCompletionsPerDay,
 					currentSubmissionsRate
 				);
+				if (data_summary.pending[u] > 0 || data_summary.jobs[u] > data_summary.done[u]) {
+					userEstimates.push(userEstimate);
+				}
 				txt_summary += renderEstimatedTimeRemainingCell(userEstimate);
 			}
 
@@ -1193,7 +1230,9 @@ function osgLogtoTable(mode) {
 				return Number(a) + Number(b);
 			}, 0);
 			var totalEstimate = calculateTotalEstimatedTimeRemaining(
-				totalPending, totalJobs, totalDone, averageCompletionsPerDay
+				totalPending, totalJobs, totalDone, averageCompletionsPerDay,
+				highestPendingPriorities.reduce(function (a, b) { return Math.max(a, b); }, 0),
+				currentSubmissionsRate, userEstimates
 			);
 
 			txt_summary += "</tr><tr><td>totals</td>";
