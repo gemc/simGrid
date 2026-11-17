@@ -57,18 +57,34 @@ class TimelineCompletionTests(unittest.TestCase):
         rows.append({"update_ts": self.latest - 3600 - 5, "global": {"done": 9999}})
         self.assertEqual(self.collect(list(reversed(rows))), self.collect(self.samples()))
 
-    def test_missing_hour_is_unknown_and_does_not_inflate_neighboring_days(self):
+    def test_missing_hour_is_skipped_without_borrowing_from_neighboring_days(self):
         rows = [row for row in self.samples() if row["update_ts"] != self.latest - 3600]
         days = self.collect(rows)
-        self.assertIsNone(days[-1]["completed_jobs"])
+        self.assertEqual(days[-1]["completed_jobs"], sum(range(1, 25)) - 2)
         self.assertEqual(days[-2]["completed_jobs"], sum(range(25, 49)))
 
-    def test_missing_done_is_unknown_but_zero_is_valid(self):
+    def test_missing_or_invalid_done_is_skipped(self):
+        for count in [None, -1, "invalid"]:
+            with self.subTest(count=count):
+                rows = self.samples()
+                rows[-1]["global"]["done"] = count
+                self.assertEqual(self.collect(rows)[-1]["completed_jobs"], sum(range(2, 25)))
+
+    def test_missing_done_is_skipped_but_zero_is_valid(self):
         rows = self.samples()
         rows[-1]["global"] = {}
-        self.assertIsNone(self.collect(rows)[-1]["completed_jobs"])
+        self.assertEqual(self.collect(rows)[-1]["completed_jobs"], sum(range(2, 25)))
         rows[-1]["global"]["done"] = 0
         self.assertEqual(self.collect(rows)[-1]["completed_jobs"], sum(range(2, 25)))
+
+    def test_interval_without_valid_counts_is_unknown(self):
+        rows = self.samples()
+        for row in rows[-24:]:
+            row["global"] = {}
+        self.assertIsNone(self.collect(rows)[-1]["completed_jobs"])
+        days = self.collect(self.samples()[-1:])
+        self.assertEqual(days[-1]["completed_jobs"], 1)
+        self.assertTrue(all(day["completed_jobs"] is None for day in days[:-1]))
 
     def test_empty_or_unreadable_timeline_omits_summary(self):
         self.assertEqual(self.collect([]), [])
@@ -96,7 +112,7 @@ class TimelineCompletionTests(unittest.TestCase):
         database = MagicMock()
         database.__enter__.return_value = database
         database.query.return_value = []
-        for rows, expected in [(full, 300), (missing_hour, None), ([], None), (zero, 0)]:
+        for rows, expected in [(full, 300), (missing_hour, 298), ([], None), (zero, 0)]:
             with self.subTest(expected=expected, samples=len(rows)):
                 self.timeline.write_text(json.dumps(rows))
                 with patch.dict("sys.modules", {"htcondor_utils": condor}), \

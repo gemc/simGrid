@@ -348,12 +348,15 @@ falling back to `~/timeline.json`, where the monitoring producer writes it on th
 no separate tail file or cron job is required. Ten consecutive 24-hour intervals end at the
 latest sample, with dates and exact interval endpoints in UTC. Sample ages are rounded to the nearest hour
 relative to that sample to tolerate scheduling jitter; duplicate hourly slots use the newest sample.
-Incomplete intervals display `N/A`, and an unreadable timeline omits the table with a warning. The timeline
-contains global monitoring counts, shared across database views, rather than per-submission completion dates.
+Missing or invalid hourly counts are skipped; each interval sums only its available counts, without
+extrapolating to replace missing hours. Intervals with no valid counts display `N/A`, and an unreadable
+timeline omits the table with a warning. The timeline contains global monitoring counts, shared across
+database views, rather than per-submission completion dates.
 The portal converts jobs to events using 5,000 events per job. The completion rate used for time estimates
-comes from the latest complete 24-hour timeline interval, matching the last column of the completed-events
-table. If that interval is incomplete or the timeline is unavailable, the rate and dependent time estimates
-display `N/A`. The old live Condor history counter has been retired: retained history may cover less than
+comes from the latest 24-hour timeline interval, matching the last column of the completed-events table.
+Missing hours can lower the reported rate and lengthen time estimates. If that interval has no valid counts
+or the timeline is unavailable, the rate and dependent time estimates display `N/A`.
+The old live Condor history counter has been retired: retained history may cover less than
 24 hours and undercount completions. `--from-db` preserves stored rates and totals until a new snapshot
 is built.
 

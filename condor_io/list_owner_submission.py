@@ -51,7 +51,8 @@ def collect_completions_per_day(timeline_file=DEFAULT_TIMELINE_FILE):
 
 	The latest sample anchors the hourly slots. Round sample ages to the nearest
 	hour so scheduling jitter cannot move a boundary sample into the wrong day.
-	Keep the newest sample per slot; missing slots remain unknown, not zero.
+	Keep the newest sample per slot and skip missing or invalid hourly counts.
+	An interval with no valid counts remains unknown.
 	"""
 	try:
 		with Path(timeline_file).expanduser().open() as fh:
@@ -77,13 +78,13 @@ def collect_completions_per_day(timeline_file=DEFAULT_TIMELINE_FILE):
 		end = latest - age_days * 86400
 		samples = [hourly.get(age_days * 24 + hour, {}) for hour in range(24)]
 		counts = [sample.get("global", {}).get("done") for sample in samples]
-		complete = all(isinstance(count, (int, float)) and count >= 0 for count in counts)
+		counts = [count for count in counts if isinstance(count, (int, float)) and count >= 0]
 		end_time = datetime.fromtimestamp(end, timezone.utc)
 		days.append({
 			"date": end_time.date().isoformat(),
 			"start": datetime.fromtimestamp(end - 86400, timezone.utc).isoformat(),
 			"end": end_time.isoformat(),
-			"completed_jobs": sum(counts) if complete else None,
+			"completed_jobs": sum(counts) if counts else None,
 		})
 	return days
 
