@@ -239,9 +239,7 @@ function renderEstimateNote(
 		"<br/><b>tproc</b> uses the completion rate and running jobs per submission. " +
 		"<br/><b>tqueue</b> uses queue position and an estimated submissions rate. " +
 		"A 'to osg' estimate shows the first queued submission's arrival only." +
-		"<br/>Total time left is at least the longest user completion estimate and includes " +
-		"the last queued submission's arrival and processing. Queue waiting and processing can overlap." +
-		"<br/>Note: Total time left includes 10,000 jobs for each queued submission." +
+		"<br/>Note: Total time left assumes 10,000 jobs for each queued submission." +
         "<table class=\"estimate-metrics\"><tbody>" +
 		"<tr><th>Average concurrent jobs per OSG submission</th><td>" +
 		escapeHtml(concurrentJobsText) + " jobs</td></tr>" +
