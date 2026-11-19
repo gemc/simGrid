@@ -856,15 +856,17 @@ function ensureJobDetailsModal() {
 		}
 		#jobDetailsModal .modal-content {
 			background: #fff;
-			margin: 4% auto;
-			padding: 20px;
+			margin: 3vh auto;
+			padding: 14px 16px;
 			width: 80%;
 			max-width: 950px;
-			max-height: 82vh;
+			max-height: 94vh;
+			box-sizing: border-box;
 			overflow-y: auto;
 			border-radius: 8px;
 			box-shadow: 0 8px 30px rgba(0,0,0,0.25);
 			font-family: Arial, sans-serif;
+			font-size: 14px;
 		}
 		#jobDetailsModal .modal-close {
 			float: right;
@@ -874,8 +876,27 @@ function ensureJobDetailsModal() {
 			margin-top: -6px;
 		}
 		#jobDetailsModal h3 {
-			margin-top: 0;
-			margin-bottom: 14px;
+			margin: 0;
+			flex: 1 1 auto;
+			font-size: 18px;
+		}
+		#jobDetailsModal .job-details-header {
+			position: sticky;
+			top: 0;
+			z-index: 1;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 8px 16px;
+			padding: 0 28px 8px 0;
+			background: #fff;
+		}
+		#jobDeletionMessage {
+			flex-basis: 100%;
+			margin: 0;
+		}
+		#jobDeletionMessage:empty {
+			display: none;
 		}
 		#jobDetailsModal table {
 			width: 100%;
@@ -885,13 +906,13 @@ function ensureJobDetailsModal() {
 		#jobDetailsModal th,
 		#jobDetailsModal td {
 			border: 1px solid #d9d9d9;
-			padding: 8px 10px;
+			padding: 4px 8px;
 			text-align: left;
 			vertical-align: top;
 		}
 		#jobDetailsModal th {
 			background: #f4f4f4;
-			width: 220px;
+			width: 160px;
 		}
 		#jobDetailsModal pre {
 			margin: 0;
@@ -903,26 +924,29 @@ function ensureJobDetailsModal() {
 		#jobDetailsModal .job-details-fields {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 8px 24px;
+			gap: 4px 20px;
 			margin: 0;
 		}
 		#jobDetailsModal .job-details-fields > div {
-			flex: 1 1 160px;
+			display: flex;
+			align-items: baseline;
+			gap: 6px;
+			flex: 0 1 auto;
 			min-width: 0;
 		}
 		#jobDetailsModal .job-details-fields dt {
 			font-size: 13px;
 			font-weight: bold;
 			color: #555;
+			white-space: nowrap;
 		}
 		#jobDetailsModal .job-details-fields dd {
-			margin: 4px 0 0;
-			white-space: pre-wrap;
+			margin: 0;
+			min-width: 0;
 			overflow-wrap: anywhere;
 		}
 		#jobDetailsModal .delete-job-button {
-			margin-top: 16px;
-			padding: 10px 18px;
+			padding: 6px 12px;
 			border: 0;
 			border-radius: 4px;
 			background: #b00020;
@@ -964,7 +988,12 @@ function ensureJobDetailsModal() {
 }
 
 function renderJobDetails(data) {
-	let html = `<h3>Submission Details for Job ${escapeHtml(data.requested_id || "")}</h3>`;
+	let html = '<div class="job-details-header">' +
+		`<h3>Submission Details for Job ${escapeHtml(data.requested_id || "")}</h3>`;
+	if (!data.error && data.can_delete === true && data.csrf_token) {
+		html += `<button type="button" class="delete-job-button" id="deleteJobButton">DELETE JOB</button>`;
+	}
+	html += '<p id="jobDeletionMessage" role="status"></p></div>';
 
 	if (data.error) {
 		html += `<div style="color:#b00020;font-weight:bold;">${escapeHtml(data.error)}</div>`;
@@ -981,21 +1010,23 @@ function renderJobDetails(data) {
 		const present = fields.filter(([, value]) => value != null && String(value).trim() !== "");
 		if (!present.length) return "";
 		return '<tr><td colspan="2"><dl class="job-details-fields">' + present.map(([label, value]) =>
-			`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
+			`<div><dt>${escapeHtml(label)}:</dt><dd>${escapeHtml(value)}</dd></div>`
 		).join("") + "</dl></td></tr>";
 	};
 	const groupedKeys = new Set(["username", "user", "client_ip", "project", "configuration",
-		"softwarev", "mcgenv"]);
+		"softwarev", "mcgenv", "generator", "nevents", "jobs", "string_id", "submission", "submission_type"]);
 	const osgId = String(data.osg_id || "").trim();
 
 	html += "<table>";
 	html += group([
 		["Username", data.user || detailValue("username") || detailValue("user")],
+		["Submission type", detailValue("submission_type") || detailValue("submission")],
 		["Client IP", detailValue("client_ip")]
 	]);
 	html += group([
 		["Job ID", data.user_submission_id || data.requested_id],
 		["OSG ID", osgId.toUpperCase() === "NULL" ? "" : osgId],
+		["String ID", detailValue("string_id")],
 		["Project", detailValue("project")]
 	]);
 	const configuration = detailValue("configuration");
@@ -1003,6 +1034,10 @@ function renderJobDetails(data) {
 		html += "<tr><th>Configuration</th><td><pre>" + escapeHtml(configuration) + "</pre></td></tr>";
 	}
 	html += group([["softwarev", detailValue("softwarev")], ["mcgenv", detailValue("mcgenv")]]);
+	html += group([
+		["Generator", detailValue("generator")], ["nevents", detailValue("nevents")],
+		["jobs", detailValue("jobs")]
+	]);
 	if (data.status) {
 		html += `<tr><th>Status</th><td>${escapeHtml(data.status)}</td></tr>`;
 	}
@@ -1027,10 +1062,6 @@ function renderJobDetails(data) {
 	}
 
 	html += `</table>`;
-	if (data.can_delete === true && data.csrf_token) {
-		html += `<button type="button" class="delete-job-button" id="deleteJobButton">DELETE JOB</button>`;
-	}
-	html += `<p id="jobDeletionMessage" role="status"></p>`;
 	if (data.status === "TODELETE") {
 		html += "<p>Deletion requested. The submit node will remove the remaining jobs " +
 			"and submission record.</p>";
