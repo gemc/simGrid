@@ -1,5 +1,7 @@
 """Owner-authorized deletion requests, serialized with pending-submission claims."""
 
+import re
+
 from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED, PROCESSING, SCRIPTS_GENERATED, TODELETE
 
 
@@ -9,7 +11,7 @@ PRE_SUBMIT_STATUSES = {NOTSUBMITTED, FAILED_TO_READ_DIRECTORY, SCRIPTS_GENERATED
 def cluster_id(value):
     """Accept only a positive, numeric HTCondor cluster ID."""
     text = str(value).strip()
-    if not text.isascii() or not text.isdigit() or int(text) <= 0:
+    if not re.fullmatch(r"[0-9]+", text) or int(text) <= 0:
         raise ValueError("Submission has no valid HTCondor cluster ID.")
     return int(text)
 

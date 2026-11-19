@@ -29,6 +29,27 @@ def database(row):
 
 
 class DeletionRequestTests(unittest.TestCase):
+    def test_id_validation_works_without_str_isascii(self):
+        class LegacyString(str):
+            def __getattribute__(self, name):
+                if name == "isascii":
+                    raise AttributeError(name)
+                return super().__getattribute__(name)
+
+            def strip(self):
+                return LegacyString(super().strip())
+
+        with patch("db_io.submission_deletion.str", LegacyString, create=True):
+            self.assertEqual(cluster_id("9757"), 9757)
+        with patch("db_io.portal_submission.str", LegacyString, create=True):
+            with patch("db_io.portal_submission.Database") as connection:
+                connection.return_value.__enter__.return_value.query_one.return_value = submission()
+                details = handle_request({
+                    "id": "42", "database": "CLAS12TEST", "user": LegacyString("alice"),
+                    "action": "details",
+                })
+                self.assertEqual(details["requested_id"], 42)
+
     def test_only_exact_authenticated_owner_can_delete(self):
         for username in ("", "bob", "Alice"):
             with self.subTest(username=username):
@@ -99,6 +120,9 @@ class DeletionRequestTests(unittest.TestCase):
         with patch("db_io.portal_submission.Database") as connection:
             for request in (
                 {"id": "42 OR 1=1", "database": "CLAS12OCR", "user": "alice"},
+                {"id": "４２", "database": "CLAS12OCR", "user": "alice"},
+                {"id": "٤٢", "database": "CLAS12OCR", "user": "alice"},
+                {"id": "42\n", "database": "CLAS12OCR", "user": "alice"},
                 {"id": "42", "database": "mysql", "user": "alice"},
             ):
                 with self.assertRaises(ValueError):

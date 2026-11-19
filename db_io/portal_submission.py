@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import re
 import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,7 +51,7 @@ def handle_request(request):
     if database not in {"CLAS12OCR", "CLAS12TEST"}:
         raise ValueError("Invalid database.")
     submission_id = str(request.get("id", ""))
-    if not submission_id.isascii() or not submission_id.isdigit() or int(submission_id) <= 0:
+    if not re.fullmatch(r"[0-9]+", submission_id) or int(submission_id) <= 0:
         raise ValueError("Invalid submission ID.")
     username = request.get("user")
     if not isinstance(username, str) or not username:
