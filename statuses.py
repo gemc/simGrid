@@ -3,6 +3,7 @@
 
 NOTSUBMITTED      = 'Not Submitted'
 PROCESSING        = 'Processing'
+TODELETE          = 'TODELETE'
 SUBMITTED         = 'Submitted to OSG'
 COMPLETED         = 'Completed'
 SCRIPTS_GENERATED = 'Submission scripts generated'

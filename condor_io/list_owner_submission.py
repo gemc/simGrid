@@ -33,7 +33,7 @@ if PROJECT_ROOT not in sys.path:
 	sys.path.insert(0, PROJECT_ROOT)
 
 from db_io.database import Database, DEFAULT_CREDENTIALS_FILE, print_job
-from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED
+from statuses import FAILED_TO_READ_DIRECTORY, NOTSUBMITTED, TODELETE
 
 PRODUCTION_DATABASE = "CLAS12OCR"
 TEST_DATABASE = "CLAS12TEST"
@@ -322,7 +322,7 @@ def collect_for_database(owner, credentials, database_name, timeline_file=DEFAUL
 
 			results.append(entry)
 
-		extra_statuses = [NOTSUBMITTED, FAILED_TO_READ_DIRECTORY]
+		extra_statuses = [NOTSUBMITTED, FAILED_TO_READ_DIRECTORY, TODELETE]
 		extra_rows = db.query(
 			"""
 			SELECT user,
@@ -332,7 +332,7 @@ def collect_for_database(owner, credentials, database_name, timeline_file=DEFAUL
 			       run_status,
 			       priority
 			FROM submissions
-			WHERE run_status IN (%s, %s)
+			WHERE run_status IN (%s, %s, %s)
 			ORDER BY user_submission_id
 			""",
 			extra_statuses,

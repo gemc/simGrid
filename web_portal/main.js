@@ -900,6 +900,20 @@ function ensureJobDetailsModal() {
 			font-family: Menlo, Consolas, monospace;
 			font-size: 13px;
 		}
+		#jobDetailsModal .delete-job-button {
+			margin-top: 16px;
+			padding: 10px 18px;
+			border: 0;
+			border-radius: 4px;
+			background: #b00020;
+			color: #fff;
+			font-weight: bold;
+			cursor: pointer;
+		}
+		#jobDetailsModal .delete-job-button:disabled {
+			opacity: 0.6;
+			cursor: wait;
+		}
 		.job-id-link {
 			cursor: pointer;
 			color: #0b5ed7;
@@ -948,6 +962,9 @@ function renderJobDetails(data) {
 	if (data.status) {
 		html += `<tr><th>Status</th><td>${escapeHtml(data.status)}</td></tr>`;
 	}
+	if (data.osg_id && String(data.osg_id).toUpperCase() !== "NULL") {
+		html += `<tr><th>OSG ID</th><td>${escapeHtml(data.osg_id)}</td></tr>`;
+	}
 
 	if (data.details && Array.isArray(data.details) && data.details.length > 0) {
 		for (const item of data.details) {
@@ -968,23 +985,66 @@ function renderJobDetails(data) {
 	}
 
 	html += `</table>`;
+	if (data.can_delete === true && data.csrf_token) {
+		html += `<button type="button" class="delete-job-button" id="deleteJobButton">DELETE JOB</button>`;
+	}
+	html += `<p id="jobDeletionMessage" role="status"></p>`;
+	if (data.status === "TODELETE") {
+		html += "<p>Deletion requested. The submit node will remove the remaining jobs " +
+			"and submission record.</p>";
+	}
 	return html;
 }
 
+async function deleteJob(data, button) {
+	const osgId = String(data.osg_id || "");
+	const target = /^\d+$/.test(osgId) ? ` (OSG ID ${osgId})` : "";
+	const confirmed = window.confirm(
+		`Delete submission ${data.requested_id}${target}?\n\n` +
+		"This permanently deletes the submission record and requests removal of all remaining HTCondor jobs. " +
+		"Existing output files are kept."
+	);
+	if (!confirmed) return;
+	button.disabled = true;
+	const message = document.getElementById("jobDeletionMessage");
+	message.textContent = "Requesting deletion...";
+	try {
+		const response = await fetch("delete_submission.php", {
+			method: "POST",
+			headers: {"Content-Type": "application/x-www-form-urlencoded"},
+			body: new URLSearchParams({id: data.requested_id, csrf_token: data.csrf_token}).toString()
+		});
+		const result = await response.json();
+		if (!response.ok || result.error) throw new Error(result.error || "Deletion request failed.");
+		message.textContent = result.message + " The table will update after the next status refresh.";
+		button.hidden = true;
+	} catch (error) {
+		message.textContent = error.message || "Deletion request failed. Please try again.";
+		button.disabled = false;
+	}
+}
+
+let jobDetailsRequest = 0;
+
 function showJobDetails(jobId) {
 	ensureJobDetailsModal();
+	const request = ++jobDetailsRequest;
 
 	const modal = document.getElementById("jobDetailsModal");
 	const body = document.getElementById("jobDetailsBody");
 	body.innerHTML = `<h3>Submission Details for Job ${escapeHtml(jobId)}</h3><div>Loading...</div>`;
 	modal.style.display = "block";
 
-	fetch("get_submission_details.php?id=" + encodeURIComponent(jobId))
+	return fetch("get_submission_details.php?id=" + encodeURIComponent(jobId))
 		.then(response => response.json())
 		.then(data => {
+			if (request !== jobDetailsRequest) return;
 			body.innerHTML = renderJobDetails(data);
+			const button = document.getElementById("deleteJobButton");
+			if (button) button.onclick = () => deleteJob(data, button);
 		})
 		.catch(error => {
+			if (request !== jobDetailsRequest) return;
 			body.innerHTML = `
 				<h3>Submission Details for Job ${escapeHtml(jobId)}</h3>
 				<div style="color:#b00020;font-weight:bold;">Failed to load submission details.</div>
@@ -1131,7 +1191,10 @@ function osgLogtoTable(mode) {
 						if (poolNode === "" || poolNode.toUpperCase() === "NULL" || poolNode.toLowerCase() === "null") {
 							txt += escapeHtml(val.mysql_status);
 						} else {
-							txt += escapeHtml(val.pool_node);
+							txt += "<a href=\"#\" class=\"job-id-link\" data-job-id=\"" +
+								escapeHtml(val.user_submission_id || val[jobIdKey]) + "\">" +
+								escapeHtml(val.pool_node) + "</a>";
+							if (submissionStatus === "TODELETE") txt += " (deletion requested)";
 						}
 					} else if (submissionCountColumns.includes(String(key).toLowerCase().trim())) {
 						txt += escapeHtml(formatNumberWithCommas(val[key]));
