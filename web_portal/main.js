@@ -1006,15 +1006,22 @@ function renderJobDetails(data) {
 		const item = details.find(item => detailKey(item.key) === key);
 		return item ? item.value : "";
 	};
-	const group = fields => {
+	const group = (fields, labelColumn = false) => {
 		const present = fields.filter(([, value]) => value != null && String(value).trim() !== "");
 		if (!present.length) return "";
-		return '<tr><td colspan="2"><dl class="job-details-fields">' + present.map(([label, value]) =>
-			`<div><dt>${escapeHtml(label)}:</dt><dd>${escapeHtml(value)}</dd></div>`
+		const heading = labelColumn ? `<th scope="row">${escapeHtml(present[0][0])}</th><td>` :
+			'<td colspan="2">';
+		return '<tr>' + heading + '<dl class="job-details-fields">' + present.map(([label, value], index) =>
+			`<div><dt${labelColumn && index === 0 ? " hidden" : ""}>${escapeHtml(label)}:</dt>` +
+			`<dd>${escapeHtml(value)}</dd></div>`
 		).join("") + "</dl></td></tr>";
 	};
 	const groupedKeys = new Set(["username", "user", "client_ip", "project", "configuration",
 		"softwarev", "mcgenv", "generator", "nevents", "jobs", "string_id", "submission", "submission_type"]);
+	const valueLabels = new Map([
+		["vertex_choice:0", "Ignore (0)"], ["vertex_choice:1", "Relative (1)"],
+		["output_type:0", "Output DST (0)"], ["output_type:1", "GEMC Only (1)"]
+	]);
 	const osgId = String(data.osg_id || "").trim();
 
 	html += "<table>";
@@ -1033,11 +1040,11 @@ function renderJobDetails(data) {
 	if (configuration) {
 		html += "<tr><th>Configuration</th><td><pre>" + escapeHtml(configuration) + "</pre></td></tr>";
 	}
-	html += group([["softwarev", detailValue("softwarev")], ["mcgenv", detailValue("mcgenv")]]);
+	html += group([["Softwarev", detailValue("softwarev")], ["mcgenv", detailValue("mcgenv")]], true);
 	html += group([
 		["Generator", detailValue("generator")], ["nevents", detailValue("nevents")],
 		["jobs", detailValue("jobs")]
-	]);
+	], true);
 	if (data.status) {
 		html += `<tr><th>Status</th><td>${escapeHtml(data.status)}</td></tr>`;
 	}
@@ -1045,10 +1052,12 @@ function renderJobDetails(data) {
 	if (details.length > 0) {
 		for (const item of details) {
 			if (groupedKeys.has(detailKey(item.key))) continue;
+			const valueKey = detailKey(item.key) + ":" + String(item.value).trim();
+			const value = valueLabels.get(valueKey) || item.value;
 			html += `
 				<tr>
 					<th>${escapeHtml(item.key)}</th>
-					<td><pre>${escapeHtml(item.value)}</pre></td>
+					<td><pre>${escapeHtml(value)}</pre></td>
 				</tr>
 			`;
 		}
