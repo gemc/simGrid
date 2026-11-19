@@ -900,6 +900,26 @@ function ensureJobDetailsModal() {
 			font-family: Menlo, Consolas, monospace;
 			font-size: 13px;
 		}
+		#jobDetailsModal .job-details-fields {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px 24px;
+			margin: 0;
+		}
+		#jobDetailsModal .job-details-fields > div {
+			flex: 1 1 160px;
+			min-width: 0;
+		}
+		#jobDetailsModal .job-details-fields dt {
+			font-size: 13px;
+			font-weight: bold;
+			color: #555;
+		}
+		#jobDetailsModal .job-details-fields dd {
+			margin: 4px 0 0;
+			white-space: pre-wrap;
+			overflow-wrap: anywhere;
+		}
 		#jobDetailsModal .delete-job-button {
 			margin-top: 16px;
 			padding: 10px 18px;
@@ -951,23 +971,45 @@ function renderJobDetails(data) {
 		return html;
 	}
 
-	html += `<table>`;
+	const details = Array.isArray(data.details) ? data.details : [];
+	const detailKey = key => String(key).trim().toLowerCase().replace(/[\s-]+/g, "_");
+	const detailValue = key => {
+		const item = details.find(item => detailKey(item.key) === key);
+		return item ? item.value : "";
+	};
+	const group = fields => {
+		const present = fields.filter(([, value]) => value != null && String(value).trim() !== "");
+		if (!present.length) return "";
+		return '<tr><td colspan="2"><dl class="job-details-fields">' + present.map(([label, value]) =>
+			`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
+		).join("") + "</dl></td></tr>";
+	};
+	const groupedKeys = new Set(["username", "user", "client_ip", "project", "configuration",
+		"softwarev", "mcgenv"]);
+	const osgId = String(data.osg_id || "").trim();
 
-	if (data.user) {
-		html += `<tr><th>User</th><td>${escapeHtml(data.user)}</td></tr>`;
+	html += "<table>";
+	html += group([
+		["Username", data.user || detailValue("username") || detailValue("user")],
+		["Client IP", detailValue("client_ip")]
+	]);
+	html += group([
+		["Job ID", data.user_submission_id || data.requested_id],
+		["OSG ID", osgId.toUpperCase() === "NULL" ? "" : osgId],
+		["Project", detailValue("project")]
+	]);
+	const configuration = detailValue("configuration");
+	if (configuration) {
+		html += "<tr><th>Configuration</th><td><pre>" + escapeHtml(configuration) + "</pre></td></tr>";
 	}
-	if (data.user_submission_id) {
-		html += `<tr><th>Job ID</th><td>${escapeHtml(data.user_submission_id)}</td></tr>`;
-	}
+	html += group([["softwarev", detailValue("softwarev")], ["mcgenv", detailValue("mcgenv")]]);
 	if (data.status) {
 		html += `<tr><th>Status</th><td>${escapeHtml(data.status)}</td></tr>`;
 	}
-	if (data.osg_id && String(data.osg_id).toUpperCase() !== "NULL") {
-		html += `<tr><th>OSG ID</th><td>${escapeHtml(data.osg_id)}</td></tr>`;
-	}
 
-	if (data.details && Array.isArray(data.details) && data.details.length > 0) {
-		for (const item of data.details) {
+	if (details.length > 0) {
+		for (const item of details) {
+			if (groupedKeys.has(detailKey(item.key))) continue;
 			html += `
 				<tr>
 					<th>${escapeHtml(item.key)}</th>
