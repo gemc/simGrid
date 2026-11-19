@@ -1,6 +1,5 @@
 """Deletion authorization, submission races, and submit-node retry behavior without services."""
 
-import json
 import subprocess
 import unittest
 from contextlib import nullcontext, redirect_stdout, redirect_stderr
@@ -144,23 +143,25 @@ class CondorDeletionTests(unittest.TestCase):
 
     @patch("condor_io.delete_jobs.subprocess.run")
     def test_running_idle_and_held_jobs_are_removed_as_one_cluster(self, run):
-        run.return_value.stdout = json.dumps([
-            {"Owner": "gemc", "JobStatus": status} for status in (1, 2, 5)
-        ])
+        run.return_value.stdout = "1234\tgemc\t1\n1234\tgemc\t2\n1234\tgemc\t5\n"
         remove_cluster(1234)
+        self.assertEqual(run.call_args_list[0].args[0], [
+            "condor_q", "1234", "-autoformat:t", "ClusterId", "Owner", "JobStatus",
+        ])
         self.assertEqual(run.call_args_list[1].args[0], ["condor_rm", "1234"])
 
     @patch("condor_io.delete_jobs.subprocess.run")
     def test_empty_or_already_removed_cluster_is_successful(self, run):
-        for ads in ([], [{"Owner": "gemc", "JobStatus": 3}]):
+        for output in ("", "\n", "1234\tgemc\t3\n", "1234\tgemc\t4\n"):
             run.reset_mock()
-            run.return_value.stdout = json.dumps(ads)
+            run.return_value.stdout = output
+            run.return_value.stderr = ""
             remove_cluster(1234)
             self.assertEqual(run.call_count, 1)
 
     @patch("condor_io.delete_jobs.subprocess.run")
     def test_wrong_condor_owner_is_rejected(self, run):
-        run.return_value.stdout = '[{"Owner": "someone_else", "JobStatus": 2}]'
+        run.return_value.stdout = "1234\tsomeone_else\t2\n"
         with self.assertRaises(RuntimeError):
             remove_cluster(1234)
         self.assertEqual(run.call_count, 1)
@@ -189,7 +190,7 @@ class CondorDeletionTests(unittest.TestCase):
                 def execute(command, **kwargs):
                     if command[0] == failing_command:
                         raise subprocess.CalledProcessError(1, command)
-                    return Mock(stdout='[{"Owner": "gemc", "JobStatus": 2}]')
+                    return Mock(stdout="1234\tgemc\t2\n", stderr="")
                 run.side_effect = execute
                 db = database(submission(TODELETE))
                 db.query.return_value = [submission(TODELETE)]
@@ -198,12 +199,44 @@ class CondorDeletionTests(unittest.TestCase):
 
     @patch("condor_io.delete_jobs.subprocess.run")
     def test_invalid_condor_response_preserves_row(self, run):
-        for response in ("", "not JSON", "{}", "[{}]"):
+        for response in ("not job data", "{}", "1234\tgemc\n", "9999\tgemc\t2\n", "1234\tgemc\t99\n"):
             run.return_value.stdout = response
+            run.return_value.stderr = ""
             db = database(None)
             db.query.return_value = [submission(TODELETE)]
             self.assertEqual(process_deletions(db, apply=True), 1)
             db.execute.assert_not_called()
+
+    @patch("condor_io.delete_jobs.subprocess.run")
+    def test_successful_empty_query_allows_database_cleanup(self, run):
+        run.return_value.stdout = ""
+        run.return_value.stderr = ""
+        db = database(None)
+        db.query.return_value = [submission(TODELETE)]
+        self.assertEqual(process_deletions(db, apply=True), 0)
+        db.execute.assert_called_once()
+        self.assertEqual(run.call_count, 1)
+
+    @patch("condor_io.delete_jobs.subprocess.run")
+    def test_empty_query_with_diagnostics_preserves_row_and_reports_output(self, run):
+        run.return_value.stdout = ""
+        run.return_value.stderr = "Unable to contact scheduler"
+        db = database(None)
+        db.query.return_value = [submission(TODELETE)]
+        self.assertEqual(process_deletions(db, apply=True), 1)
+        db.execute.assert_not_called()
+        self.assertIn("Unable to contact scheduler", self.output.getvalue())
+
+    @patch("condor_io.delete_jobs.subprocess.run")
+    def test_unexpected_query_text_is_reported_for_diagnosis(self, run):
+        run.return_value.stdout = "Scheduler warning instead of job fields"
+        run.return_value.stderr = "Additional diagnostic"
+        db = database(None)
+        db.query.return_value = [submission(TODELETE)]
+        self.assertEqual(process_deletions(db, apply=True), 1)
+        db.execute.assert_not_called()
+        self.assertIn("Scheduler warning instead of job fields", self.output.getvalue())
+        self.assertIn("Additional diagnostic", self.output.getvalue())
 
     @patch("condor_io.delete_jobs.remove_cluster")
     def test_database_failure_after_removal_is_reported_for_retry(self, remove):

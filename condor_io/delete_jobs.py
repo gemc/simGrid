@@ -2,7 +2,6 @@
 """Remove TODELETE clusters on the submit node, then delete their MySQL rows."""
 
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -20,15 +19,27 @@ def remove_cluster(cluster):
     """Treat an empty queue as success; query/removal errors preserve the DB row."""
     cluster = str(cluster_id(cluster))
     result = subprocess.run(
-        ["condor_q", cluster, "-json", "-attributes", "Owner,JobStatus"],
+        ["condor_q", cluster, "-autoformat:t", "ClusterId", "Owner", "JobStatus"],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=30,
     )
-    ads = json.loads(result.stdout)
-    if not isinstance(ads, list):
-        raise RuntimeError("Unexpected condor_q response.")
-    if any(ad.get("Owner") != "gemc" or ad.get("JobStatus") is None for ad in ads):
-        raise RuntimeError("Cluster does not match the portal's Condor owner gemc.")
-    if any(ad["JobStatus"] not in (3, 4) for ad in ads):
+    statuses = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split()
+        if (
+            len(fields) != 3 or fields[0] != cluster
+            or fields[2] not in {"0", "1", "2", "3", "4", "5", "6", "7"}
+        ):
+            raise RuntimeError("Unexpected condor_q output: {!r}; stderr: {!r}".format(
+                line, result.stderr.strip(),
+            ))
+        if fields[1] != "gemc":
+            raise RuntimeError("Cluster does not match the portal's Condor owner gemc.")
+        statuses.append(int(fields[2]))
+    if not statuses and result.stderr.strip():
+        raise RuntimeError("Empty condor_q response with diagnostics: {}".format(result.stderr.strip()))
+    if any(status not in (3, 4) for status in statuses):
         subprocess.run(
             ["condor_rm", cluster], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             universal_newlines=True, timeout=30,
@@ -62,8 +73,10 @@ def process_deletions(db, apply=False):
         except Exception as exc:
             failed = True
             print("Submission {} retained for retry: {}".format(submission_id, exc), file=sys.stderr)
-            if getattr(exc, "stderr", None):
-                print(exc.stderr.strip(), file=sys.stderr)
+            for stream in ("stdout", "stderr"):
+                output = getattr(exc, stream, None)
+                if output:
+                    print("{}: {}".format(stream, output.strip()), file=sys.stderr)
     return 1 if failed else 0
 
 

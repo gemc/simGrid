@@ -22,8 +22,9 @@ On the submit node, inspect scheduled deletions with:
 ./condor_io/delete_jobs.py --database=CLAS12TEST
 ```
 
-The default is a dry run. Add `--apply` to run `condor_rm` and delete the matching rows. A successful
-`condor_q` that finds no remaining jobs also permits row deletion. Query errors, removal errors,
+The default is a dry run. Add `--apply` to run `condor_rm` and delete the matching rows. The worker
+queries explicit cluster, owner, and status fields rather than JSON. A successful empty `condor_q`
+result with no diagnostics also permits row deletion. Query errors, removal errors,
 invalid cluster IDs, or a Condor owner other than `gemc` retain the row for retry and return failure.
 
 Add these entries to the submit account's crontab, using its existing `sg`, `sgd`, `rll`, and `logs`
