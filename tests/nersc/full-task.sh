@@ -3,8 +3,15 @@
 set -euo pipefail
 container_name="simgrid-full-${SLURM_JOB_ID:?}-$(hostname -s)"
 if [[ "${1:-}" == --cleanup ]]; then
+    rc=0
     if podman-hpc container exists "$container_name"; then
         podman-hpc stop --time 10 "$container_name"
+    else
+        rc=$?
+        if (( rc != 1 )); then
+            printf 'Shared container lookup failed during cleanup: exit=%s\n' "$rc" >&2
+            exit "$rc"
+        fi
     fi
     exit 0
 fi
@@ -39,22 +46,39 @@ if [[ "$layout" == C ]]; then
     # Serialize startup and shared-token initialization, then release the lock before any physics.
     state="$campaign/containers/$(hostname -s)"
     mkdir -p "$state"
-    exec 9> "${TMPDIR:-/tmp}/simgrid-full-${SLURM_JOB_ID}-${UID}.lock"
+    # All tasks on this host must lock the same file, even when TMPDIR differs between tasks.
+    lock_file="$state/startup.lock"
+    printf 'Shared startup: container=%s lock=%s TMPDIR=%s\n' \
+        "$container_name" "$lock_file" "${TMPDIR:-<unset>}"
+    exec 9> "$lock_file"
     flock 9
-    if ! podman-hpc container exists "$container_name"; then
+    exists_rc=0
+    podman-hpc container exists "$container_name" 9>&- || exists_rc=$?
+    printf 'Shared container lookup: exit=%s\n' "$exists_rc"
+    if (( exists_rc == 1 )); then
         cmd=(podman-hpc run --rm --pull=never --detach --name "$container_name"
             --volume "$campaign:$campaign" --volume /cvmfs:/cvmfs:ro
             --volume "$HOME/.ssh:/sshkeys:ro" --env 'SLURM_*' --env SCRATCH
             --env 'CLAS12_*' --env SIMGRID_BACKEND=nersc --entrypoint /bin/bash)
-        "${cmd[@]}" "$image" -lc 'exec sleep infinity'
+        # Do not let the container monitor inherit the startup lock.
+        "${cmd[@]}" "$image" -lc 'exec sleep infinity' 9>&-
         rm -f "$state/token-ready"
+    elif (( exists_rc != 0 )); then
+        printf 'Shared container lookup failed; refusing creation: exit=%s\n' "$exists_rc" >&2
+        exit "$exists_rc"
+    fi
+    rc=0
+    podman-hpc exec "$container_name" /bin/true 9>&- || rc=$?
+    if (( rc != 0 )); then
+        printf 'Shared container is not ready for exec: exit=%s\n' "$rc" >&2
+        exit "$rc"
     fi
     if [[ ! -f "$state/token-ready" ]]; then
         podman-hpc exec "$container_name" /bin/bash -lc '
             uid=$(id -u)
             export XDG_RUNTIME_DIR=/run/user/$uid BEARER_TOKEN_FILE=/var/run/user/$uid/bt_u$uid
             zsh /sshkeys/token-renew.zsh && test -s "$BEARER_TOKEN_FILE"
-        '
+        ' 9>&-
         touch "$state/token-ready"
     fi
     flock -u 9

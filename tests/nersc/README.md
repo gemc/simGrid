@@ -1,6 +1,7 @@
 # Test Submissions
 
-All jobs use `nersc_io/container.sh` and the `ghcr.io/gemc/simgrid:test` image. 
+All tests use the `ghcr.io/gemc/simgrid:test` image by default. Layout C manages its shared
+container directly; the other tests use `nersc_io/container.sh`.
 The available tests are:
 
 
@@ -30,6 +31,28 @@ sbatch pelican-transfer.sbatch
 squeue -u mungaro
 squeue -j <job_id>
 ```
+
+### Where logs and working files go
+
+These paths describe the NERSC batch scripts in this directory; they are not a rule for all Slurm or OSG jobs.
+With the default submission settings:
+
+| Files | Location |
+|---|---|
+| Slurm stdout and stderr for every test | `<submission-directory>/<test-name>/*.out` and `*.err` |
+| B/C campaign files and TaskFarmer progress | `$SCRATCH/simgrid/full-b/<job_id>/` or `full-c/<job_id>/` |
+| B/C per-task logs and result | `<campaign>/jobs/<task_id>/task.out`, `task.err`, and `exit-code` |
+| Other tests' staged scripts and working data | `$SCRATCH/simgrid/<test-name>/` |
+
+B and C have one Slurm log pair per allocation and a separate scratch log pair for each simulation task.
+Standalone jobs and the Lund/generators arrays send worker stdout and stderr to their Slurm logs; they do
+not create B/C-style `task.out`, `task.err`, or `exit-code` files. Arrays have one Slurm log pair per
+array task.
+The physics scripts print their exact `Output directory:` path in stdout.
+
+`SIMGRID_FULL_CAMPAIGN` overrides the B/C scratch campaign path, including when resuming a campaign.
+Slurm `--output`, `--error`, and `--chdir` options can also change the default log locations. Scratch files
+remain after a job finishes unless removed separately; do not use the number of files as a success count.
 
 To launch all .sbatch files in a directory:
 
@@ -80,6 +103,18 @@ The container launcher returns the worker's nonzero exit code to the batch scrip
 the failure. An empty `.err` is not proof of success: some applications and shared worker functions print
 failure messages to stdout, while warnings may appear on stderr. Check `State` and `ExitCode`, then read
 both logs for details. These directives apply to newly submitted jobs; existing logs remain combined.
+
+For standalone jobs and arrays, count allocation/task records by state and exit code, excluding Slurm's
+internal `.batch` and `.extern` steps:
+
+```shell
+sacct -X -j "$job_id" --noheader --parsable2 --format=State%30,ExitCode | sort | uniq -c
+```
+
+`COMPLETED|0:0` indicates success. `PENDING`, `RUNNING`, and `COMPLETING` are unfinished states;
+terminal states such as `FAILED`, `CANCELLED`, `TIMEOUT`, `OUT_OF_MEMORY`, and `NODE_FAIL` indicate
+unsuccessful jobs. Accounting may lag behind execution. For B/C, this command describes the allocation,
+not the 100 simulations; use the task counts below.
 
 Expected result: the main job reports COMPLETED with ExitCode=0:0. Missing optional tools and
 uninitialized modules are reported without failing the environment report. The GEMC trial also
@@ -213,6 +248,12 @@ concurrency, submit with `THREADS=20 sbatch full-b.sbatch` and the same setting 
 the same shared CLAS12 defaults as the standalone tests. For a fair comparison, keep the image,
 software versions, inputs, node count, and concurrency unchanged between the two runs.
 
+Upcoming in the next release: `SIMGRID_FULL_TASKS=2 THREADS=2 sbatch full-c.sbatch` creates a fresh
+two-task campaign for a smaller validation run; B accepts the same setting. The default remains 100
+tasks, and each task still requests 5,000 events. The setting accepts 1 through 100 and applies only
+when creating a task list. Resuming retains the original task count and script snapshots; see the
+[C startup validation procedure](README_c.md#validate-the-startup-fix-before-another-full-campaign).
+
 `full-taskfarmer.sh` snapshots the clasdis node script, shared functions, and task wrappers into
 `$SCRATCH/simgrid/full-b/<job_id>/` or `full-c/<job_id>/`, then writes `tasks.txt` and starts
 `runcommands.sh`. Each task has a separate `jobs/<task_id>/` directory with `task.out`, `task.err`,
@@ -221,6 +262,66 @@ the internal generator. Success requires 100 zero exit-code records for a new ca
 The batch log prints completed tasks and elapsed seconds; include the manager node when comparing
 allocated node-hours. Slurm accounting alone describes the allocation, so also inspect task logs
 and TaskFarmer's progress and error files.
+
+### Count successful and failed B/C tasks, during or after a run
+
+Upcoming in the next release: B/C task wrappers write `exit-code` when each task attempt exits.
+`0` means the entire workflow succeeded, including validation and the JLab upload; a nonzero code means
+that attempt failed. Use the campaign path printed in the Slurm `.out` log. For the example B campaign:
+
+```shell
+job_id=61609884
+campaign="$SCRATCH/simgrid/full-b/$job_id"
+# For C instead:
+# job_id=61609889
+# campaign="$SCRATCH/simgrid/full-c/$job_id"
+
+task_status() {
+    local campaign="$1" total task_id rc succeeded=0 failed=0
+    total=$(awk 'END {print NR}' "$campaign/tasks.txt") || return 1
+    for (( task_id=0; task_id<total; task_id++ )); do
+        rc=$(cat "$campaign/jobs/$task_id/exit-code" 2>/dev/null) || rc=''
+        case "$rc" in
+            0) succeeded=$((succeeded + 1)) ;;
+            ''|*[!0-9]*) ;;  # No complete numeric result yet.
+            *) failed=$((failed + 1)) ;;
+        esac
+    done
+    printf 'Successful: %s; failed: %s; no result: %s; total: %s\n' \
+        "$succeeded" "$failed" "$((total - succeeded - failed))" "$total"
+}
+
+task_status "$campaign"
+# Optional: refresh every ten seconds; press Ctrl-C to stop monitoring.
+while true; do task_status "$campaign"; sleep 10; done
+```
+
+The same function works in Bash and Zsh, for both B and C. It checks the expected task IDs from 0 through
+the task-list length minus one, so tasks that have not created a directory are still counted as having
+no result. Counts are a live snapshot and can change while tasks finish.
+
+While the campaign is running, **no result** includes queued and running tasks. After it finishes, a missing
+result remains unknown: a hard kill or failure before the exit trap was installed can prevent a record.
+Do not count these tasks as successful or assume they are still running. On a resumed campaign, records
+describe the most recently recorded attempt; an older result remains visible until a new attempt exits.
+
+List recorded failures with task IDs and exit codes, then inspect both logs for one failed task:
+
+```shell
+find "$campaign/jobs" -name exit-code -type f -exec grep -H -E '^[0-9]+$' {} + | grep -v ':0$'
+task_id=37  # Replace with an ID from the failure list.
+cat "$campaign/jobs/$task_id/task.err"
+tail -n 80 "$campaign/jobs/$task_id/task.out"
+squeue -j "$job_id"
+sacct -j "$job_id" --format=JobID%25,State%20,ExitCode,Elapsed
+```
+
+No failure-list output means there are no recorded nonzero results; also check the **no result** count.
+Common workflow codes include `204` for GEMC, `207` for reconstruction, `208` for DST creation, and
+`214` for HIPO integrity. Read both task logs for the underlying error, including container-runtime errors.
+TaskFarmer's `Remaining jobs` messages are not success/failure counts. The final `Completed: N/100` in
+the Slurm `.out` log counts zero-valued task records; the driver requires all tasks to succeed and
+TaskFarmer to exit successfully. Slurm accounting reports the overall outcome.
 
 Each task sends its validated DST to JLab with Pelican. All HIPO files are placed directly inside
 the allocation's job-ID directory:

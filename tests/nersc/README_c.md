@@ -116,13 +116,16 @@ trap that records the eventual status. For layout C it then follows this sequenc
 
 1. Compute the container name `simgrid-full-<job_id>-<short_hostname>`. All tasks on the same
    worker node use that name; a different Slurm allocation gets a different name.
-2. Open a lock file under `${TMPDIR:-/tmp}`, named with the job ID and host user ID, and acquire
-   `flock` on file descriptor 9. The lock is local to that node.
-3. Check `podman-hpc container exists <name>`. If the container is absent, start it with
-   `podman-hpc run --detach --rm --pull=never --name <name> ...`.
+2. Open `<campaign>/containers/<short_hostname>/startup.lock` and acquire `flock` on descriptor 9.
+   All tasks on that host use the same lock path, regardless of their `TMPDIR` settings. The task
+   stdout log records the container name, lock path, and `TMPDIR` for diagnosis.
+3. Check `podman-hpc container exists <name>`. Exit 0 reuses the container; exit 1 permits creation
+   with `podman-hpc run --detach --rm --pull=never --name <name> ...`. Other lookup errors fail the
+   task with the original code and an explicit message, without trying to create another container.
 4. The container's main process is Bash executing `sleep infinity`. This keeps the container
    alive; simulation processes are launched separately with `podman-hpc exec`.
-5. Initialize the shared OSDF token if this container has no `token-ready` marker. Run
+5. Verify that the container accepts `podman-hpc exec <name> /bin/true`; fail if it cannot.
+   Initialize the shared OSDF token if this container has no `token-ready` marker. Run
    `/sshkeys/token-renew.zsh` inside the container and require a nonempty bearer-token file before
    writing the marker. Creating a new container removes any marker left by an earlier instance.
 6. Release `flock` and close descriptor 9 before starting the physics process.
@@ -130,6 +133,7 @@ trap that records the eventual status. For layout C it then follows this sequenc
 The lock prevents two arriving tasks from creating the same container or initializing its token
 simultaneously. It does not serialize the physics chain or uploads. Once startup is complete, many
 `podman-hpc exec` calls run concurrently in the same container.
+Podman subprocesses close descriptor 9 so the container monitor cannot retain the startup lock.
 
 The container mounts the entire campaign directory at the same absolute path, `/cvmfs` read-only,
 and the host `$HOME/.ssh` read-only at `/sshkeys`. It receives Slurm variables, `SCRATCH`,
@@ -217,6 +221,10 @@ inside that job directory. A failed token initialization or upload makes the tas
 
 ## Logs, status, and container cleanup
 
+Use the [B/C task-count commands](README.md#count-successful-and-failed-bc-tasks-during-or-after-a-run)
+to count successful, failed, and unreported tasks while running or after completion. Slurm logs stay
+in the submission directory; the per-task logs below are on scratch by default.
+
 ```text
 tests/nersc/full-c/
     full-c-<job_id>.out                 Slurm stdout and campaign summary
@@ -297,6 +305,34 @@ records. Previously completed DST files stay where they were created and keep th
 ID in the filename. They are not automatically revalidated on restart. There is no added retry
 limit or automatic submission of another allocation in these scripts.
 
+## Validate the startup fix before another full campaign
+
+Upcoming in the next release: shared startup uses a campaign-and-host lock path and checks container
+lookup and execution errors explicitly. Fresh campaigns also accept `SIMGRID_FULL_TASKS=1..100`, with
+100 as the default. Start with two concurrent tasks, each still requesting 5,000 events:
+
+```shell
+module load taskfarmer
+mkdir -p full-c
+unset SIMGRID_FULL_CAMPAIGN
+SIMGRID_FULL_TASKS=2 THREADS=2 sbatch full-c.sbatch
+```
+
+Use the new campaign path printed in stdout and the
+[task-count commands](README.md#count-successful-and-failed-bc-tasks-during-or-after-a-run).
+Require `Completed: 2/2`, `TaskFarmer exit code: 0`, and two zero-valued task records, then inspect
+the task logs for lookup errors or name collisions and confirm both DST files reached JLab.
+After that check succeeds, submit the default 100-task campaign with `sbatch full-c.sbatch`.
+
+Use a fresh campaign to exercise changed scripts: resuming preserves the old script snapshots and
+task list, and `SIMGRID_FULL_TASKS` does not resize that list. Keep the failed campaign for diagnosis.
+
+The driver now prints TaskFarmer's return code separately from its own final outcome. In the failed
+61609889 run, name collisions affected some tasks while others ran GEMC; the workload step returned
+before they completed, and the later cleanup step failed with 125. The available logs do not establish
+why TaskFarmer returned at about ten minutes. Its installed timeout/error policy needs inspection if
+early termination persists; changing that policy is not part of this startup fix.
+
 ## What to compare with B
 
 Hold task count, event count, seeds, software, image contents, concurrency, and worker-node count fixed.
@@ -315,6 +351,10 @@ shared-container startup, token initialization, and lock waits when needed. The 
 reports physics processing and Pelican upload separately. Repeat matching runs and compare those
 components individually; network time can vary independently of container reuse.
 
-Local mocked checks cover reuse of the container, event arguments, task counts, and error
-propagation. Real concurrency, shared-file interactions, cleanup on Perlmutter, and performance
-still need to be evaluated with the actual batch test.
+Local mocked checks cover concurrent startup with different temporary directories, container/token
+reuse, lock-descriptor isolation, lookup/readiness failures, event arguments, task counts, and error
+propagation. Actual Podman-HPC behavior, scratch-filesystem locks, shared-file interactions, cleanup
+on Perlmutter, and performance still need to be evaluated with the batch test.
+
+Run the startup regression checks locally with `~/venv/pymysql/bin/python3 -B test_full_startup.py`
+from `tests/nersc`. These checks require the host `flock` command.

@@ -7,8 +7,13 @@ case "$layout" in B|C) ;; *) echo 'Layout must be B or C.' >&2; exit 2 ;; esac
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
 export SIMGRID_REPO_DIR="$repo_dir"
 export THREADS="${THREADS:-100}"
+new_task_count="${SIMGRID_FULL_TASKS:-100}"
 if [[ ! "$THREADS" =~ ^[1-9][0-9]*$ ]] || (( THREADS > 128 )); then
     echo 'THREADS must be between 1 and 128.' >&2
+    exit 2
+fi
+if [[ ! "$new_task_count" =~ ^[1-9][0-9]*$ ]] || (( new_task_count > 100 )); then
+    echo 'SIMGRID_FULL_TASKS must be between 1 and 100.' >&2
     exit 2
 fi
 : "${SLURM_JOB_ID:?Run this test inside a Slurm allocation}"
@@ -26,7 +31,7 @@ if [[ ! -f "$campaign/tasks.txt" ]]; then
     cp "$repo_dir/tests/nersc/full-task.sh" "$campaign/scripts/full-task.sh"
     cp "$repo_dir/nersc_io/container.sh" "$campaign/scripts/container.sh"
     printf '%s\n%s\n' "$layout" "$image" > "$campaign/config"
-    for (( i=0; i<100; i++ )); do
+    for (( i=0; i<new_task_count; i++ )); do
         printf 'bash %q %q %q %s clasdis %q\n' \
             "$campaign/scripts/full-task.sh" "$campaign" "$layout" "$i" "$image"
     done > "$campaign/tasks.txt"
@@ -64,6 +69,7 @@ runcommands.sh tasks.txt &
 farmer_pid=$!
 rc=0
 wait "$farmer_pid" || rc=$?
+printf 'TaskFarmer exit code: %s\n' "$rc"
 finished=$(date +%s)
 completed=0
 for status in jobs/*/exit-code; do

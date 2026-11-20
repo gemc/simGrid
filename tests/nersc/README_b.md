@@ -179,6 +179,10 @@ inside that job directory. A failed token renewal or upload makes the task fail.
 
 ## Outputs and monitoring
 
+Use the [B/C task-count commands](README.md#count-successful-and-failed-bc-tasks-during-or-after-a-run)
+to count successful, failed, and unreported tasks while running or after completion. Slurm logs stay
+in the submission directory; the per-task logs below are on scratch by default.
+
 ```text
 tests/nersc/full-b/
     full-b-<job_id>.out                 Slurm stdout and campaign summary
