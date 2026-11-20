@@ -1017,25 +1017,25 @@ function renderJobDetails(data) {
 		).join("") + "</dl></td></tr>";
 	};
 	const groupedKeys = new Set(["username", "user", "client_ip", "project", "configuration",
-		"softwarev", "mcgenv", "generator", "nevents", "jobs", "string_id", "submission", "submission_type"]);
+		"softwarev", "mcgenv", "generator", "nevents", "jobs", "string_id", "submission",
+		"submission_type", "output_type"]);
 	const valueLabels = new Map([
 		["vertex_choice:0", "Ignore (0)"], ["vertex_choice:1", "Relative (1)"],
 		["output_type:0", "Output DST (0)"], ["output_type:1", "GEMC Only (1)"]
 	]);
+	const outputType = String(detailValue("output_type") ?? "").trim() || "0";
 	const osgId = String(data.osg_id || "").trim();
 
 	html += "<table>";
 	html += group([
-		["Username", data.user || detailValue("username") || detailValue("user")],
-		["Submission type", detailValue("submission_type") || detailValue("submission")],
-		["Client IP", detailValue("client_ip")]
-	]);
-	html += group([
+		["User", data.user || detailValue("username") || detailValue("user")],
+		["Ip", detailValue("client_ip")],
+		["Type", detailValue("submission_type") || detailValue("submission")],
 		["Job ID", data.user_submission_id || data.requested_id],
 		["OSG ID", osgId.toUpperCase() === "NULL" ? "" : osgId],
-		["String ID", detailValue("string_id")],
 		["Project", detailValue("project")]
 	]);
+	html += group([["String ID", detailValue("string_id")]], true);
 	const configuration = detailValue("configuration");
 	if (configuration) {
 		html += "<tr><th>Configuration</th><td><pre>" + escapeHtml(configuration) + "</pre></td></tr>";
@@ -1045,6 +1045,7 @@ function renderJobDetails(data) {
 		["Generator", detailValue("generator")], ["nevents", detailValue("nevents")],
 		["jobs", detailValue("jobs")]
 	], true);
+	html += group([["Output type", valueLabels.get("output_type:" + outputType) || outputType]], true);
 	if (data.status) {
 		html += `<tr><th>Status</th><td>${escapeHtml(data.status)}</td></tr>`;
 	}

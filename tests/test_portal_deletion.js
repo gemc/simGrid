@@ -60,3 +60,23 @@ test("rejected request reports the error and re-enables retry", async () => {
     assert.equal(button.disabled, false);
     assert.match(message.textContent, /Only the submitting user/);
 });
+
+
+test("output type is always shown with its description, including the default for older cards", () => {
+    const {context} = portal();
+    const cases = [
+        [[], "Output DST (0)"],
+        [[{key: "output_type", value: ""}], "Output DST (0)"],
+        [[{key: "output_type", value: null}], "Output DST (0)"],
+        [[{key: "output_type", value: " 0 "}], "Output DST (0)"],
+        [[{key: "output_type", value: 0}], "Output DST (0)"],
+        [[{key: "output_type", value: "1"}], "GEMC Only (1)"],
+        [[{key: "Output Type", value: 1}], "GEMC Only (1)"],
+    ];
+    for (const [details, label] of cases) {
+        const html = context.renderJobDetails({...data, details});
+        assert.equal((html.match(/<th scope="row">Output type<\/th>/g) || []).length, 1);
+        assert.ok(html.includes(`<dd>${label}</dd>`));
+        assert.doesNotMatch(html, /<th>output_type<\/th>/);
+    }
+});
