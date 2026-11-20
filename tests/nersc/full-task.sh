@@ -5,7 +5,19 @@ container_name="simgrid-full-${SLURM_JOB_ID:?}-$(hostname -s)"
 if [[ "${1:-}" == --cleanup ]]; then
     rc=0
     if podman-hpc container exists "$container_name"; then
-        podman-hpc stop --time 10 "$container_name"
+        podman-hpc stop --time 10 "$container_name" || rc=$?
+        if (( rc != 0 )); then
+            # A monitor error during shutdown can occur after --rm has removed the container.
+            exists_rc=0
+            podman-hpc container exists "$container_name" || exists_rc=$?
+            if (( exists_rc == 1 )); then
+                printf 'Shared container removal confirmed after stop exit=%s: %s\n' "$rc" "$container_name"
+            else
+                printf 'Shared container removal unconfirmed: stop exit=%s lookup exit=%s\n' \
+                    "$rc" "$exists_rc" >&2
+                exit "$rc"
+            fi
+        fi
     else
         rc=$?
         if (( rc != 1 )); then

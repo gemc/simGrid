@@ -130,6 +130,109 @@ Shared jobs (https://docs.nersc.gov/jobs/examples/#shared),
 CVMFS jobs (https://docs.nersc.gov/services/cvmfs/#cvmfs-batch-jobs),
 job monitoring (https://docs.nersc.gov/jobs/monitoring/).
 
+## Memory requests, live usage, and completed-job accounting
+
+Run these commands on NERSC. Set `job_id` to the allocation ID, or an individual array task such as
+`123456_1` when inspecting one Lund/generators task. Resource allocation and measured usage are separate.
+
+### Requested and allocated resources
+
+```shell
+job_id=61656225  # Replace with your job ID.
+sacct -X -j "$job_id" --format=JobID,State,ReqMem,AllocTRES%80
+```
+
+Example from the two-task C validation run while it was running:
+
+```text
+JobID        State    ReqMem   AllocTRES
+61656225     RUNNING  975604M  billing=512,cpu=512,mem=975604M,node=2
+```
+
+| Field | Meaning in this example |
+|---|---|
+| `RUNNING` | The Slurm allocation is active. |
+| `ReqMem=975604M` | Memory requirement recorded by Slurm; this is not measured consumption. |
+| `node=2` | Two allocated CPU nodes. |
+| `cpu=512` | 512 logical CPUs, or 256 hardware threads per node with this allocation. |
+| `mem=975604M` | Total allocated memory: about 953 GiB, or 476 GiB per node if evenly allocated. |
+| `billing=512` | The allocation's scheduler accounting weight, matching its logical CPU count here. |
+
+Slurm memory values use binary-scaled units: `975604M / 1024` is about 953 GiB. When `ReqMem` has
+an `n` suffix, it denotes a per-node request; a `c` suffix denotes a per-CPU request. Use `AllocTRES`
+to see the total allocation, and do not assume `ReqMem` is always a whole-job total.
+
+`billing=512` is a resource weight. An hour at that weight represents 512 billing-unit-hours;
+NERSC's charging policy determines the conversion to project allocation usage. The displayed value
+does not measure CPU utilization, memory consumption, or elapsed time.
+
+The B/C scripts request two nodes without an explicit `--mem`; inspect the granted memory rather
+than assuming a limit. One node manages TaskFarmer and one runs the simulations, so those simulations
+share the worker node's allocation, not the sum across both nodes. Standalone clasdis/Lund scripts
+request `--mem=2500M`; generators/environment/transfer tests request `--mem=2G`.
+
+### Memory statistics while a job is running
+
+```shell
+sstat --allsteps -j "$job_id" --format=JobID,NTasks,AveRSS,MaxRSS,MaxRSSNode
+
+# Optional: refresh every ten seconds; press Ctrl-C to stop.
+watch -n 10 "sstat --allsteps -j $job_id --format=JobID,NTasks,AveRSS,MaxRSS,MaxRSSNode"
+```
+
+| Field | Meaning |
+|---|---|
+| `JobID` | Slurm step ID, for example `61656225.0`. |
+| `NTasks` | Number of Slurm tasks in that step, not the number of TaskFarmer simulations. |
+| `AveRSS` | Average reported resident memory across the step's Slurm tasks. |
+| `MaxRSS` | Largest reported Slurm-task resident-memory peak in the step. |
+| `MaxRSSNode` | Node where that maximum was recorded. |
+
+`MaxRSS` is a recorded peak, not instantaneous whole-node memory usage or a sum across both nodes.
+For B/C, many simulations run within TaskFarmer's Slurm tasks; do not multiply `MaxRSS` by the
+number of simulations. Accounting updates are sampled, and container/process attribution depends
+on the site's accounting configuration. Blank statistics mean unavailable or uncollected data,
+not zero usage. A blank field does not establish that a job fits its memory allowance.
+
+### Memory and step results after completion
+
+```shell
+sacct -j "$job_id" --format=JobID%25,State,ReqMem,MaxRSS,MaxRSSNode
+
+# Include exit codes and durations when investigating a failed step:
+sacct -j "$job_id" --format=JobID%25,State%25,ExitCode,Elapsed,MaxRSS
+```
+
+Example from the same C run after both HIPO files reached JLab, before the cleanup handling fix:
+
+```text
+JobID             State       ReqMem    MaxRSS    MaxRSSNode
+61656225          COMPLETED   975604M
+61656225.batch    COMPLETED             34900K    nid004234
+61656225.extern   COMPLETED
+61656225.0        COMPLETED             6117676K  nid004234
+61656225.1        FAILED                0         nid004235
+```
+
+| Record | Interpretation for this B/C launcher |
+|---|---|
+| `61656225` | Overall allocation; the driver reported success. |
+| `.batch` | Campaign driver; `34900K` is about 34 MiB of reported peak resident memory. |
+| `.extern` | Slurm's external-process tracking step, separate from the simulation workflow. |
+| `.0` | TaskFarmer workload step; `6117676K` is about 5.83 GiB for its largest reported task peak. |
+| `.1` | Subsequent shared-container cleanup step; investigate its failure in the Slurm stderr log. |
+
+Step numbers describe this run's launch order; they are not universal names for workload and cleanup.
+The overall job and workload completed, and both files arrived at JLab. The failed cleanup step
+reported a Podman-HPC container-monitor shutdown error with exit 125. The driver tolerates cleanup
+errors, so a cleanup failure can coexist with overall success. `0` in that step's `MaxRSS` field is
+an accounting result, not evidence that its commands consumed no memory.
+
+The 5.83 GiB value is not the combined consumption of both nodes or a proven per-simulation memory
+requirement. A successful two-task run also does not establish the memory needed at 100-way
+concurrency. Use task results and JLab output checks alongside Slurm accounting; see the
+[B/C monitoring commands](#count-successful-and-failed-bc-tasks-during-or-after-a-run).
+
 ## clasdis workflow
 
 `clasdis.sbatch` runs `nodescript-clasdis.sh`: GEMC with its internal electron generator

@@ -277,6 +277,12 @@ it with a ten-second grace period. `--rm` requests container removal after shutd
 never started a simulation container have nothing to stop. Cleanup errors are tolerated and do
 not replace the campaign result.
 
+Upcoming in the next release: if Podman-HPC reports an error while stopping a container, cleanup
+checks whether the container has been removed. A confirmed absence makes that cleanup successful;
+an existing container or a failed check preserves the stop error. The original runtime message stays
+in stderr, and stdout reports confirmed removal. This handles a monitor error after removal without
+silently ignoring an unsuccessful stop.
+
 The campaign files remain on scratch because they were bind-mounted outside the container.
 Successful task completion alone does not stop the container; allocation-level cleanup does.
 

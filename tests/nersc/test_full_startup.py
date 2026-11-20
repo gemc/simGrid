@@ -32,6 +32,9 @@ class SharedStartupTests(unittest.TestCase):
             'case "$1 $2" in\n'
             '  "container exists")\n'
             '    echo lookup >> "$CALLS"\n'
+            '    if [[ -f "$MOCK_CONTAINER.stopped" && -n "${AFTER_STOP_LOOKUP_ERROR:-}" ]]; then\n'
+            '      exit "$AFTER_STOP_LOOKUP_ERROR"\n'
+            '    fi\n'
             '    [[ -z "${LOOKUP_ERROR:-}" ]] || exit "$LOOKUP_ERROR"\n'
             '    [[ ! -d "$MOCK_CONTAINER" ]] || exit 0\n'
             '    sleep 0.15\n'
@@ -39,6 +42,11 @@ class SharedStartupTests(unittest.TestCase):
             '  "run --rm")\n'
             '    mkdir "$MOCK_CONTAINER" || exit 125\n'
             '    echo create >> "$CALLS" ;;\n'
+            '  "stop --time")\n'
+            '    echo stop >> "$CALLS"\n'
+            '    touch "$MOCK_CONTAINER.stopped"\n'
+            '    [[ "${KEEP_CONTAINER:-0}" == 1 ]] || rmdir "$MOCK_CONTAINER"\n'
+            '    exit "${STOP_ERROR:-0}" ;;\n'
             '  "exec --workdir")\n'
             '    echo physics >> "$CALLS"\n'
             '    if [[ "${WAIT_FOR_PEER:-0}" == 1 ]]; then\n'
@@ -114,6 +122,30 @@ class SharedStartupTests(unittest.TestCase):
         self.env["READINESS_ERROR"] = "125"
         self.finish_task(0, self.start_task(0), expected=125)
         self.assertEqual(self.trace.read_text().splitlines(), ["lookup", "ready"])
+
+    def run_cleanup(self):
+        Path(self.env["MOCK_CONTAINER"]).mkdir()
+        self.env["STOP_ERROR"] = "125"
+        return subprocess.run(["bash", str(WRAPPER), "--cleanup"], env=self.env,
+                              capture_output=True, text=True)
+
+    def test_stop_monitor_error_succeeds_when_container_removal_is_confirmed(self):
+        result = self.run_cleanup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("removal confirmed", result.stdout)
+        self.assertEqual(self.trace.read_text().splitlines(), ["lookup", "stop", "lookup"])
+
+    def test_stop_error_is_preserved_when_container_still_exists(self):
+        self.env["KEEP_CONTAINER"] = "1"
+        result = self.run_cleanup()
+        self.assertEqual(result.returncode, 125)
+        self.assertEqual(self.trace.read_text().splitlines(), ["lookup", "stop", "lookup"])
+
+    def test_stop_error_is_preserved_when_removal_check_fails(self):
+        self.env["AFTER_STOP_LOOKUP_ERROR"] = "125"
+        result = self.run_cleanup()
+        self.assertEqual(result.returncode, 125)
+        self.assertEqual(self.trace.read_text().splitlines(), ["lookup", "stop", "lookup"])
 
     def test_small_fresh_campaign_and_resume_keep_the_original_task_list(self):
         driver = WRAPPER.parent / "full-taskfarmer.sh"
